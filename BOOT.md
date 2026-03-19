@@ -29,6 +29,7 @@ At the beginning of each run, read in this order:
 4. the active plan index and the most recently active plan under `docs/roadmap/`
 5. root-level `todo.md`, this is the task list left by your human lead; update `todo.md` after completion
 6. research, design, tech, SOP, and test documents related to the current task
+   - If a matching research note already exists for the same Go semantic surface, read it before changing code and extend it instead of creating duplicate compatibility notes.
 
 Operational clarifications:
 1. If there is no archived plan yet, explicitly record that the repository is at a cold start and immediately create the first milestone and plan.

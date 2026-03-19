@@ -2,8 +2,8 @@ use std::fmt;
 
 use crate::bytecode::instruction::{CompiledFunction, Instruction, Program};
 use crate::semantic::model::{
-    CallTarget, CheckedBinaryOperator, CheckedBlock, CheckedExpression, CheckedExpressionKind,
-    CheckedFunction, CheckedProgram, CheckedStatement, Type,
+    CallTarget, CheckedAssignmentTarget, CheckedBinaryOperator, CheckedBlock, CheckedExpression,
+    CheckedExpressionKind, CheckedFunction, CheckedProgram, CheckedStatement, Type,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,11 +83,22 @@ impl<'a> FunctionCompiler<'a> {
                 self.expect_value(&value.ty, "variable declaration")?;
                 self.instructions.push(Instruction::StoreLocal(*slot));
             }
-            CheckedStatement::Assign { slot, value, .. } => {
-                self.compile_expression(value)?;
-                self.expect_value(&value.ty, "assignment")?;
-                self.instructions.push(Instruction::StoreLocal(*slot));
-            }
+            CheckedStatement::Assign { target, value } => match target {
+                CheckedAssignmentTarget::Local { slot, .. } => {
+                    self.compile_expression(value)?;
+                    self.expect_value(&value.ty, "assignment")?;
+                    self.instructions.push(Instruction::StoreLocal(*slot));
+                }
+                CheckedAssignmentTarget::Index { target, index } => {
+                    self.compile_expression(target)?;
+                    self.expect_value(&target.ty, "index assignment")?;
+                    self.compile_expression(index)?;
+                    self.expect_value(&index.ty, "index assignment")?;
+                    self.compile_expression(value)?;
+                    self.expect_value(&value.ty, "index assignment")?;
+                    self.instructions.push(Instruction::SetIndex);
+                }
+            },
             CheckedStatement::Expr(expression) => {
                 self.compile_expression(expression)?;
                 if expression.ty.produces_value() {
@@ -164,6 +175,22 @@ impl<'a> FunctionCompiler<'a> {
                 self.compile_expression(index)?;
                 self.expect_value(&index.ty, "index expression")?;
                 self.instructions.push(Instruction::Index);
+            }
+            CheckedExpressionKind::Slice { target, low, high } => {
+                self.compile_expression(target)?;
+                self.expect_value(&target.ty, "slice expression")?;
+                if let Some(low) = low {
+                    self.compile_expression(low)?;
+                    self.expect_value(&low.ty, "slice expression")?;
+                }
+                if let Some(high) = high {
+                    self.compile_expression(high)?;
+                    self.expect_value(&high.ty, "slice expression")?;
+                }
+                self.instructions.push(Instruction::Slice {
+                    has_low: low.is_some(),
+                    has_high: high.is_some(),
+                });
             }
             CheckedExpressionKind::Binary {
                 left,

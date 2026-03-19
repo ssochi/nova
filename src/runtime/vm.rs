@@ -4,7 +4,7 @@ use std::fmt;
 use crate::builtin::BuiltinFunction;
 use crate::bytecode::instruction::{Instruction, Program};
 use crate::package::PackageFunction;
-use crate::runtime::value::Value;
+use crate::runtime::value::{SliceValue, Value};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeError {
@@ -92,7 +92,7 @@ impl VirtualMachine {
                         elements.push(self.pop_value()?);
                     }
                     elements.reverse();
-                    self.stack.push(Value::Slice(elements));
+                    self.stack.push(Value::Slice(SliceValue::new(elements)));
                 }
                 Instruction::LoadLocal(index) => {
                     let value = self.frames[frame_index]
@@ -132,6 +132,8 @@ impl VirtualMachine {
                     self.binary_integer_compare(|left, right| left >= right)?
                 }
                 Instruction::Index => self.index_slice()?,
+                Instruction::Slice { has_low, has_high } => self.slice_value(has_low, has_high)?,
+                Instruction::SetIndex => self.set_slice_index()?,
                 Instruction::Jump(target) => {
                     self.frames[frame_index].pc = target;
                     advance_pc = false;
@@ -268,7 +270,7 @@ impl VirtualMachine {
                 }
                 let value = match arguments.into_iter().next().expect("arity checked above") {
                     Value::String(value) => value.len() as i64,
-                    Value::Slice(elements) => elements.len() as i64,
+                    Value::Slice(slice) => slice.len() as i64,
                     _ => {
                         return Err(RuntimeError::new(
                             "builtin `len` expected a string or slice argument",
@@ -283,16 +285,15 @@ impl VirtualMachine {
                         "builtin `append` expected at least 1 argument",
                     ));
                 };
-                let mut elements = match first {
-                    Value::Slice(elements) => elements.clone(),
+                let slice = match first {
+                    Value::Slice(slice) => slice.clone(),
                     _ => {
                         return Err(RuntimeError::new(
                             "builtin `append` expected a slice as the first argument",
                         ));
                     }
                 };
-                elements.extend(rest.iter().cloned());
-                self.stack.push(Value::Slice(elements));
+                self.stack.push(Value::Slice(slice.append(rest)));
             }
         }
 
@@ -387,15 +388,60 @@ impl VirtualMachine {
             )));
         }
         let target = self.pop_value()?;
-        let elements = match target {
-            Value::Slice(elements) => elements,
+        let slice = match target {
+            Value::Slice(slice) => slice,
             _ => return Err(RuntimeError::new("index target is not a slice")),
         };
-        let value = elements
+        let value = slice
             .get(index as usize)
-            .cloned()
             .ok_or_else(|| RuntimeError::new(format!("slice index {index} is out of bounds")))?;
         self.stack.push(value);
+        Ok(())
+    }
+
+    fn slice_value(&mut self, has_low: bool, has_high: bool) -> Result<(), RuntimeError> {
+        let high = if has_high {
+            Some(self.pop_integer()?)
+        } else {
+            None
+        };
+        let low = if has_low {
+            Some(self.pop_integer()?)
+        } else {
+            None
+        };
+        let target = self.pop_value()?;
+        let slice = match target {
+            Value::Slice(slice) => slice,
+            _ => return Err(RuntimeError::new("slice expression target is not a slice")),
+        };
+        let low = normalize_slice_bound(low, 0, "lower")?;
+        let high_default = i64::try_from(slice.len())
+            .map_err(|_| RuntimeError::new("slice length could not convert to integer"))?;
+        let high = normalize_slice_bound(high, high_default, "upper")?;
+        let result = slice
+            .slice(low, high)
+            .map_err(|_| RuntimeError::new(slice_bounds_error_message(low, high)))?;
+        self.stack.push(Value::Slice(result));
+        Ok(())
+    }
+
+    fn set_slice_index(&mut self) -> Result<(), RuntimeError> {
+        let value = self.pop_value()?;
+        let index = self.pop_integer()?;
+        if index < 0 {
+            return Err(RuntimeError::new(format!(
+                "slice index {index} is out of bounds"
+            )));
+        }
+        let target = self.pop_value()?;
+        let slice = match target {
+            Value::Slice(slice) => slice,
+            _ => return Err(RuntimeError::new("index assignment target is not a slice")),
+        };
+        slice
+            .set(index as usize, value)
+            .map_err(|_| RuntimeError::new(format!("slice index {index} is out of bounds")))?;
         Ok(())
     }
 
@@ -546,6 +592,51 @@ mod tests {
 
         assert_eq!(output, "false\ntrue\n");
     }
+
+    #[test]
+    fn execute_slice_windows_and_index_assignment() {
+        let program = Program {
+            package_name: "main".to_string(),
+            entry_function: "main".to_string(),
+            entry_function_index: 0,
+            functions: vec![CompiledFunction {
+                name: "main".to_string(),
+                parameter_count: 0,
+                returns_value: false,
+                local_names: vec!["values".to_string(), "window".to_string()],
+                instructions: vec![
+                    Instruction::PushInt(1),
+                    Instruction::PushInt(2),
+                    Instruction::PushInt(3),
+                    Instruction::BuildSlice(3),
+                    Instruction::StoreLocal(0),
+                    Instruction::LoadLocal(0),
+                    Instruction::PushInt(1),
+                    Instruction::Slice {
+                        has_low: true,
+                        has_high: false,
+                    },
+                    Instruction::StoreLocal(1),
+                    Instruction::LoadLocal(1),
+                    Instruction::PushInt(0),
+                    Instruction::PushInt(9),
+                    Instruction::SetIndex,
+                    Instruction::LoadLocal(0),
+                    Instruction::PushInt(1),
+                    Instruction::Index,
+                    Instruction::CallBuiltin(BuiltinFunction::Println, 1),
+                    Instruction::Return,
+                ],
+            }],
+        };
+
+        let output = VirtualMachine::new()
+            .execute(&program)
+            .expect("slice window program should execute")
+            .render_output();
+
+        assert_eq!(output, "9\n");
+    }
 }
 
 fn expect_exact_package_arguments<const N: usize>(
@@ -610,7 +701,7 @@ fn expect_string_slice_package_argument(
     value: Value,
 ) -> Result<Vec<String>, RuntimeError> {
     let elements = match value {
-        Value::Slice(elements) => elements,
+        Value::Slice(slice) => slice.visible_elements(),
         other => {
             return Err(RuntimeError::new(format!(
                 "argument {} in call to `{}` expected `[]string`, found `{}`",
@@ -646,4 +737,23 @@ fn runtime_type_name(value: &Value) -> &'static str {
         Value::String(_) => "string",
         Value::Slice(_) => "slice",
     }
+}
+
+fn normalize_slice_bound(
+    bound: Option<i64>,
+    default: i64,
+    position: &str,
+) -> Result<usize, RuntimeError> {
+    let value = bound.unwrap_or(default);
+    if value < 0 {
+        return Err(RuntimeError::new(format!(
+            "slice {position} bound {value} is out of bounds"
+        )));
+    }
+    usize::try_from(value)
+        .map_err(|_| RuntimeError::new(format!("slice {position} bound {value} is out of bounds")))
+}
+
+fn slice_bounds_error_message(low: usize, high: usize) -> String {
+    format!("slice bounds [{low}:{high}] are out of range")
 }

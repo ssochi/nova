@@ -30,8 +30,7 @@ pub enum CheckedStatement {
         value: CheckedExpression,
     },
     Assign {
-        slot: usize,
-        name: String,
+        target: CheckedAssignmentTarget,
         value: CheckedExpression,
     },
     Expr(CheckedExpression),
@@ -45,6 +44,18 @@ pub enum CheckedStatement {
         body: CheckedBlock,
     },
     Return(Option<CheckedExpression>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CheckedAssignmentTarget {
+    Local {
+        slot: usize,
+        name: String,
+    },
+    Index {
+        target: Box<CheckedExpression>,
+        index: Box<CheckedExpression>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -68,6 +79,11 @@ pub enum CheckedExpressionKind {
     Index {
         target: Box<CheckedExpression>,
         index: Box<CheckedExpression>,
+    },
+    Slice {
+        target: Box<CheckedExpression>,
+        low: Option<Box<CheckedExpression>>,
+        high: Option<Box<CheckedExpression>>,
     },
     Binary {
         left: Box<CheckedExpression>,

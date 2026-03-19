@@ -18,6 +18,7 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 - Validate package-level structure independently from runtime entrypoint rules.
 - Track block scopes and map variables to stable local slots.
 - Infer the type of each supported expression and reject incompatible assignments, returns, and branch conditions.
+- Validate slice windows and indexed slice assignment through the checked-program model instead of runtime-only checks.
 - Resolve builtin calls through a centralized contract table instead of hardcoded name checks spread across the analyzer.
 - Validate loop conditions and model loop bodies as scoped blocks.
 - Ensure non-void functions do not fall through on any reachable path in the supported subset.
@@ -46,8 +47,9 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 
 ## Current Limits
 
-- Supported types are limited to `int`, `bool`, `string`, and `void`.
+- Supported types are limited to `int`, `bool`, `string`, `[]T`, and `void`.
 - Package loading is still single-file and does not model imports.
 - Loop support is limited to `for <condition> { ... }`.
 - Termination analysis only treats the literal `for true { ... }` as definitely non-fallthrough because `break` and `continue` do not exist yet.
 - Builtin coverage is still intentionally small and does not yet model package-backed standard library APIs.
+- Slice support is still staged: simple slice expressions on `[]T` are supported, while full slice expressions and string slicing remain deferred.

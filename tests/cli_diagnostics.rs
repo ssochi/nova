@@ -191,3 +191,42 @@ fn check_rejects_unsupported_strings_member() {
 
     cleanup_temp_source(path);
 }
+
+#[test]
+fn check_rejects_bad_slice_upper_bound_type() {
+    let path = write_temp_source(
+        "check-bad-slice-upper",
+        "package main\n\nfunc main() {\n\tvar values = []int{1, 2}\n\tprintln(values[0:true])\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("slice expression upper bound requires `int`, found `bool`"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_slice_assignment_type_mismatch() {
+    let path = write_temp_source(
+        "check-bad-slice-assign",
+        "package main\n\nfunc main() {\n\tvar values = []int{1, 2}\n\tvalues[0] = \"oops\"\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("slice element assignment requires `int`, found `string`"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_full_slice_expression() {
+    let path = write_temp_source(
+        "check-full-slice",
+        "package main\n\nfunc main() {\n\tvar values = []int{1, 2, 3}\n\tprintln(values[0:2:3])\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("full slice expressions are not supported"));
+
+    cleanup_temp_source(path);
+}

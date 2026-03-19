@@ -3,13 +3,14 @@ use std::fmt;
 
 use crate::config::ExecutionConfig;
 use crate::frontend::ast::{
-    BinaryOperator, Block, Expression, FunctionDecl, SourceFileAst, Statement, TypeRef,
+    AssignmentTarget, BinaryOperator, Block, Expression, FunctionDecl, SourceFileAst, Statement,
+    TypeRef,
 };
 use crate::package::ImportedPackage;
 use crate::semantic::builtins::{resolve_builtin, validate_builtin_call};
 use crate::semantic::model::{
-    CallTarget, CheckedBinaryOperator, CheckedBlock, CheckedExpression, CheckedExpressionKind,
-    CheckedFunction, CheckedProgram, CheckedStatement, Type,
+    CallTarget, CheckedAssignmentTarget, CheckedBinaryOperator, CheckedBlock, CheckedExpression,
+    CheckedExpressionKind, CheckedFunction, CheckedProgram, CheckedStatement, Type,
 };
 use crate::semantic::packages::{
     resolve_import_path, resolve_package_function, validate_package_call,
@@ -286,15 +287,25 @@ impl<'a> FunctionAnalyzer<'a> {
                     value,
                 })
             }
-            Statement::Assign { name, value } => {
-                let binding = self.lookup_local(name)?.clone();
+            Statement::Assign { target, value } => {
+                let target = self.analyze_assignment_target(target)?;
                 let value = self.analyze_expression(value)?;
-                expect_type(&binding.ty, &value.ty, &format!("assignment to `{name}`"))?;
-                Ok(CheckedStatement::Assign {
-                    slot: binding.slot,
-                    name: name.clone(),
-                    value,
-                })
+                match &target {
+                    CheckedAssignmentTarget::Local { name, .. } => {
+                        let binding = self.lookup_local(name)?;
+                        expect_type(&binding.ty, &value.ty, &format!("assignment to `{name}`"))?;
+                    }
+                    CheckedAssignmentTarget::Index { target, .. } => {
+                        let element_type = target.ty.slice_element_type().ok_or_else(|| {
+                            SemanticError::new(format!(
+                                "index assignment requires `slice` target, found `{}`",
+                                target.ty.render()
+                            ))
+                        })?;
+                        expect_type(element_type, &value.ty, "slice element assignment")?;
+                    }
+                }
+                Ok(CheckedStatement::Assign { target, value })
             }
             Statement::Expr(expression) => {
                 Ok(CheckedStatement::Expr(self.analyze_expression(expression)?))
@@ -428,6 +439,37 @@ impl<'a> FunctionAnalyzer<'a> {
                     kind: CheckedExpressionKind::Index {
                         target: Box::new(target),
                         index: Box::new(index),
+                    },
+                })
+            }
+            Expression::Slice { target, low, high } => {
+                let target = self.analyze_expression(target)?;
+                if !matches!(target.ty, Type::Slice(_)) {
+                    return Err(SemanticError::new(format!(
+                        "slice expression requires `slice` target, found `{}`",
+                        target.ty.render()
+                    )));
+                }
+                let low = low
+                    .as_ref()
+                    .map(|value| self.analyze_expression(value))
+                    .transpose()?;
+                if let Some(low) = &low {
+                    expect_type(&Type::Int, &low.ty, "slice expression lower bound")?;
+                }
+                let high = high
+                    .as_ref()
+                    .map(|value| self.analyze_expression(value))
+                    .transpose()?;
+                if let Some(high) = &high {
+                    expect_type(&Type::Int, &high.ty, "slice expression upper bound")?;
+                }
+                Ok(CheckedExpression {
+                    ty: target.ty.clone(),
+                    kind: CheckedExpressionKind::Slice {
+                        target: Box::new(target),
+                        low: low.map(Box::new),
+                        high: high.map(Box::new),
                     },
                 })
             }
@@ -598,6 +640,36 @@ impl<'a> FunctionAnalyzer<'a> {
         }
 
         Err(SemanticError::new(format!("unknown variable `{name}`")))
+    }
+
+    fn analyze_assignment_target(
+        &mut self,
+        target: &AssignmentTarget,
+    ) -> Result<CheckedAssignmentTarget, SemanticError> {
+        match target {
+            AssignmentTarget::Identifier(name) => {
+                let binding = self.lookup_local(name)?;
+                Ok(CheckedAssignmentTarget::Local {
+                    slot: binding.slot,
+                    name: name.clone(),
+                })
+            }
+            AssignmentTarget::Index { target, index } => {
+                let target = self.analyze_expression(target)?;
+                let index = self.analyze_expression(index)?;
+                expect_type(&Type::Int, &index.ty, "index assignment")?;
+                if !matches!(target.ty, Type::Slice(_)) {
+                    return Err(SemanticError::new(format!(
+                        "index assignment requires `slice` target, found `{}`",
+                        target.ty.render()
+                    )));
+                }
+                Ok(CheckedAssignmentTarget::Index {
+                    target: Box::new(target),
+                    index: Box::new(index),
+                })
+            }
+        }
     }
 }
 
@@ -803,5 +875,20 @@ mod tests {
                 .to_string()
                 .contains("does not support `[]int` operands")
         );
+    }
+
+    #[test]
+    fn analyze_slice_expression_and_index_assignment() {
+        let source = SourceFile {
+            path: "test.go".into(),
+            contents: "package main\n\nfunc main() {\n\tvar values = []int{1, 2, 3}\n\tvar middle = values[1:3]\n\tmiddle[0] = 9\n\tprintln(values[1], middle[0])\n}\n"
+                .to_string(),
+        };
+
+        let tokens = lex(&source).expect("lexing should succeed");
+        let ast = parse_source_file(&tokens).expect("parsing should succeed");
+        let program = analyze_package(&ast).expect("analysis should succeed");
+
+        assert_eq!(program.functions.len(), 1);
     }
 }

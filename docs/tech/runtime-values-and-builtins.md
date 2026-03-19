@@ -15,10 +15,10 @@ Describe the current runtime value categories and builtin execution model introd
   - Produced by string literals, user functions, concatenation, and builtin arguments
   - `len(string)` returns the UTF-8 byte length
 - `slice`
-  - Stored as an ordered vector of runtime values
+  - Stored as shared backing storage plus start / length / capacity metadata
   - Built by slice literals and returned by `append`
   - Currently rendered in a Go-like `[value value]` form for builtin and package output
-  - Supports `len(slice)` and index expressions such as `values[0]`
+  - Supports `len(slice)`, index expressions such as `values[0]`, simple slice expressions such as `values[1:3]`, and element assignment such as `values[0] = 1`
 
 ## Builtin Contract Model
 
@@ -54,17 +54,19 @@ Describe the current runtime value categories and builtin execution model introd
 ## Runtime Execution Notes
 
 - Bytecode uses `push-string` for literals and `concat` for string addition
-- Bytecode now also uses `build-slice <count>` for slice literals and `index` for slice element reads
+- Bytecode now also uses `build-slice <count>` for slice literals, `index` for slice element reads, `slice` for slice-window creation, and `set-index` for slice element writes
 - Equality still reuses the generic value comparison path because runtime values are tagged
 - VM output is an accumulated string buffer instead of newline-separated records
 - `print` appends rendered arguments without an automatic trailing newline
 - `println` appends rendered arguments plus a newline
 - `append` returns a new slice runtime value and does not mutate earlier values in place
+- Slice windows share backing storage, so updating one slice view is visible through overlapping slice values
 - Bytecode now also uses `call-package` for metadata-backed package functions
 - `fmt.Sprint` returns a runtime string value without mutating the output buffer
 - `fmt` formatting is intentionally approximate and does not yet support format verbs
 - `strings.Join` currently requires a runtime `[]string` value and returns a joined string
 - `strings.Repeat` maps negative-count or repeated-size overflow failures into runtime errors because the VM does not model Go panic yet
+- String slice execution is still deferred because the current runtime stores strings as Rust `String` instead of a byte-addressed Go string model
 
 ## Extension Hooks
 
@@ -73,4 +75,4 @@ Describe the current runtime value categories and builtin execution model introd
 - Keep new runtime value categories reflected in both `src/runtime/value.rs` and semantic `Type`
 - If output behavior becomes more realistic or package-backed, extract builtin execution helpers from `src/runtime/vm.rs`
 - Keep package-function validation metadata centralized; do not reintroduce package-specific ad hoc type checks inside `src/semantic/analyzer.rs`
-- If slice behavior expands beyond literals and indexing, consider separating slice-specific lowering and VM helpers from the core scalar path
+- If slice behavior expands beyond the current window / assignment subset, consider separating slice-specific lowering and VM helpers from the core scalar path

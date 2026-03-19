@@ -91,6 +91,7 @@ impl<'a> Lexer<'a> {
                 '{' => self.push_simple(TokenKind::LeftBrace, &mut tokens),
                 '}' => self.push_simple(TokenKind::RightBrace, &mut tokens),
                 ',' => self.push_simple(TokenKind::Comma, &mut tokens),
+                ':' => self.push_simple(TokenKind::Colon, &mut tokens),
                 '.' => self.push_simple(TokenKind::Dot, &mut tokens),
                 ';' => self.push_simple(TokenKind::Semicolon, &mut tokens),
                 '=' if self.peek_next() == Some('=') => {

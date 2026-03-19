@@ -34,3 +34,4 @@ This directory stores research notes that inform roadmap choices and implementat
 
 - `AGENTS.md`: this directory convention
 - `2026-03-20-strings-package-contracts.md`: official behavior baseline for the first `strings` package seam
+- `2026-03-20-slice-expressions-and-assignment.md`: official behavior baseline for simple slice expressions and slice element assignment

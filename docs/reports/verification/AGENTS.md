@@ -41,3 +41,4 @@ This directory stores validation evidence that "proves the change holds."
 - `2026-03-20-import-fmt-seam.md`: validates import declarations, selector calls, and the first package-backed `fmt` seam
 - `2026-03-20-slice-runtime-testing.md`: validates slice runtime values, builtin expansion, and layered automated coverage
 - `2026-03-20-strings-package-contracts.md`: validates typed package contracts, the `strings` seam, and CLI inspection
+- `2026-03-20-slice-expressions-and-assignment.md`: validates simple slice expressions, shared slice windows, and indexed slice assignment

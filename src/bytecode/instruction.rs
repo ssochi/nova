@@ -73,6 +73,8 @@ pub enum Instruction {
     Greater,
     GreaterEqual,
     Index,
+    Slice { has_low: bool, has_high: bool },
+    SetIndex,
     Jump(usize),
     JumpIfFalse(usize),
     Pop,
@@ -105,6 +107,10 @@ impl Instruction {
             Instruction::Greater => "greater".to_string(),
             Instruction::GreaterEqual => "greater-equal".to_string(),
             Instruction::Index => "index".to_string(),
+            Instruction::Slice { has_low, has_high } => {
+                format!("slice low={} high={}", has_low, has_high)
+            }
+            Instruction::SetIndex => "set-index".to_string(),
             Instruction::Jump(target) => format!("jump {target}"),
             Instruction::JumpIfFalse(target) => format!("jump-if-false {target}"),
             Instruction::Pop => "pop".to_string(),

@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-01-33-44-slice-expressions-assignment`
+- Opened `2026-03-20-01-33-44-slice-expressions-assignment` for slice expressions, slice element assignment, and the next composite runtime step under `M3`
 - Completed and archived `2026-03-20-01-17-51-strings-package-contracts`
 - Opened `2026-03-20-01-17-51-strings-package-contracts` for the second package-backed standard-library seam and the new research directory baseline under `M3`
 - Completed and archived `2026-03-20-00-55-55-slice-runtime-testing`

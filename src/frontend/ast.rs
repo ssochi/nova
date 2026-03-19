@@ -104,7 +104,7 @@ pub enum Statement {
         value: Expression,
     },
     Assign {
-        name: String,
+        target: AssignmentTarget,
         value: Expression,
     },
     Expr(Expression),
@@ -126,8 +126,13 @@ impl Statement {
             Statement::VarDecl { name, value } => {
                 format!("{}var {} = {}", indent_str(indent), name, value.render())
             }
-            Statement::Assign { name, value } => {
-                format!("{}{} = {}", indent_str(indent), name, value.render())
+            Statement::Assign { target, value } => {
+                format!(
+                    "{}{} = {}",
+                    indent_str(indent),
+                    target.render(),
+                    value.render()
+                )
             }
             Statement::Expr(expression) => {
                 format!("{}{}", indent_str(indent), expression.render())
@@ -176,6 +181,26 @@ impl Statement {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AssignmentTarget {
+    Identifier(String),
+    Index {
+        target: Expression,
+        index: Expression,
+    },
+}
+
+impl AssignmentTarget {
+    fn render(&self) -> String {
+        match self {
+            AssignmentTarget::Identifier(name) => name.clone(),
+            AssignmentTarget::Index { target, index } => {
+                format!("{}[{}]", target.render(), index.render())
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Expression {
     Integer(i64),
     Bool(bool),
@@ -193,6 +218,11 @@ pub enum Expression {
     Index {
         target: Box<Expression>,
         index: Box<Expression>,
+    },
+    Slice {
+        target: Box<Expression>,
+        low: Option<Box<Expression>>,
+        high: Option<Box<Expression>>,
     },
     Selector {
         target: Box<Expression>,
@@ -236,6 +266,14 @@ impl Expression {
             Expression::Index { target, index } => {
                 format!("{}[{}]", target.render(), index.render())
             }
+            Expression::Slice { target, low, high } => format!(
+                "{}[{}:{}]",
+                target.render(),
+                low.as_ref().map(|value| value.render()).unwrap_or_default(),
+                high.as_ref()
+                    .map(|value| value.render())
+                    .unwrap_or_default()
+            ),
             Expression::Selector { target, member } => {
                 format!("{}.{}", target.render(), member)
             }

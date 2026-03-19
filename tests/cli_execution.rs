@@ -46,6 +46,12 @@ fn run_executes_strings_package_calls() {
 }
 
 #[test]
+fn run_executes_slice_windows_and_index_assignment() {
+    let output = run_cli(&["run", "examples/slice_windows.go"]).expect("program should run");
+    assert_eq!(output, "3 9 7\n1 9 3 7\n");
+}
+
+#[test]
 fn dump_bytecode_shows_stack_machine_instructions() {
     let output = run_cli(&["dump-bytecode", "examples/arithmetic.go"])
         .expect("bytecode should be generated");
@@ -105,6 +111,15 @@ fn dump_tokens_show_slice_syntax() {
 }
 
 #[test]
+fn dump_tokens_show_slice_window_syntax() {
+    let output =
+        run_cli(&["dump-tokens", "examples/slice_windows.go"]).expect("tokens should be rendered");
+
+    assert!(output.contains(":"));
+    assert!(output.contains("identifier(reopen)"));
+}
+
+#[test]
 fn dump_ast_renders_strings_and_builtins() {
     let output = run_cli(&["dump-ast", "examples/strings.go"]).expect("ast should be rendered");
 
@@ -138,6 +153,16 @@ fn dump_ast_renders_strings_package_calls() {
     assert!(output.contains("import \"strings\""));
     assert!(output.contains("return strings.Join(parts, \"-\")"));
     assert!(output.contains("strings.HasPrefix(joined, \"nova\")"));
+}
+
+#[test]
+fn dump_ast_renders_slice_windows_and_index_assignment() {
+    let output =
+        run_cli(&["dump-ast", "examples/slice_windows.go"]).expect("ast should be rendered");
+
+    assert!(output.contains("var head = values[:2]"));
+    assert!(output.contains("var reopen = head[1:4]"));
+    assert!(output.contains("reopen[2] = 7"));
 }
 
 #[test]
@@ -191,4 +216,14 @@ fn dump_bytecode_shows_strings_package_calls() {
     assert!(output.contains("call-package strings.Join 2"));
     assert!(output.contains("call-package strings.Contains 2"));
     assert!(output.contains("call-package strings.HasPrefix 2"));
+}
+
+#[test]
+fn dump_bytecode_shows_slice_window_instructions() {
+    let output = run_cli(&["dump-bytecode", "examples/slice_windows.go"])
+        .expect("bytecode should be generated");
+
+    assert!(output.contains("slice low=false high=true"));
+    assert!(output.contains("slice low=true high=true"));
+    assert!(output.contains("set-index"));
 }

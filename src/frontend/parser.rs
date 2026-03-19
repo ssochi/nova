@@ -1,8 +1,8 @@
 use std::fmt;
 
 use crate::frontend::ast::{
-    BinaryOperator, Block, Expression, FunctionDecl, ImportDecl, Parameter, SourceFileAst,
-    Statement, TypeRef,
+    AssignmentTarget, BinaryOperator, Block, Expression, FunctionDecl, ImportDecl, Parameter,
+    SourceFileAst, Statement, TypeRef,
 };
 use crate::frontend::token::{Token, TokenKind};
 
@@ -142,13 +142,6 @@ impl<'a> Parser<'a> {
             return Ok(Statement::Return(Some(value)));
         }
 
-        if self.check_identifier_assignment() {
-            let name = self.expect_identifier()?;
-            self.expect(TokenKind::Assign)?;
-            let value = self.parse_expression()?;
-            return Ok(Statement::Assign { name, value });
-        }
-
         if self.match_kind(&TokenKind::If) {
             let condition = self.parse_expression()?;
             let then_block = self.parse_block()?;
@@ -171,6 +164,11 @@ impl<'a> Parser<'a> {
         }
 
         let expression = self.parse_expression()?;
+        if self.match_kind(&TokenKind::Assign) {
+            let target = assignment_target_from_expression(expression)?;
+            let value = self.parse_expression()?;
+            return Ok(Statement::Assign { target, value });
+        }
         Ok(Statement::Expr(expression))
     }
 
@@ -261,11 +259,42 @@ impl<'a> Parser<'a> {
             }
 
             if self.match_kind(&TokenKind::LeftBracket) {
-                let index = self.parse_expression()?;
+                if self.match_kind(&TokenKind::Colon) {
+                    let high = if self.check(&TokenKind::RightBracket) {
+                        None
+                    } else {
+                        Some(Box::new(self.parse_expression()?))
+                    };
+                    self.reject_full_slice_expression()?;
+                    self.expect(TokenKind::RightBracket)?;
+                    expression = Expression::Slice {
+                        target: Box::new(expression),
+                        low: None,
+                        high,
+                    };
+                    continue;
+                }
+
+                let first = self.parse_expression()?;
+                if self.match_kind(&TokenKind::Colon) {
+                    let high = if self.check(&TokenKind::RightBracket) {
+                        None
+                    } else {
+                        Some(Box::new(self.parse_expression()?))
+                    };
+                    self.reject_full_slice_expression()?;
+                    self.expect(TokenKind::RightBracket)?;
+                    expression = Expression::Slice {
+                        target: Box::new(expression),
+                        low: Some(Box::new(first)),
+                        high,
+                    };
+                    continue;
+                }
                 self.expect(TokenKind::RightBracket)?;
                 expression = Expression::Index {
                     target: Box::new(expression),
-                    index: Box::new(index),
+                    index: Box::new(first),
                 };
                 continue;
             }
@@ -378,14 +407,12 @@ impl<'a> Parser<'a> {
         None
     }
 
-    fn check_identifier_assignment(&self) -> bool {
-        matches!(
-            (
-                &self.current_token().kind,
-                self.peek().map(|token| &token.kind)
-            ),
-            (TokenKind::Identifier(_), Some(TokenKind::Assign))
-        )
+    fn reject_full_slice_expression(&self) -> Result<(), ParseError> {
+        if self.check(&TokenKind::Colon) {
+            Err(self.error_at_current("full slice expressions are not supported"))
+        } else {
+            Ok(())
+        }
     }
 
     fn expect_keyword(&mut self, expected: TokenKind) -> Result<(), ParseError> {
@@ -483,7 +510,7 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::parse_source_file;
-    use crate::frontend::ast::{Expression, Statement, TypeRef};
+    use crate::frontend::ast::{AssignmentTarget, Expression, Statement, TypeRef};
     use crate::frontend::lexer::lex;
     use crate::source::SourceFile;
 
@@ -519,5 +546,55 @@ mod tests {
             }
             _ => panic!("expected call expression"),
         }
+    }
+
+    #[test]
+    fn parse_slice_expression_and_index_assignment() {
+        let source = SourceFile {
+            path: "test.go".into(),
+            contents: "package main\n\nfunc main() {\n\tvar values = []int{1, 2, 3}\n\tvar middle = values[1:3]\n\tvalues[:2][1] = 9\n}\n"
+                .to_string(),
+        };
+
+        let tokens = lex(&source).expect("lexing should succeed");
+        let ast = parse_source_file(&tokens).expect("parsing should succeed");
+        let function = &ast.functions[0];
+
+        match &function.body.statements[1] {
+            Statement::VarDecl { value, .. } => match value {
+                Expression::Slice { low, high, .. } => {
+                    assert!(matches!(low, Some(value) if **value == Expression::Integer(1)));
+                    assert!(matches!(high, Some(value) if **value == Expression::Integer(3)));
+                }
+                _ => panic!("expected slice expression"),
+            },
+            _ => panic!("expected variable declaration"),
+        }
+
+        match &function.body.statements[2] {
+            Statement::Assign { target, .. } => match target {
+                AssignmentTarget::Index { target, index } => {
+                    assert_eq!(*index, Expression::Integer(1));
+                    assert!(matches!(target, Expression::Slice { .. }));
+                }
+                _ => panic!("expected index assignment target"),
+            },
+            _ => panic!("expected assignment statement"),
+        }
+    }
+}
+
+fn assignment_target_from_expression(
+    expression: Expression,
+) -> Result<AssignmentTarget, ParseError> {
+    match expression {
+        Expression::Identifier(name) => Ok(AssignmentTarget::Identifier(name)),
+        Expression::Index { target, index } => Ok(AssignmentTarget::Index {
+            target: *target,
+            index: *index,
+        }),
+        _ => Err(ParseError::new(
+            "assignment target must be a variable name or index expression",
+        )),
     }
 }

@@ -1,0 +1,5 @@
+- [done] Open the active `M3` plan and sync roadmap indexes for the slice-expression and assignment iteration.
+- [done] Capture research and design scope for official slice-expression and element-assignment behavior.
+- [done] Implement frontend, semantic, lowering, and VM support for slice expressions and slice element assignment.
+- [done] Add examples, automated coverage, and serial CLI validation for the new slice surface.
+- [done] Sync design, tech, reports, milestone state, `BOOT.md`, archive the completed plan, and commit all current changes.
