@@ -58,6 +58,7 @@ pub enum Instruction {
     PushInt(i64),
     PushBool(bool),
     PushString(String),
+    PushNilSlice,
     BuildSlice(usize),
     LoadLocal(usize),
     StoreLocal(usize),
@@ -92,6 +93,7 @@ impl Instruction {
             Instruction::PushString(value) => {
                 format!("push-string {}", render_string_literal(value))
             }
+            Instruction::PushNilSlice => "push-nil-slice".to_string(),
             Instruction::BuildSlice(count) => format!("build-slice {count}"),
             Instruction::LoadLocal(index) => format!("load-local {index}"),
             Instruction::StoreLocal(index) => format!("store-local {index}"),

@@ -101,7 +101,8 @@ pub struct Block {
 pub enum Statement {
     VarDecl {
         name: String,
-        value: Expression,
+        type_ref: Option<TypeRef>,
+        value: Option<Expression>,
     },
     Assign {
         target: AssignmentTarget,
@@ -123,8 +124,21 @@ pub enum Statement {
 impl Statement {
     fn render(&self, indent: usize) -> String {
         match self {
-            Statement::VarDecl { name, value } => {
-                format!("{}var {} = {}", indent_str(indent), name, value.render())
+            Statement::VarDecl {
+                name,
+                type_ref,
+                value,
+            } => {
+                let mut rendered = format!("{}var {}", indent_str(indent), name);
+                if let Some(type_ref) = type_ref {
+                    rendered.push(' ');
+                    rendered.push_str(&type_ref.render());
+                }
+                if let Some(value) = value {
+                    rendered.push_str(" = ");
+                    rendered.push_str(&value.render());
+                }
+                rendered
             }
             Statement::Assign { target, value } => {
                 format!(

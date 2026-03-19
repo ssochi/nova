@@ -86,6 +86,7 @@ impl VirtualMachine {
                 Instruction::PushInt(value) => self.stack.push(Value::Integer(value)),
                 Instruction::PushBool(value) => self.stack.push(Value::Boolean(value)),
                 Instruction::PushString(value) => self.stack.push(Value::String(value)),
+                Instruction::PushNilSlice => self.stack.push(Value::Slice(SliceValue::nil())),
                 Instruction::BuildSlice(count) => {
                     let mut elements = Vec::with_capacity(count);
                     for _ in 0..count {
@@ -733,6 +734,47 @@ mod tests {
             .render_output();
 
         assert_eq!(output, "4\n3 2\n");
+    }
+
+    #[test]
+    fn execute_typed_zero_value_slices() {
+        let program = Program {
+            package_name: "main".to_string(),
+            entry_function: "main".to_string(),
+            entry_function_index: 0,
+            functions: vec![CompiledFunction {
+                name: "main".to_string(),
+                parameter_count: 0,
+                returns_value: false,
+                local_names: vec!["values".to_string(), "grown".to_string()],
+                instructions: vec![
+                    Instruction::PushNilSlice,
+                    Instruction::StoreLocal(0),
+                    Instruction::LoadLocal(0),
+                    Instruction::CallBuiltin(BuiltinFunction::Len, 1),
+                    Instruction::LoadLocal(0),
+                    Instruction::CallBuiltin(BuiltinFunction::Cap, 1),
+                    Instruction::CallBuiltin(BuiltinFunction::Println, 2),
+                    Instruction::LoadLocal(0),
+                    Instruction::PushInt(4),
+                    Instruction::PushInt(5),
+                    Instruction::CallBuiltin(BuiltinFunction::Append, 3),
+                    Instruction::StoreLocal(1),
+                    Instruction::LoadLocal(1),
+                    Instruction::PushInt(1),
+                    Instruction::Index,
+                    Instruction::CallBuiltin(BuiltinFunction::Println, 1),
+                    Instruction::Return,
+                ],
+            }],
+        };
+
+        let output = VirtualMachine::new()
+            .execute(&program)
+            .expect("typed zero-value slice program should execute")
+            .render_output();
+
+        assert_eq!(output, "0 0\n5\n");
     }
 }
 

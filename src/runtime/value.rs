@@ -56,6 +56,7 @@ pub struct SliceValue {
     start: usize,
     len: usize,
     capacity: usize,
+    is_nil: bool,
 }
 
 impl SliceValue {
@@ -66,6 +67,17 @@ impl SliceValue {
             start: 0,
             len,
             capacity: len,
+            is_nil: false,
+        }
+    }
+
+    pub fn nil() -> Self {
+        Self {
+            storage: Rc::new(RefCell::new(Vec::new())),
+            start: 0,
+            len: 0,
+            capacity: 0,
+            is_nil: true,
         }
     }
 
@@ -106,6 +118,7 @@ impl SliceValue {
             start: self.start + low,
             len: high - low,
             capacity: self.capacity - low,
+            is_nil: self.is_nil && low == 0 && high == 0,
         })
     }
 
@@ -140,6 +153,7 @@ impl SliceValue {
                 start: self.start,
                 len: new_len,
                 capacity: self.capacity,
+                is_nil: false,
             };
         }
 
@@ -151,7 +165,10 @@ impl SliceValue {
 
 impl PartialEq for SliceValue {
     fn eq(&self, other: &Self) -> bool {
-        self.visible_elements() == other.visible_elements()
+        self.is_nil == other.is_nil
+            && self.len == other.len
+            && self.capacity == other.capacity
+            && self.visible_elements() == other.visible_elements()
     }
 }
 
@@ -206,5 +223,22 @@ mod tests {
                 Value::Integer(4),
             ]
         );
+    }
+
+    #[test]
+    fn nil_slice_reports_zero_lengths_and_appends_into_real_storage() {
+        let nil_slice = SliceValue::nil();
+
+        assert_eq!(nil_slice.len(), 0);
+        assert_eq!(nil_slice.capacity(), 0);
+        assert_eq!(nil_slice.visible_elements(), Vec::<Value>::new());
+
+        let grown = nil_slice.append(&[Value::Integer(7), Value::Integer(8)]);
+
+        assert_eq!(
+            grown.visible_elements(),
+            vec![Value::Integer(7), Value::Integer(8)]
+        );
+        assert_eq!(grown.capacity(), 2);
     }
 }

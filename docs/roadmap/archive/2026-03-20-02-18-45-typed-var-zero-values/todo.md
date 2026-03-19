@@ -1,0 +1,5 @@
+- [done] Open the active `M3` plan and sync roadmap indexes for typed declarations and zero-value slices.
+- [done] Extend the slice research/design baseline for typed `var` zero values and nil-slice semantics.
+- [done] Implement parser, semantic, bytecode, and runtime support for typed declarations and nil-slice zero values.
+- [done] Add automated coverage, serial CLI validation, and formal verification / experience reports.
+- [done] Sync milestone state, `BOOT.md`, archive the completed plan, and commit plus push all current changes.

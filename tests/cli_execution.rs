@@ -58,6 +58,12 @@ fn run_executes_slice_builtins_and_capacity_aware_append() {
 }
 
 #[test]
+fn run_executes_typed_zero_values() {
+    let output = run_cli(&["run", "examples/typed_zero_values.go"]).expect("program should run");
+    assert_eq!(output, "0 false 0 0 0\n2 4 5\n1 2 4\n");
+}
+
+#[test]
 fn dump_bytecode_shows_stack_machine_instructions() {
     let output = run_cli(&["dump-bytecode", "examples/arithmetic.go"])
         .expect("bytecode should be generated");
@@ -182,6 +188,16 @@ fn dump_ast_renders_slice_builtins() {
 }
 
 #[test]
+fn dump_ast_renders_typed_zero_values() {
+    let output =
+        run_cli(&["dump-ast", "examples/typed_zero_values.go"]).expect("ast should be rendered");
+
+    assert!(output.contains("var total int"));
+    assert!(output.contains("var values []int"));
+    assert!(output.contains("var head []int = values[:1]"));
+}
+
+#[test]
 fn dump_bytecode_shows_loop_jumps() {
     let output =
         run_cli(&["dump-bytecode", "examples/loops.go"]).expect("bytecode should be generated");
@@ -242,6 +258,17 @@ fn dump_bytecode_shows_slice_builtins() {
     assert!(output.contains("call-builtin cap 1"));
     assert!(output.contains("call-builtin copy 2"));
     assert!(output.contains("call-builtin append 2"));
+}
+
+#[test]
+fn dump_bytecode_shows_typed_zero_value_instructions() {
+    let output = run_cli(&["dump-bytecode", "examples/typed_zero_values.go"])
+        .expect("bytecode should be generated");
+
+    assert!(output.contains("push-int 0"));
+    assert!(output.contains("push-bool false"));
+    assert!(output.contains("push-string \"\""));
+    assert!(output.contains("push-nil-slice"));
 }
 
 #[test]

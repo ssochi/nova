@@ -72,6 +72,19 @@ fn check_rejects_invalid_len_argument_type() {
 }
 
 #[test]
+fn check_rejects_typed_var_initializer_type_mismatch() {
+    let path = write_temp_source(
+        "check-bad-typed-var",
+        "package main\n\nfunc main() {\n\tvar ready bool = 1\n\tprintln(ready)\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("variable `ready` requires `bool`, found `int`"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
 fn check_rejects_package_call_without_import() {
     let path = write_temp_source(
         "check-missing-import",

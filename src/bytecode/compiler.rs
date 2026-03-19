@@ -79,9 +79,11 @@ impl<'a> FunctionCompiler<'a> {
     fn compile_statement(&mut self, statement: &CheckedStatement) -> Result<(), CompileError> {
         match statement {
             CheckedStatement::VarDecl { slot, value, .. } => {
-                self.compile_expression(value)?;
-                self.expect_value(&value.ty, "variable declaration")?;
-                self.instructions.push(Instruction::StoreLocal(*slot));
+                if let Some(value) = value {
+                    self.compile_expression(value)?;
+                    self.expect_value(&value.ty, "variable declaration")?;
+                    self.instructions.push(Instruction::StoreLocal(*slot));
+                }
             }
             CheckedStatement::Assign { target, value } => match target {
                 CheckedAssignmentTarget::Local { slot, .. } => {
@@ -158,6 +160,19 @@ impl<'a> FunctionCompiler<'a> {
                 self.instructions
                     .push(Instruction::PushString(value.clone()));
             }
+            CheckedExpressionKind::ZeroValue => match &expression.ty {
+                Type::Int => self.instructions.push(Instruction::PushInt(0)),
+                Type::Bool => self.instructions.push(Instruction::PushBool(false)),
+                Type::String => self
+                    .instructions
+                    .push(Instruction::PushString(String::new())),
+                Type::Slice(_) => self.instructions.push(Instruction::PushNilSlice),
+                Type::Void => {
+                    return Err(CompileError::new(
+                        "zero-value synthesis does not support `void` locals",
+                    ));
+                }
+            },
             CheckedExpressionKind::SliceLiteral { elements } => {
                 for element in elements {
                     self.compile_expression(element)?;

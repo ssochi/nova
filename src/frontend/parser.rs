@@ -128,9 +128,26 @@ impl<'a> Parser<'a> {
     fn parse_statement(&mut self) -> Result<Statement, ParseError> {
         if self.match_kind(&TokenKind::Var) {
             let name = self.expect_identifier()?;
-            self.expect(TokenKind::Assign)?;
-            let value = self.parse_expression()?;
-            return Ok(Statement::VarDecl { name, value });
+            let (type_ref, value) = if self.match_kind(&TokenKind::Assign) {
+                (None, Some(self.parse_expression()?))
+            } else if self.check_type_start() {
+                let type_ref = self.parse_type_ref()?;
+                let value = if self.match_kind(&TokenKind::Assign) {
+                    Some(self.parse_expression()?)
+                } else {
+                    None
+                };
+                (Some(type_ref), value)
+            } else {
+                return Err(
+                    self.error_at_current("variable declaration requires a type or initializer")
+                );
+            };
+            return Ok(Statement::VarDecl {
+                name,
+                type_ref,
+                value,
+            });
         }
 
         if self.match_kind(&TokenKind::Return) {
@@ -528,8 +545,8 @@ mod tests {
         let function = &ast.functions[0];
 
         match &function.body.statements[0] {
-            Statement::VarDecl { value, .. } => match value {
-                Expression::SliceLiteral { element_type, .. } => {
+            Statement::VarDecl { value, .. } => match value.as_ref() {
+                Some(Expression::SliceLiteral { element_type, .. }) => {
                     assert_eq!(
                         element_type,
                         &TypeRef::Slice(Box::new(TypeRef::Named("int".into())))
@@ -561,8 +578,8 @@ mod tests {
         let function = &ast.functions[0];
 
         match &function.body.statements[1] {
-            Statement::VarDecl { value, .. } => match value {
-                Expression::Slice { low, high, .. } => {
+            Statement::VarDecl { value, .. } => match value.as_ref() {
+                Some(Expression::Slice { low, high, .. }) => {
                     assert!(matches!(low, Some(value) if **value == Expression::Integer(1)));
                     assert!(matches!(high, Some(value) if **value == Expression::Integer(3)));
                 }
@@ -580,6 +597,42 @@ mod tests {
                 _ => panic!("expected index assignment target"),
             },
             _ => panic!("expected assignment statement"),
+        }
+    }
+
+    #[test]
+    fn parse_typed_var_declarations_with_and_without_initializers() {
+        let source = SourceFile {
+            path: "test.go".into(),
+            contents: "package main\n\nfunc main() {\n\tvar total int\n\tvar values []int = []int{1, 2}\n}\n"
+                .to_string(),
+        };
+
+        let tokens = lex(&source).expect("lexing should succeed");
+        let ast = parse_source_file(&tokens).expect("parsing should succeed");
+        let function = &ast.functions[0];
+
+        match &function.body.statements[0] {
+            Statement::VarDecl {
+                type_ref, value, ..
+            } => {
+                assert_eq!(type_ref, &Some(TypeRef::Named("int".into())));
+                assert!(value.is_none());
+            }
+            _ => panic!("expected typed variable declaration"),
+        }
+
+        match &function.body.statements[1] {
+            Statement::VarDecl {
+                type_ref, value, ..
+            } => {
+                assert_eq!(
+                    type_ref,
+                    &Some(TypeRef::Slice(Box::new(TypeRef::Named("int".into()))))
+                );
+                assert!(matches!(value, Some(Expression::SliceLiteral { .. })));
+            }
+            _ => panic!("expected typed variable declaration with initializer"),
         }
     }
 }

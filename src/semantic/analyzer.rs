@@ -266,21 +266,56 @@ impl<'a> FunctionAnalyzer<'a> {
         statement: &Statement,
     ) -> Result<CheckedStatement, SemanticError> {
         match statement {
-            Statement::VarDecl { name, value } => {
+            Statement::VarDecl {
+                name,
+                type_ref,
+                value,
+            } => {
                 if self.current_scope().contains_key(name) {
                     return Err(SemanticError::new(format!(
                         "variable `{name}` is already defined in the current scope"
                     )));
                 }
 
-                let value = self.analyze_expression(value)?;
-                if !value.ty.produces_value() {
-                    return Err(SemanticError::new(format!(
-                        "variable `{name}` requires a value-producing expression"
-                    )));
-                }
-
-                let slot = self.allocate_local(name.clone(), value.ty.clone());
+                let declared_type = type_ref
+                    .as_ref()
+                    .map(|type_ref| {
+                        resolve_type_ref(type_ref).ok_or_else(|| {
+                            SemanticError::new(format!(
+                                "unsupported variable type `{}` in declaration of `{name}`",
+                                type_ref.render()
+                            ))
+                        })
+                    })
+                    .transpose()?;
+                let value = match value {
+                    Some(expression) => {
+                        let value = self.analyze_expression(expression)?;
+                        if !value.ty.produces_value() {
+                            return Err(SemanticError::new(format!(
+                                "variable `{name}` requires a value-producing expression"
+                            )));
+                        }
+                        if let Some(declared_type) = &declared_type {
+                            expect_type(declared_type, &value.ty, &format!("variable `{name}`"))?;
+                        }
+                        Some(value)
+                    }
+                    None => None,
+                };
+                let local_type = declared_type.unwrap_or_else(|| {
+                    value
+                        .as_ref()
+                        .expect("untyped variable declarations require an initializer")
+                        .ty
+                        .clone()
+                });
+                let value = if value.is_some() {
+                    value
+                } else {
+                    Some(zero_value_expression(local_type.clone()))
+                };
+                let slot = self.allocate_local(name.clone(), local_type);
                 Ok(CheckedStatement::VarDecl {
                     slot,
                     name: name.clone(),
@@ -890,5 +925,28 @@ mod tests {
         let program = analyze_package(&ast).expect("analysis should succeed");
 
         assert_eq!(program.functions.len(), 1);
+    }
+
+    #[test]
+    fn analyze_typed_var_declarations_without_initializers() {
+        let source = SourceFile {
+            path: "test.go".into(),
+            contents:
+                "package main\n\nfunc main() {\n\tvar total int\n\tvar ready bool\n\tvar label string\n\tvar values []int\n\tprintln(total, ready, len(label), len(values), cap(values))\n}\n"
+                    .to_string(),
+        };
+
+        let tokens = lex(&source).expect("lexing should succeed");
+        let ast = parse_source_file(&tokens).expect("parsing should succeed");
+        let program = analyze_package(&ast).expect("analysis should succeed");
+
+        assert_eq!(program.functions.len(), 1);
+    }
+}
+
+fn zero_value_expression(ty: Type) -> CheckedExpression {
+    CheckedExpression {
+        ty,
+        kind: CheckedExpressionKind::ZeroValue,
     }
 }

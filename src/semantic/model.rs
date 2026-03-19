@@ -27,7 +27,7 @@ pub enum CheckedStatement {
     VarDecl {
         slot: usize,
         name: String,
-        value: CheckedExpression,
+        value: Option<CheckedExpression>,
     },
     Assign {
         target: CheckedAssignmentTarget,
@@ -69,6 +69,7 @@ pub enum CheckedExpressionKind {
     Integer(i64),
     Bool(bool),
     String(String),
+    ZeroValue,
     SliceLiteral {
         elements: Vec<CheckedExpression>,
     },

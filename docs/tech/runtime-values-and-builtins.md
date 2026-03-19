@@ -17,6 +17,7 @@ Describe the current runtime value categories and builtin execution model introd
 - `slice`
   - Stored as shared backing storage plus start / length / capacity metadata
   - Built by slice literals and returned by `append`
+  - Also used as the zero value for explicit typed slice declarations via a nil-slice runtime state
   - Currently rendered in a Go-like `[value value]` form for builtin and package output
   - Supports `len(slice)`, `cap(slice)`, `copy(dst, src)`, index expressions such as `values[0]`, simple slice expressions such as `values[1:3]`, and element assignment such as `values[0] = 1`
 
@@ -58,7 +59,7 @@ Describe the current runtime value categories and builtin execution model introd
 ## Runtime Execution Notes
 
 - Bytecode uses `push-string` for literals and `concat` for string addition
-- Bytecode now also uses `build-slice <count>` for slice literals, `index` for slice element reads, `slice` for slice-window creation, and `set-index` for slice element writes
+- Bytecode now also uses `push-nil-slice` for typed zero-value slice declarations, `build-slice <count>` for slice literals, `index` for slice element reads, `slice` for slice-window creation, and `set-index` for slice element writes
 - Equality still reuses the generic value comparison path because runtime values are tagged
 - VM output is an accumulated string buffer instead of newline-separated records
 - `print` appends rendered arguments without an automatic trailing newline
@@ -67,6 +68,7 @@ Describe the current runtime value categories and builtin execution model introd
 - `copy` snapshots source elements before writing, so overlapping slice windows behave predictably
 - `append` now reuses existing backing storage when spare capacity is available; otherwise it allocates a fresh slice value
 - Slice windows share backing storage, so updating one slice view is visible through overlapping slice values
+- Explicit typed local declarations are lowered into concrete zero-producing instructions, so `var total int`, `var ready bool`, `var label string`, and `var values []int` all produce Go-like zero values without runtime type reflection
 - Bytecode now also uses `call-package` for metadata-backed package functions
 - `fmt.Sprint` returns a runtime string value without mutating the output buffer
 - `fmt` formatting is intentionally approximate and does not yet support format verbs
