@@ -3,6 +3,8 @@ pub enum BuiltinFunction {
     Print,
     Println,
     Len,
+    Cap,
+    Copy,
     Append,
 }
 
@@ -12,6 +14,8 @@ impl BuiltinFunction {
             BuiltinFunction::Print => "print",
             BuiltinFunction::Println => "println",
             BuiltinFunction::Len => "len",
+            BuiltinFunction::Cap => "cap",
+            BuiltinFunction::Copy => "copy",
             BuiltinFunction::Append => "append",
         }
     }

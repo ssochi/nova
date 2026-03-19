@@ -30,15 +30,16 @@
 - `2026-03-20-00-55-55-slice-runtime-testing`: completed the first composite runtime value and layered test coverage
 - `2026-03-20-01-17-51-strings-package-contracts`: completed typed package contracts, a second standard-library seam, and the research baseline
 - `2026-03-20-01-33-44-slice-expressions-assignment`: completed slice windows, shared slice storage, and indexed slice assignment
+- `2026-03-20-01-54-16-slice-builtins-capacity`: completed `cap`, `copy`, and capacity-aware `append`
 
 ## Current Risks
 
 - Runtime-surface growth can sprawl quickly if types, builtins, and imports are mixed into the same plan.
 - Builtin additions can become hardcoded special cases unless their contracts stay centralized.
 - Supporting more realistic Go programs will require careful staging so the VM remains understandable.
-- The current runtime now has richer slice operations, but still lacks string slicing, more realistic append/capacity semantics, real import graphs, and broader package-backed runtime services.
+- The current runtime now has richer slice operations, but still lacks string slicing, `make` / nil slice construction, full append growth semantics, real import graphs, and broader package-backed runtime services.
 
 ## Next-Round Recommendations
 
-- Open the next `M3` plan around either byte-oriented string/runtime work needed for string slicing compatibility or broader slice helpers such as `cap`, `copy`, and more Go-like `append`.
+- Open the next `M3` plan around either byte-oriented string/runtime work for string slicing and `[]byte`-adjacent semantics, or a deeper allocation model such as `make` and nil slices.
 - Reuse the `docs/research/` flow before locking the next compatibility-sensitive slice.

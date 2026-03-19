@@ -279,6 +279,42 @@ impl VirtualMachine {
                 };
                 self.stack.push(Value::Integer(value));
             }
+            BuiltinFunction::Cap => {
+                if arguments.len() != 1 {
+                    return Err(RuntimeError::new(format!(
+                        "builtin `cap` expected 1 argument, received {}",
+                        arguments.len()
+                    )));
+                }
+                let value = match arguments.into_iter().next().expect("arity checked above") {
+                    Value::Slice(slice) => slice.capacity() as i64,
+                    _ => {
+                        return Err(RuntimeError::new("builtin `cap` expected a slice argument"));
+                    }
+                };
+                self.stack.push(Value::Integer(value));
+            }
+            BuiltinFunction::Copy => {
+                let [destination, source] = expect_exact_builtin_arguments(arguments, 2, "copy")?;
+                let destination = match destination {
+                    Value::Slice(slice) => slice,
+                    _ => {
+                        return Err(RuntimeError::new(
+                            "builtin `copy` expected a slice as argument 1",
+                        ));
+                    }
+                };
+                let source = match source {
+                    Value::Slice(slice) => slice,
+                    _ => {
+                        return Err(RuntimeError::new(
+                            "builtin `copy` expected a slice as argument 2",
+                        ));
+                    }
+                };
+                self.stack
+                    .push(Value::Integer(destination.copy_from(&source) as i64));
+            }
             BuiltinFunction::Append => {
                 let Some((first, rest)) = arguments.split_first() else {
                     return Err(RuntimeError::new(
@@ -637,6 +673,67 @@ mod tests {
 
         assert_eq!(output, "9\n");
     }
+
+    #[test]
+    fn execute_slice_builtins_and_capacity_aware_append() {
+        let program = Program {
+            package_name: "main".to_string(),
+            entry_function: "main".to_string(),
+            entry_function_index: 0,
+            functions: vec![CompiledFunction {
+                name: "main".to_string(),
+                parameter_count: 0,
+                returns_value: false,
+                local_names: vec![
+                    "values".to_string(),
+                    "head".to_string(),
+                    "grown".to_string(),
+                ],
+                instructions: vec![
+                    Instruction::PushInt(1),
+                    Instruction::PushInt(2),
+                    Instruction::PushInt(3),
+                    Instruction::PushInt(4),
+                    Instruction::BuildSlice(4),
+                    Instruction::StoreLocal(0),
+                    Instruction::LoadLocal(0),
+                    Instruction::PushInt(2),
+                    Instruction::Slice {
+                        has_low: false,
+                        has_high: true,
+                    },
+                    Instruction::StoreLocal(1),
+                    Instruction::LoadLocal(1),
+                    Instruction::PushInt(9),
+                    Instruction::CallBuiltin(BuiltinFunction::Append, 2),
+                    Instruction::StoreLocal(2),
+                    Instruction::LoadLocal(2),
+                    Instruction::CallBuiltin(BuiltinFunction::Cap, 1),
+                    Instruction::CallBuiltin(BuiltinFunction::Println, 1),
+                    Instruction::LoadLocal(0),
+                    Instruction::LoadLocal(0),
+                    Instruction::PushInt(1),
+                    Instruction::Slice {
+                        has_low: true,
+                        has_high: false,
+                    },
+                    Instruction::CallBuiltin(BuiltinFunction::Copy, 2),
+                    Instruction::LoadLocal(0),
+                    Instruction::PushInt(0),
+                    Instruction::Index,
+                    Instruction::CallBuiltin(BuiltinFunction::Println, 2),
+                    Instruction::Return,
+                ],
+            }],
+        };
+
+        let output = VirtualMachine::new()
+            .execute(&program)
+            .expect("slice builtin program should execute")
+            .render_output();
+
+        assert_eq!(output, "4\n3 2\n");
+    }
 }
 
 fn expect_exact_package_arguments<const N: usize>(
@@ -728,6 +825,26 @@ fn expect_string_slice_package_argument(
     }
 
     Ok(strings)
+}
+
+fn expect_exact_builtin_arguments<const N: usize>(
+    arguments: Vec<Value>,
+    expected: usize,
+    builtin: &str,
+) -> Result<[Value; N], RuntimeError> {
+    if arguments.len() != expected {
+        return Err(RuntimeError::new(format!(
+            "builtin `{builtin}` expected {expected} arguments, received {}",
+            arguments.len()
+        )));
+    }
+
+    arguments.try_into().map_err(|arguments: Vec<Value>| {
+        RuntimeError::new(format!(
+            "builtin `{builtin}` expected {expected} arguments, received {}",
+            arguments.len()
+        ))
+    })
 }
 
 fn runtime_type_name(value: &Value) -> &'static str {

@@ -42,3 +42,4 @@ This directory stores experience validation reports close to the real user path.
 - `2026-03-20-slice-runtime-testing-playtest.md`: records the CLI walkthrough for slice literals, indexing, and the layered test upgrade
 - `2026-03-20-strings-package-contracts-playtest.md`: records the CLI walkthrough for typed `strings` package contracts
 - `2026-03-20-slice-expressions-and-assignment-playtest.md`: records the CLI walkthrough for slice windows and indexed slice updates
+- `2026-03-20-slice-builtins-capacity-playtest.md`: records the CLI walkthrough for `cap`, `copy`, and capacity-aware append reuse

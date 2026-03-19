@@ -8,7 +8,7 @@ pub struct BuiltinContract {
     pub validator: fn(&[Type]) -> Result<Type, String>,
 }
 
-const BUILTIN_CONTRACTS: [BuiltinContract; 4] = [
+const BUILTIN_CONTRACTS: [BuiltinContract; 6] = [
     BuiltinContract {
         builtin: BuiltinFunction::Print,
         name: "print",
@@ -23,6 +23,16 @@ const BUILTIN_CONTRACTS: [BuiltinContract; 4] = [
         builtin: BuiltinFunction::Len,
         name: "len",
         validator: validate_len_builtin,
+    },
+    BuiltinContract {
+        builtin: BuiltinFunction::Cap,
+        name: "cap",
+        validator: validate_cap_builtin,
+    },
+    BuiltinContract {
+        builtin: BuiltinFunction::Copy,
+        name: "copy",
+        validator: validate_copy_builtin,
     },
     BuiltinContract {
         builtin: BuiltinFunction::Append,
@@ -77,6 +87,40 @@ fn validate_len_builtin(argument_types: &[Type]) -> Result<Type, String> {
             actual.render()
         ))
     }
+}
+
+fn validate_cap_builtin(argument_types: &[Type]) -> Result<Type, String> {
+    validate_exact_arity("cap", 1, argument_types.len())?;
+    let actual = &argument_types[0];
+    if matches!(actual, Type::Slice(_)) {
+        Ok(Type::Int)
+    } else {
+        Err(format!(
+            "argument 1 in call to builtin `cap` requires `slice`, found `{}`",
+            actual.render()
+        ))
+    }
+}
+
+fn validate_copy_builtin(argument_types: &[Type]) -> Result<Type, String> {
+    validate_exact_arity("copy", 2, argument_types.len())?;
+    let destination = argument_types[0].clone();
+    let destination_element = destination.slice_element_type().cloned().ok_or_else(|| {
+        format!(
+            "argument 1 in call to builtin `copy` requires `slice`, found `{}`",
+            argument_types[0].render()
+        )
+    })?;
+    let source = &argument_types[1];
+    if source.slice_element_type() != Some(&destination_element) {
+        return Err(format!(
+            "argument 2 in call to builtin `copy` requires `{}`, found `{}`",
+            destination.render(),
+            source.render()
+        ));
+    }
+
+    Ok(Type::Int)
 }
 
 fn validate_append_builtin(argument_types: &[Type]) -> Result<Type, String> {
@@ -135,6 +179,29 @@ mod tests {
             validate_builtin_call(BuiltinFunction::Len, &[Type::Slice(Box::new(Type::Int))])
                 .expect("len should accept slices");
         assert_eq!(result, Type::Int);
+    }
+
+    #[test]
+    fn cap_rejects_non_slice_arguments() {
+        let error = validate_builtin_call(BuiltinFunction::Cap, &[Type::String])
+            .expect_err("cap should reject strings in the current subset");
+
+        assert!(error.contains("requires `slice`"));
+    }
+
+    #[test]
+    fn copy_requires_matching_slice_types() {
+        let error = validate_builtin_call(
+            BuiltinFunction::Copy,
+            &[
+                Type::Slice(Box::new(Type::Int)),
+                Type::Slice(Box::new(Type::String)),
+            ],
+        )
+        .expect_err("copy should reject mismatched slice types");
+
+        assert!(error.contains("argument 2"));
+        assert!(error.contains("requires `[]int`"));
     }
 
     #[test]

@@ -1,0 +1,5 @@
+- [done] Open the active `M3` plan and sync roadmap indexes for the slice builtin and capacity iteration.
+- [done] Capture research and design scope for `cap`, `copy`, and capacity-aware `append`.
+- [done] Implement semantic, runtime, and example support for the chosen slice builtin surface.
+- [done] Add automated coverage, serial CLI validation, and formal verification / experience reports.
+- [done] Sync milestone state, `BOOT.md`, archive the completed plan, and commit plus push all current changes.

@@ -52,6 +52,12 @@ fn run_executes_slice_windows_and_index_assignment() {
 }
 
 #[test]
+fn run_executes_slice_builtins_and_capacity_aware_append() {
+    let output = run_cli(&["run", "examples/slice_builtins.go"]).expect("program should run");
+    assert_eq!(output, "2 4\n9 3 4\n3 2 9 4 4\n");
+}
+
+#[test]
 fn dump_bytecode_shows_stack_machine_instructions() {
     let output = run_cli(&["dump-bytecode", "examples/arithmetic.go"])
         .expect("bytecode should be generated");
@@ -166,6 +172,16 @@ fn dump_ast_renders_slice_windows_and_index_assignment() {
 }
 
 #[test]
+fn dump_ast_renders_slice_builtins() {
+    let output =
+        run_cli(&["dump-ast", "examples/slice_builtins.go"]).expect("ast should be rendered");
+
+    assert!(output.contains("println(len(head), cap(head))"));
+    assert!(output.contains("var copied = copy(values, values[1:])"));
+    assert!(output.contains("var grown = append(head, 9)"));
+}
+
+#[test]
 fn dump_bytecode_shows_loop_jumps() {
     let output =
         run_cli(&["dump-bytecode", "examples/loops.go"]).expect("bytecode should be generated");
@@ -216,6 +232,16 @@ fn dump_bytecode_shows_strings_package_calls() {
     assert!(output.contains("call-package strings.Join 2"));
     assert!(output.contains("call-package strings.Contains 2"));
     assert!(output.contains("call-package strings.HasPrefix 2"));
+}
+
+#[test]
+fn dump_bytecode_shows_slice_builtins() {
+    let output = run_cli(&["dump-bytecode", "examples/slice_builtins.go"])
+        .expect("bytecode should be generated");
+
+    assert!(output.contains("call-builtin cap 1"));
+    assert!(output.contains("call-builtin copy 2"));
+    assert!(output.contains("call-builtin append 2"));
 }
 
 #[test]

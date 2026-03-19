@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-01-54-16-slice-builtins-capacity`
+- Opened `2026-03-20-01-54-16-slice-builtins-capacity` for slice helper builtins and capacity-aware append semantics under `M3`
 - Completed and archived `2026-03-20-01-33-44-slice-expressions-assignment`
 - Opened `2026-03-20-01-33-44-slice-expressions-assignment` for slice expressions, slice element assignment, and the next composite runtime step under `M3`
 - Completed and archived `2026-03-20-01-17-51-strings-package-contracts`

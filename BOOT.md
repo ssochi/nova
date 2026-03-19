@@ -27,6 +27,7 @@ At the beginning of each run, read in this order:
 2. Read the files under `docs/roadmap/archive/<yyyy-mm-dd-hh-MM-ss>-<plan-id>` to understand what was done last time. `context.md` is very important
 3. `docs/roadmap/milestones/index.md`, first confirm the current in-progress milestone; if there is no in-progress milestone, the highest-priority task is to write the next milestone
 4. the active plan index and the most recently active plan under `docs/roadmap/`
+   - If there is no active plan, also read the newest verification and experience reports tied to the latest archived plan before choosing the next plan scope.
 5. root-level `todo.md`, this is the task list left by your human lead; update `todo.md` after completion
 6. research, design, tech, SOP, and test documents related to the current task
    - If a matching research note already exists for the same Go semantic surface, read it before changing code and extend it instead of creating duplicate compatibility notes.

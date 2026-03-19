@@ -1,13 +1,15 @@
-# Slice Expression and Assignment Research
+# Slice Expressions, Assignment, and Builtin Semantics Research
 
 ## Goal
 
-Capture the official Go behavior baseline for simple slice expressions and indexed assignment so the next slice-runtime expansion stays explicit and defensible.
+Capture the official Go behavior baseline for the currently targeted slice surface: simple slice expressions, indexed assignment, `cap`, `copy`, and slice-backed `append` reuse.
 
 ## Sources Reviewed
 
 - Official Go language specification section `Slice expressions`
 - Official Go language specification section `Assignment statements`
+- Official Go language specification section `Appending to and copying slices`
+- Official Go language specification section `Length and capacity`
 
 ## Confirmed Findings
 
@@ -18,6 +20,11 @@ Capture the official Go behavior baseline for simple slice expressions and index
 - Indexed assignment requires the left-hand side to be assignable. A slice element assignment such as `values[i] = x` replaces the current element value.
 - String slice expressions are byte-oriented in real Go, not rune-oriented.
 - Out-of-range slice bounds or indexed writes fail at runtime in real Go.
+- `append` and `copy` are defined so their results do not depend on whether the referenced memory overlaps.
+- `append` returns a slice of the same type. If the destination slice has enough spare capacity, the existing underlying array is reused; otherwise a new sufficiently large underlying array is allocated.
+- `copy(dst, src)` returns the minimum of `len(dst)` and `len(src)` and requires matching slice element types, except for the special `[]byte` <- `string` case.
+- `cap(slice)` returns the current slice capacity. For slices, `0 <= len(s) <= cap(s)` always holds.
+- Real Go also accepts arrays, pointers to arrays, channels, and some generic type-parameter cases for `cap`, but those surfaces are outside the current compiler subset.
 
 ## Implementation Implications
 
@@ -25,9 +32,12 @@ Capture the official Go behavior baseline for simple slice expressions and index
 - Supporting slice expressions on `[]T` is feasible if runtime slices keep shared backing storage plus independent start/length metadata.
 - Indexed assignment should reuse the same shared-slice representation so overlapping slice windows observe mutations.
 - String slice execution should stay deferred for now because the current runtime stores strings as Rust `String`, which does not model Go's byte-addressed string slicing cleanly.
-- `append` and explicit capacity management remain separate concerns from this slice-window iteration and should stay documented as future work.
+- The existing slice runtime already tracks capacity metadata, so `cap(slice)` and capacity-aware `append` should extend that path instead of adding a second storage model.
+- `copy` should snapshot the visible source elements before writing so overlapping slice windows behave independently of aliasing order, matching the spec.
+- The `[]byte` <- `string` special case for `copy` and `append(slice, string...)` should remain deferred until the compiler grows a byte-oriented runtime type.
 
 ## Deferred Questions
 
 - Whether a later runtime slice model should expose `cap` and nil slices directly once more builtin coverage lands
 - Whether string runtime values should move to a byte-oriented representation before broader `strings` or slicing support expands
+- Whether a future allocation model should introduce `make` plus spare-capacity growth heuristics beyond the minimal "reuse if capacity allows" rule

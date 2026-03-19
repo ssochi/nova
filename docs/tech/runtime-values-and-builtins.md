@@ -18,7 +18,7 @@ Describe the current runtime value categories and builtin execution model introd
   - Stored as shared backing storage plus start / length / capacity metadata
   - Built by slice literals and returned by `append`
   - Currently rendered in a Go-like `[value value]` form for builtin and package output
-  - Supports `len(slice)`, index expressions such as `values[0]`, simple slice expressions such as `values[1:3]`, and element assignment such as `values[0] = 1`
+  - Supports `len(slice)`, `cap(slice)`, `copy(dst, src)`, index expressions such as `values[0]`, simple slice expressions such as `values[1:3]`, and element assignment such as `values[0] = 1`
 
 ## Builtin Contract Model
 
@@ -28,9 +28,13 @@ Describe the current runtime value categories and builtin execution model introd
   - `print(...value) -> void`
   - `println(...value) -> void`
   - `len(string|slice) -> int`
+  - `cap(slice) -> int`
+  - `copy(slice, slice) -> int`
   - `append(slice, ...element) -> slice`
 - Variadic output builtins accept any value-producing expression in the current type system
 - `len` validates one string or slice target before lowering
+- `cap` validates one slice target before lowering
+- `copy` validates destination and source slice types centrally before lowering
 - `append` validates a slice first argument and matching appended element types before lowering
 
 ## Package Contract Model
@@ -59,7 +63,9 @@ Describe the current runtime value categories and builtin execution model introd
 - VM output is an accumulated string buffer instead of newline-separated records
 - `print` appends rendered arguments without an automatic trailing newline
 - `println` appends rendered arguments plus a newline
-- `append` returns a new slice runtime value and does not mutate earlier values in place
+- `cap` returns the current slice capacity metadata tracked by the runtime
+- `copy` snapshots source elements before writing, so overlapping slice windows behave predictably
+- `append` now reuses existing backing storage when spare capacity is available; otherwise it allocates a fresh slice value
 - Slice windows share backing storage, so updating one slice view is visible through overlapping slice values
 - Bytecode now also uses `call-package` for metadata-backed package functions
 - `fmt.Sprint` returns a runtime string value without mutating the output buffer
@@ -75,4 +81,4 @@ Describe the current runtime value categories and builtin execution model introd
 - Keep new runtime value categories reflected in both `src/runtime/value.rs` and semantic `Type`
 - If output behavior becomes more realistic or package-backed, extract builtin execution helpers from `src/runtime/vm.rs`
 - Keep package-function validation metadata centralized; do not reintroduce package-specific ad hoc type checks inside `src/semantic/analyzer.rs`
-- If slice behavior expands beyond the current window / assignment subset, consider separating slice-specific lowering and VM helpers from the core scalar path
+- If slice behavior expands beyond the current window / builtin subset, consider separating slice-specific lowering and VM helpers from the core scalar path

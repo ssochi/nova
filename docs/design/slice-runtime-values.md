@@ -18,8 +18,9 @@ Introduce the first composite runtime value for `M3` with a narrow, testable sli
 - Index expressions such as `values[0]`
 - Simple slice expressions on slices such as `values[1:3]`, `values[:2]`, and `values[1:]`
 - Slice element assignment such as `values[0] = 1`
-- Builtin `append(slice, ...elements)` returning a new slice value
-- Builtin `len` support for both `string` and `slice`
+- Builtin `append(slice, ...elements)` with backing-storage reuse when capacity permits
+- Builtin `len(slice)` and `cap(slice)` support plus existing `len(string)`
+- Builtin `copy(dstSlice, srcSlice)` returning the copied element count with overlap-safe behavior
 - Runtime rendering of slices in a Go-like `[1 2 3]` form
 - Shared backing storage for slice windows so overlapping slice views observe element updates
 - Layered validation with unit tests in `src/` and CLI integration tests under `tests/`
@@ -27,15 +28,16 @@ Introduce the first composite runtime value for `M3` with a narrow, testable sli
 ## Deferred Scope
 
 - Full slice expressions such as `values[1:3:4]`
-- String slice execution, `make`, `copy`, `cap`, nil, or explicit backing-array capacity APIs
+- String slice execution, `make`, nil, explicit backing-array allocation APIs, or byte-specialized slice builtins
 - Variadic forwarding with `...`
 - Full Go comparability rules beyond rejecting slice equality in the current semantic layer
+- Array, pointer-to-array, or channel operands for `cap`
 
 ## Interfaces and Extension Hooks
 
 - `src/frontend/token.rs` and `src/frontend/parser.rs`: bracket tokens, recursive type parsing, slice literals, and index expressions
 - `src/semantic/model.rs` and `src/semantic/analyzer.rs`: recursive `Type`, slice validation, slice-aware expression checking, and index-assignment targets
-- `src/semantic/builtins.rs`: centralized contracts for slice-aware `len` and `append`
+- `src/semantic/builtins.rs`: centralized contracts for slice-aware `len`, `cap`, `copy`, and `append`
 - `src/bytecode/instruction.rs` and `src/bytecode/compiler.rs`: `build-slice`, `slice`, `index`, and `set-index` instructions
-- `src/runtime/value.rs` and `src/runtime/vm.rs`: shared slice runtime values, rendering, indexing, slice-window construction, and builtin execution
+- `src/runtime/value.rs` and `src/runtime/vm.rs`: shared slice runtime values, rendering, indexing, slice-window construction, overlap-safe copy, and capacity-aware append execution
 - `tests/support/` plus CLI integration files: reusable helpers and layered automated coverage

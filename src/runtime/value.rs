@@ -109,7 +109,40 @@ impl SliceValue {
         })
     }
 
+    pub fn copy_from(&self, source: &Self) -> usize {
+        let count = self.len.min(source.len);
+        let snapshot = source
+            .visible_elements()
+            .into_iter()
+            .take(count)
+            .collect::<Vec<_>>();
+        let mut storage = self.storage.borrow_mut();
+        for (offset, value) in snapshot.into_iter().enumerate() {
+            storage[self.start + offset] = value;
+        }
+        count
+    }
+
     pub fn append(&self, rest: &[Value]) -> Self {
+        if rest.is_empty() {
+            return self.clone();
+        }
+
+        let new_len = self.len + rest.len();
+        if new_len <= self.capacity {
+            let mut storage = self.storage.borrow_mut();
+            for (offset, value) in rest.iter().cloned().enumerate() {
+                storage[self.start + self.len + offset] = value;
+            }
+            drop(storage);
+            return Self {
+                storage: Rc::clone(&self.storage),
+                start: self.start,
+                len: new_len,
+                capacity: self.capacity,
+            };
+        }
+
         let mut elements = self.visible_elements();
         elements.extend(rest.iter().cloned());
         Self::new(elements)
@@ -123,3 +156,55 @@ impl PartialEq for SliceValue {
 }
 
 impl Eq for SliceValue {}
+
+#[cfg(test)]
+mod tests {
+    use super::{SliceValue, Value};
+
+    #[test]
+    fn append_within_capacity_reuses_backing_storage() {
+        let base = SliceValue::new(vec![
+            Value::Integer(1),
+            Value::Integer(2),
+            Value::Integer(3),
+        ]);
+        let window = base.slice(0, 2).expect("slice window should succeed");
+
+        let grown = window.append(&[Value::Integer(9)]);
+
+        assert_eq!(
+            grown.visible_elements(),
+            vec![Value::Integer(1), Value::Integer(2), Value::Integer(9)]
+        );
+        assert_eq!(grown.capacity(), 3);
+        assert_eq!(
+            base.visible_elements(),
+            vec![Value::Integer(1), Value::Integer(2), Value::Integer(9)]
+        );
+    }
+
+    #[test]
+    fn copy_handles_overlapping_ranges() {
+        let base = SliceValue::new(vec![
+            Value::Integer(1),
+            Value::Integer(2),
+            Value::Integer(3),
+            Value::Integer(4),
+        ]);
+        let destination = base.slice(0, 3).expect("destination slice should succeed");
+        let source = base.slice(1, 4).expect("source slice should succeed");
+
+        let copied = destination.copy_from(&source);
+
+        assert_eq!(copied, 3);
+        assert_eq!(
+            base.visible_elements(),
+            vec![
+                Value::Integer(2),
+                Value::Integer(3),
+                Value::Integer(4),
+                Value::Integer(4),
+            ]
+        );
+    }
+}

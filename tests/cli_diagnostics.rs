@@ -206,6 +206,34 @@ fn check_rejects_bad_slice_upper_bound_type() {
 }
 
 #[test]
+fn check_rejects_invalid_cap_argument_type() {
+    let path = write_temp_source(
+        "check-bad-cap",
+        "package main\n\nfunc main() {\n\tprintln(cap(\"oops\"))\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("argument 1 in call to builtin `cap` requires `slice`, found `string`"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_copy_slice_type_mismatch() {
+    let path = write_temp_source(
+        "check-bad-copy",
+        "package main\n\nfunc main() {\n\tvar left = []int{1, 2}\n\tvar right = []string{\"x\"}\n\tprintln(copy(left, right))\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(
+        error.contains("argument 2 in call to builtin `copy` requires `[]int`, found `[]string`")
+    );
+
+    cleanup_temp_source(path);
+}
+
+#[test]
 fn check_rejects_slice_assignment_type_mismatch() {
     let path = write_temp_source(
         "check-bad-slice-assign",
