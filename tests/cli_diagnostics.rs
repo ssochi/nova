@@ -163,3 +163,31 @@ fn check_rejects_append_element_type_mismatch() {
 
     cleanup_temp_source(path);
 }
+
+#[test]
+fn check_rejects_bad_strings_join_argument_type() {
+    let path = write_temp_source(
+        "check-bad-strings-join",
+        "package main\n\nimport \"strings\"\n\nfunc main() {\n\tprintln(strings.Join(\"oops\", \",\"))\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(
+        error.contains("argument 1 in call to `strings.Join` requires `[]string`, found `string`")
+    );
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_unsupported_strings_member() {
+    let path = write_temp_source(
+        "check-bad-strings-member",
+        "package main\n\nimport \"strings\"\n\nfunc main() {\n\tprintln(strings.ToUpper(\"nova\"))\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("does not export supported member `ToUpper`"));
+
+    cleanup_temp_source(path);
+}

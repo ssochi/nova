@@ -28,7 +28,7 @@ At the beginning of each run, read in this order:
 3. `docs/roadmap/milestones/index.md`, first confirm the current in-progress milestone; if there is no in-progress milestone, the highest-priority task is to write the next milestone
 4. the active plan index and the most recently active plan under `docs/roadmap/`
 5. root-level `todo.md`, this is the task list left by your human lead; update `todo.md` after completion
-6. design, tech, SOP, and test documents related to the current task
+6. research, design, tech, SOP, and test documents related to the current task
 
 Operational clarifications:
 1. If there is no archived plan yet, explicitly record that the repository is at a cold start and immediately create the first milestone and plan.
@@ -45,6 +45,8 @@ If no task is explicitly specified, you must proactively choose the most worthwh
 3. Problems that recur or repeated labor that has not yet been turned into SOPs (read historical plans)
 4. Gaps in the documentation system, plan system, and indexing system
 5. Tools, debugging entry points, or testing capabilities that can significantly improve subsequent iteration efficiency
+
+When a task depends on external behavior or compatibility semantics, prefer creating or updating a note under `docs/research/` before locking the implementation scope.
 
 You must maintain the plan system. Plans are uniformly stored under `docs/roadmap/plans/<yyyy-mm-dd-hh-MM-ss>-<plan-id>/`. Each plan directory must contain at least:
 - `plan.md`: plan goals, scope, phase breakdown, acceptance criteria, dependencies, risks

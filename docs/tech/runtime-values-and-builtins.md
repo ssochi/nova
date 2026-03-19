@@ -39,10 +39,15 @@ Describe the current runtime value categories and builtin execution model introd
 - Semantic package contracts live in `src/semantic/packages.rs`
 - Current imported package support:
   - `import "fmt"`
+  - `import "strings"`
 - Current package-backed function set:
   - `fmt.Print(...value) -> void`
   - `fmt.Println(...value) -> void`
   - `fmt.Sprint(...value) -> string`
+  - `strings.Contains(string, string) -> bool`
+  - `strings.HasPrefix(string, string) -> bool`
+  - `strings.Join([]string, string) -> string`
+  - `strings.Repeat(string, int) -> string`
 - Selector calls require the package binding to be imported before semantic analysis will lower them
 - Unsupported import paths and unsupported package members fail during semantic analysis
 
@@ -58,6 +63,8 @@ Describe the current runtime value categories and builtin execution model introd
 - Bytecode now also uses `call-package` for metadata-backed package functions
 - `fmt.Sprint` returns a runtime string value without mutating the output buffer
 - `fmt` formatting is intentionally approximate and does not yet support format verbs
+- `strings.Join` currently requires a runtime `[]string` value and returns a joined string
+- `strings.Repeat` maps negative-count or repeated-size overflow failures into runtime errors because the VM does not model Go panic yet
 
 ## Extension Hooks
 
@@ -65,4 +72,5 @@ Describe the current runtime value categories and builtin execution model introd
 - Add new package IDs and package-function IDs in `src/package.rs`, then extend `src/semantic/packages.rs`
 - Keep new runtime value categories reflected in both `src/runtime/value.rs` and semantic `Type`
 - If output behavior becomes more realistic or package-backed, extract builtin execution helpers from `src/runtime/vm.rs`
+- Keep package-function validation metadata centralized; do not reintroduce package-specific ad hoc type checks inside `src/semantic/analyzer.rs`
 - If slice behavior expands beyond literals and indexing, consider separating slice-specific lowering and VM helpers from the core scalar path

@@ -40,6 +40,12 @@ fn run_executes_slices() {
 }
 
 #[test]
+fn run_executes_strings_package_calls() {
+    let output = run_cli(&["run", "examples/strings_package.go"]).expect("program should run");
+    assert_eq!(output, "nova-gogo-vm\ntrue\ntrue\n");
+}
+
+#[test]
 fn dump_bytecode_shows_stack_machine_instructions() {
     let output = run_cli(&["dump-bytecode", "examples/arithmetic.go"])
         .expect("bytecode should be generated");
@@ -125,6 +131,16 @@ fn dump_ast_renders_slices() {
 }
 
 #[test]
+fn dump_ast_renders_strings_package_calls() {
+    let output =
+        run_cli(&["dump-ast", "examples/strings_package.go"]).expect("ast should be rendered");
+
+    assert!(output.contains("import \"strings\""));
+    assert!(output.contains("return strings.Join(parts, \"-\")"));
+    assert!(output.contains("strings.HasPrefix(joined, \"nova\")"));
+}
+
+#[test]
 fn dump_bytecode_shows_loop_jumps() {
     let output =
         run_cli(&["dump-bytecode", "examples/loops.go"]).expect("bytecode should be generated");
@@ -164,4 +180,15 @@ fn dump_bytecode_shows_slice_instructions() {
     assert!(output.contains("build-slice 2"));
     assert!(output.contains("call-builtin append 3"));
     assert!(output.contains("index"));
+}
+
+#[test]
+fn dump_bytecode_shows_strings_package_calls() {
+    let output = run_cli(&["dump-bytecode", "examples/strings_package.go"])
+        .expect("bytecode should be generated");
+
+    assert!(output.contains("call-package strings.Repeat 2"));
+    assert!(output.contains("call-package strings.Join 2"));
+    assert!(output.contains("call-package strings.Contains 2"));
+    assert!(output.contains("call-package strings.HasPrefix 2"));
 }

@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-01-17-51-strings-package-contracts`
+- Opened `2026-03-20-01-17-51-strings-package-contracts` for the second package-backed standard-library seam and the new research directory baseline under `M3`
 - Completed and archived `2026-03-20-00-55-55-slice-runtime-testing`
 - Opened `2026-03-20-00-55-55-slice-runtime-testing` for slice runtime values and layered test coverage under `M3`
 - Completed and archived `2026-03-20-00-35-11-import-fmt-seam`

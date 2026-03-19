@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use std::fmt;
 
 use crate::builtin::BuiltinFunction;
@@ -319,6 +320,51 @@ impl VirtualMachine {
                 self.stack
                     .push(Value::String(render_package_arguments(&arguments, "")));
             }
+            PackageFunction::StringsContains => {
+                let [haystack, needle] = expect_exact_package_arguments(function, arguments, 2)?;
+                let haystack = expect_string_package_argument(function, 1, haystack)?;
+                let needle = expect_string_package_argument(function, 2, needle)?;
+                self.stack
+                    .push(Value::Boolean(haystack.contains(needle.as_str())));
+            }
+            PackageFunction::StringsHasPrefix => {
+                let [value, prefix] = expect_exact_package_arguments(function, arguments, 2)?;
+                let value = expect_string_package_argument(function, 1, value)?;
+                let prefix = expect_string_package_argument(function, 2, prefix)?;
+                self.stack
+                    .push(Value::Boolean(value.starts_with(prefix.as_str())));
+            }
+            PackageFunction::StringsJoin => {
+                let [elements, separator] = expect_exact_package_arguments(function, arguments, 2)?;
+                let elements = expect_string_slice_package_argument(function, 1, elements)?;
+                let separator = expect_string_package_argument(function, 2, separator)?;
+                self.stack
+                    .push(Value::String(elements.join(separator.as_str())));
+            }
+            PackageFunction::StringsRepeat => {
+                let [value, count] = expect_exact_package_arguments(function, arguments, 2)?;
+                let value = expect_string_package_argument(function, 1, value)?;
+                let count = expect_integer_package_argument(function, 2, count)?;
+                if count < 0 {
+                    return Err(RuntimeError::new(format!(
+                        "package function `{}` requires a non-negative repeat count",
+                        function.render()
+                    )));
+                }
+                let repeat_count = usize::try_from(count).map_err(|_| {
+                    RuntimeError::new(format!(
+                        "package function `{}` could not convert repeat count",
+                        function.render()
+                    ))
+                })?;
+                value.len().checked_mul(repeat_count).ok_or_else(|| {
+                    RuntimeError::new(format!(
+                        "package function `{}` overflowed the repeated string size",
+                        function.render()
+                    ))
+                })?;
+                self.stack.push(Value::String(value.repeat(repeat_count)));
+            }
         }
 
         Ok(())
@@ -425,6 +471,7 @@ mod tests {
     use super::VirtualMachine;
     use crate::builtin::BuiltinFunction;
     use crate::bytecode::instruction::{CompiledFunction, Instruction, Program};
+    use crate::package::PackageFunction;
 
     #[test]
     fn execute_builds_and_indexes_slices() {
@@ -458,5 +505,145 @@ mod tests {
             .expect("program should execute")
             .render_output();
         assert_eq!(output, "2 2\n");
+    }
+
+    #[test]
+    fn execute_strings_package_functions() {
+        let program = Program {
+            package_name: "main".to_string(),
+            entry_function: "main".to_string(),
+            entry_function_index: 0,
+            functions: vec![CompiledFunction {
+                name: "main".to_string(),
+                parameter_count: 0,
+                returns_value: false,
+                local_names: vec![],
+                instructions: vec![
+                    Instruction::PushString("nova".to_string()),
+                    Instruction::PushString("go".to_string()),
+                    Instruction::PushString("go".to_string()),
+                    Instruction::BuildSlice(3),
+                    Instruction::PushString("-".to_string()),
+                    Instruction::CallPackage(PackageFunction::StringsJoin, 2),
+                    Instruction::PushString("gogo".to_string()),
+                    Instruction::CallPackage(PackageFunction::StringsContains, 2),
+                    Instruction::CallBuiltin(BuiltinFunction::Println, 1),
+                    Instruction::PushString("vm".to_string()),
+                    Instruction::PushInt(2),
+                    Instruction::CallPackage(PackageFunction::StringsRepeat, 2),
+                    Instruction::PushString("vmvm".to_string()),
+                    Instruction::CallPackage(PackageFunction::StringsHasPrefix, 2),
+                    Instruction::CallBuiltin(BuiltinFunction::Println, 1),
+                    Instruction::Return,
+                ],
+            }],
+        };
+
+        let output = VirtualMachine::new()
+            .execute(&program)
+            .expect("strings package functions should execute")
+            .render_output();
+
+        assert_eq!(output, "false\ntrue\n");
+    }
+}
+
+fn expect_exact_package_arguments<const N: usize>(
+    function: PackageFunction,
+    arguments: Vec<Value>,
+    expected: usize,
+) -> Result<[Value; N], RuntimeError> {
+    if arguments.len() != expected {
+        return Err(RuntimeError::new(format!(
+            "package function `{}` expected {} arguments, received {}",
+            function.render(),
+            expected,
+            arguments.len()
+        )));
+    }
+
+    arguments.try_into().map_err(|arguments: Vec<Value>| {
+        RuntimeError::new(format!(
+            "package function `{}` expected {} arguments, received {}",
+            function.render(),
+            expected,
+            arguments.len()
+        ))
+    })
+}
+
+fn expect_string_package_argument(
+    function: PackageFunction,
+    position: usize,
+    value: Value,
+) -> Result<String, RuntimeError> {
+    match value {
+        Value::String(value) => Ok(value),
+        other => Err(RuntimeError::new(format!(
+            "argument {} in call to `{}` expected `string`, found `{}`",
+            position,
+            function.render(),
+            runtime_type_name(&other)
+        ))),
+    }
+}
+
+fn expect_integer_package_argument(
+    function: PackageFunction,
+    position: usize,
+    value: Value,
+) -> Result<i64, RuntimeError> {
+    match value {
+        Value::Integer(value) => Ok(value),
+        other => Err(RuntimeError::new(format!(
+            "argument {} in call to `{}` expected `int`, found `{}`",
+            position,
+            function.render(),
+            runtime_type_name(&other)
+        ))),
+    }
+}
+
+fn expect_string_slice_package_argument(
+    function: PackageFunction,
+    position: usize,
+    value: Value,
+) -> Result<Vec<String>, RuntimeError> {
+    let elements = match value {
+        Value::Slice(elements) => elements,
+        other => {
+            return Err(RuntimeError::new(format!(
+                "argument {} in call to `{}` expected `[]string`, found `{}`",
+                position,
+                function.render(),
+                runtime_type_name(&other)
+            )));
+        }
+    };
+
+    let mut strings = Vec::with_capacity(elements.len());
+    for element in elements {
+        match element {
+            Value::String(value) => strings.push(value),
+            other => {
+                return Err(RuntimeError::new(format!(
+                    "argument {} in call to `{}` expected `[]string`, found `[]{}`",
+                    position,
+                    function.render(),
+                    runtime_type_name(&other)
+                )));
+            }
+        }
+    }
+
+    Ok(strings)
+}
+
+fn runtime_type_name(value: &Value) -> &'static str {
+    match value {
+        Value::Integer(_) => "int",
+        Value::Boolean(_) => "bool",
+        Value::String(_) => "string",
+        Value::Slice(_) => "slice",
     }
 }

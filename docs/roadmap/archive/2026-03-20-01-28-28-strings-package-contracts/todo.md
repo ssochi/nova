@@ -1,0 +1,5 @@
+- [done] Create the active `M3` plan, update roadmap indexes, and record the research-backed scope for the `strings` package seam.
+- [done] Create `docs/research/` conventions and a `strings` package research note based on official Go behavior.
+- [done] Implement typed package contracts and runtime execution for the chosen `strings` functions.
+- [done] Add examples, automated coverage, and serial CLI validation for the new package surface.
+- [done] Sync design, tech, reports, milestone state, `BOOT.md`, and archive the completed plan.

@@ -28,15 +28,16 @@
 - `2026-03-20-00-09-59-string-runtime-builtins`: completed first richer runtime value slice with builtin contract centralization
 - `2026-03-20-00-35-11-import-fmt-seam`: completed the first narrow import and package-backed standard-library seam
 - `2026-03-20-00-55-55-slice-runtime-testing`: completed the first composite runtime value and layered test coverage
+- `2026-03-20-01-17-51-strings-package-contracts`: completed typed package contracts, a second standard-library seam, and the research baseline
 
 ## Current Risks
 
 - Runtime-surface growth can sprawl quickly if types, builtins, and imports are mixed into the same plan.
 - Builtin additions can become hardcoded special cases unless their contracts stay centralized.
 - Supporting more realistic Go programs will require careful staging so the VM remains understandable.
-- The current runtime now has the first composite value, but still lacks richer slice operations, real import graphs, and broader package-backed runtime services.
+- The current runtime now has stronger typed package seams, but still lacks richer slice operations, real import graphs, and broader package-backed runtime services.
 
 ## Next-Round Recommendations
 
-- Open the next `M3` plan around either deeper slice behavior such as assignment / slicing or a second metadata-backed package-service slice.
-- Preserve the centralized builtin and package-contract patterns and keep the new layered test structure intact as runtime features grow.
+- Open the next `M3` plan around either deeper slice behavior such as slice expressions / assignment or another package seam that benefits from the stronger typed contract metadata.
+- Reuse the new `docs/research/` flow before locking the next compatibility-sensitive slice.

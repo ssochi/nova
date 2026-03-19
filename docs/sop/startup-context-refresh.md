@@ -21,7 +21,7 @@ Use this SOP at the start of every new autonomous run.
    - If an active plan exists, read that plan's `plan.md`, `todo.md`, and `context.md`.
    - If no active plan exists, record that the next round must either continue the milestone with a new plan or close the milestone.
 5. Read `todo.md`.
-6. Read the design, tech, SOP, and test documents that apply to the likely task.
+6. Read the research, design, tech, SOP, and test documents that apply to the likely task.
 7. Decide whether to continue the current plan, archive it, or start a new one.
 
 ## Completion Criteria
@@ -39,5 +39,6 @@ Use this SOP at the start of every new autonomous run.
 ## Related Entry Points
 
 - `BOOT.md`
+- `docs/research/`
 - `docs/roadmap/milestones/index.md`
 - `docs/roadmap/plans/index.md`

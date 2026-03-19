@@ -8,6 +8,7 @@ You do not need to be limited by the current directories. As long as a new type 
 - `design/`: feature and subsystem design baselines
 - `roadmap/`: milestones, active plans, archives, and roadmap progress state
 - `reports/`: validation and real experience evidence
+- `research/`: external behavior baselines and compatibility research
 - `sop/`: high-frequency, reusable, and easy-to-miss processes
 - `tech/`: framework structure, boundary descriptions, and migration mapping
 
@@ -34,5 +35,6 @@ You do not need to be limited by the current directories. As long as a new type 
 - `design/`: design documentation root
 - `roadmap/`: roadmap documentation root
 - `reports/`: validation and experience report root
+- `research/`: external behavior research and compatibility notes root
 - `sop/`: SOP documentation root
 - `tech/`: technical documentation root

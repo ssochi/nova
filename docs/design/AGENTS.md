@@ -38,3 +38,4 @@ This directory stores feature and subsystem designs. It describes intent, scope 
 - `string-runtime-builtins.md`: design baseline for string values, builtin contract centralization, and the first `M3` runtime slice
 - `import-fmt-package-seam.md`: design baseline for top-level imports and the first package-backed `fmt` seam
 - `slice-runtime-values.md`: design baseline for the first composite runtime value and layered test coverage
+- `strings-package-contracts.md`: design baseline for typed package contracts and the first `strings` package seam
