@@ -1,7 +1,7 @@
 use super::parse_source_file;
 use crate::frontend::ast::{
-    AssignmentTarget, Binding, BindingMode, ElseBranch, Expression, HeaderStatement, Statement,
-    SwitchClause, TypeRef,
+    AssignmentTarget, Binding, BindingMode, ElseBranch, Expression, ForPostStatement,
+    HeaderStatement, Statement, SwitchClause, TypeRef,
 };
 use crate::frontend::lexer::lex;
 use crate::source::SourceFile;
@@ -518,5 +518,61 @@ fn parse_nil_expression_and_nil_comparison() {
             ));
         }
         _ => panic!("expected nil comparison call"),
+    }
+}
+
+#[test]
+fn parse_for_clauses_and_loop_control_statements() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tfor var i int = 0; i < 3; i = i + 1 {\n\t\tcontinue\n\t}\n\tfor ; ; value, ok = counts[\"go\"] {\n\t\tbreak\n\t}\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let function = &ast.functions[0];
+
+    match &function.body.statements[0] {
+        Statement::For(for_statement) => {
+            assert!(matches!(
+                &for_statement.init,
+                Some(HeaderStatement::VarDecl { name, .. }) if name == "i"
+            ));
+            assert!(matches!(
+                &for_statement.condition,
+                Some(Expression::Binary { .. })
+            ));
+            assert!(matches!(
+                &for_statement.post,
+                Some(ForPostStatement::Assign {
+                    target: AssignmentTarget::Identifier(name),
+                    ..
+                }) if name == "i"
+            ));
+            assert!(matches!(
+                for_statement.body.statements[0],
+                Statement::Continue
+            ));
+        }
+        _ => panic!("expected classic for statement"),
+    }
+
+    match &function.body.statements[1] {
+        Statement::For(for_statement) => {
+            assert!(for_statement.init.is_none());
+            assert!(for_statement.condition.is_none());
+            assert!(matches!(
+                &for_statement.post,
+                Some(ForPostStatement::MapLookup { bindings, .. })
+                    if bindings
+                        == &vec![
+                            Binding::Identifier("value".into()),
+                            Binding::Identifier("ok".into())
+                        ]
+            ));
+            assert!(matches!(for_statement.body.statements[0], Statement::Break));
+        }
+        _ => panic!("expected infinite for clause statement"),
     }
 }

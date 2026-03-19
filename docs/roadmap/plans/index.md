@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-06-12-55-for-clauses-break-continue`
+- Opened `2026-03-20-06-12-55-for-clauses-break-continue` for staged classic `for` clauses plus unlabeled `break` / `continue` under `M3`
 - Completed and archived `2026-03-20-05-46-33-switch-statements`
 - Opened `2026-03-20-05-46-33-switch-statements` for staged `switch` statements and shared control-flow header modeling under `M3`
 - Completed and archived `2026-03-20-05-29-16-if-initializers-else-if`

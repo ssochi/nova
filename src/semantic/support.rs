@@ -1,8 +1,8 @@
 use crate::frontend::ast::TypeRef;
 use crate::semantic::analyzer::SemanticError;
 use crate::semantic::model::{
-    CheckedBlock, CheckedElseBranch, CheckedExpression, CheckedExpressionKind, CheckedIfStatement,
-    CheckedStatement, CheckedSwitchClause, CheckedSwitchStatement, Type,
+    CheckedBlock, CheckedElseBranch, CheckedExpression, CheckedExpressionKind, CheckedForStatement,
+    CheckedIfStatement, CheckedStatement, CheckedSwitchClause, CheckedSwitchStatement, Type,
 };
 
 pub fn resolve_type_ref(type_ref: &TypeRef) -> Option<Type> {
@@ -160,8 +160,9 @@ fn statement_guarantees_termination(statement: &CheckedStatement) -> bool {
         CheckedStatement::Switch(switch_statement) => {
             switch_statement_guarantees_termination(switch_statement)
         }
-        CheckedStatement::For { condition, .. } => expression_is_compile_time_true(condition),
+        CheckedStatement::For(for_statement) => for_statement_guarantees_termination(for_statement),
         CheckedStatement::RangeFor { .. } => false,
+        CheckedStatement::Break | CheckedStatement::Continue => false,
         _ => false,
     }
 }
@@ -180,13 +181,13 @@ fn switch_statement_guarantees_termination(switch_statement: &CheckedSwitchState
     for clause in &switch_statement.clauses {
         match clause {
             CheckedSwitchClause::Case { body, .. } => {
-                if !block_guarantees_return(body) {
+                if !block_guarantees_return(body) || block_contains_break_for_switch(body) {
                     return false;
                 }
             }
             CheckedSwitchClause::Default(body) => {
                 has_default = true;
-                if !block_guarantees_return(body) {
+                if !block_guarantees_return(body) || block_contains_break_for_switch(body) {
                     return false;
                 }
             }
@@ -195,6 +196,92 @@ fn switch_statement_guarantees_termination(switch_statement: &CheckedSwitchState
     has_default
 }
 
+fn for_statement_guarantees_termination(for_statement: &CheckedForStatement) -> bool {
+    let Some(condition) = &for_statement.condition else {
+        return !block_contains_break_for_loop(&for_statement.body);
+    };
+    expression_is_compile_time_true(condition)
+        && !block_contains_break_for_loop(&for_statement.body)
+}
+
 fn expression_is_compile_time_true(expression: &CheckedExpression) -> bool {
     matches!(expression.kind, CheckedExpressionKind::Bool(true))
+}
+
+fn block_contains_break_for_loop(block: &CheckedBlock) -> bool {
+    block
+        .statements
+        .iter()
+        .any(statement_contains_break_for_loop)
+}
+
+fn statement_contains_break_for_loop(statement: &CheckedStatement) -> bool {
+    match statement {
+        CheckedStatement::Break => true,
+        CheckedStatement::If(if_statement) => {
+            block_contains_break_for_loop(&if_statement.then_block)
+                || match &if_statement.else_branch {
+                    Some(CheckedElseBranch::Block(else_block)) => {
+                        block_contains_break_for_loop(else_block)
+                    }
+                    Some(CheckedElseBranch::If(else_if)) => {
+                        if_statement_contains_break_for_loop(else_if)
+                    }
+                    None => false,
+                }
+        }
+        CheckedStatement::Switch(_)
+        | CheckedStatement::For(_)
+        | CheckedStatement::RangeFor { .. } => false,
+        _ => false,
+    }
+}
+
+fn if_statement_contains_break_for_loop(if_statement: &CheckedIfStatement) -> bool {
+    block_contains_break_for_loop(&if_statement.then_block)
+        || match &if_statement.else_branch {
+            Some(CheckedElseBranch::Block(else_block)) => block_contains_break_for_loop(else_block),
+            Some(CheckedElseBranch::If(else_if)) => if_statement_contains_break_for_loop(else_if),
+            None => false,
+        }
+}
+
+fn block_contains_break_for_switch(block: &CheckedBlock) -> bool {
+    block
+        .statements
+        .iter()
+        .any(statement_contains_break_for_switch)
+}
+
+fn statement_contains_break_for_switch(statement: &CheckedStatement) -> bool {
+    match statement {
+        CheckedStatement::Break => true,
+        CheckedStatement::If(if_statement) => {
+            block_contains_break_for_switch(&if_statement.then_block)
+                || match &if_statement.else_branch {
+                    Some(CheckedElseBranch::Block(else_block)) => {
+                        block_contains_break_for_switch(else_block)
+                    }
+                    Some(CheckedElseBranch::If(else_if)) => {
+                        if_statement_contains_break_for_switch(else_if)
+                    }
+                    None => false,
+                }
+        }
+        CheckedStatement::Switch(_)
+        | CheckedStatement::For(_)
+        | CheckedStatement::RangeFor { .. } => false,
+        _ => false,
+    }
+}
+
+fn if_statement_contains_break_for_switch(if_statement: &CheckedIfStatement) -> bool {
+    block_contains_break_for_switch(&if_statement.then_block)
+        || match &if_statement.else_branch {
+            Some(CheckedElseBranch::Block(else_block)) => {
+                block_contains_break_for_switch(else_block)
+            }
+            Some(CheckedElseBranch::If(else_if)) => if_statement_contains_break_for_switch(else_if),
+            None => false,
+        }
 }

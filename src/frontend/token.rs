@@ -25,6 +25,8 @@ pub enum TokenKind {
     Default,
     For,
     Range,
+    Break,
+    Continue,
     Return,
     Map,
     Nil,
@@ -69,6 +71,8 @@ impl TokenKind {
                 | TokenKind::RightParen
                 | TokenKind::RightBracket
                 | TokenKind::RightBrace
+                | TokenKind::Break
+                | TokenKind::Continue
                 | TokenKind::Return
         )
     }
@@ -86,6 +90,8 @@ impl TokenKind {
             TokenKind::Default => "default".to_string(),
             TokenKind::For => "for".to_string(),
             TokenKind::Range => "range".to_string(),
+            TokenKind::Break => "break".to_string(),
+            TokenKind::Continue => "continue".to_string(),
             TokenKind::Return => "return".to_string(),
             TokenKind::Map => "map".to_string(),
             TokenKind::Nil => "nil".to_string(),

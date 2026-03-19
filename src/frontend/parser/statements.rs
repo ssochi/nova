@@ -1,6 +1,6 @@
 use crate::frontend::ast::{
-    Binding, BindingMode, ElseBranch, Expression, HeaderStatement, IfStatement, Statement,
-    SwitchClause, SwitchStatement,
+    Binding, BindingMode, ElseBranch, Expression, ForPostStatement, ForStatement, HeaderStatement,
+    IfStatement, Statement, SwitchClause, SwitchStatement,
 };
 use crate::frontend::token::TokenKind;
 
@@ -46,6 +46,16 @@ impl<'a> Parser<'a> {
             return self.parse_for_statement();
         }
 
+        if self.match_kind(&TokenKind::Break) {
+            self.reject_labeled_control_statement("break")?;
+            return Ok(Statement::Break);
+        }
+
+        if self.match_kind(&TokenKind::Continue) {
+            self.reject_labeled_control_statement("continue")?;
+            return Ok(Statement::Continue);
+        }
+
         if self.is_map_lookup_statement_start() {
             return self.parse_map_lookup_statement();
         }
@@ -61,11 +71,12 @@ impl<'a> Parser<'a> {
 
     fn parse_for_statement(&mut self) -> Result<Statement, ParseError> {
         if self.check(&TokenKind::LeftBrace) {
-            let body = self.parse_block()?;
-            return Ok(Statement::For {
-                condition: Expression::Bool(true),
-                body,
-            });
+            return Ok(Statement::For(ForStatement {
+                init: None,
+                condition: None,
+                post: None,
+                body: self.parse_block()?,
+            }));
         }
 
         if self.match_kind(&TokenKind::Range) {
@@ -102,9 +113,18 @@ impl<'a> Parser<'a> {
             });
         }
 
+        if self.for_statement_uses_clause_form() {
+            return Ok(Statement::For(self.parse_for_clause_statement()?));
+        }
+
         let condition = self.parse_expression()?;
         let body = self.parse_block()?;
-        Ok(Statement::For { condition, body })
+        Ok(Statement::For(ForStatement {
+            init: None,
+            condition: Some(condition),
+            post: None,
+            body,
+        }))
     }
 
     fn parse_map_lookup_statement(&mut self) -> Result<Statement, ParseError> {
@@ -339,6 +359,88 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn parse_for_clause_statement(&mut self) -> Result<ForStatement, ParseError> {
+        let init = if self.check(&TokenKind::Semicolon) {
+            None
+        } else {
+            Some(self.parse_for_init_statement()?)
+        };
+        self.expect(TokenKind::Semicolon)?;
+
+        let condition = if self.check(&TokenKind::Semicolon) {
+            None
+        } else {
+            Some(self.parse_expression()?)
+        };
+        self.expect(TokenKind::Semicolon)?;
+
+        let post = if self.check(&TokenKind::LeftBrace) {
+            None
+        } else {
+            Some(self.parse_for_post_statement()?)
+        };
+
+        Ok(ForStatement {
+            init,
+            condition,
+            post,
+            body: self.parse_block()?,
+        })
+    }
+
+    fn parse_for_init_statement(&mut self) -> Result<HeaderStatement, ParseError> {
+        if self.match_kind(&TokenKind::Var) {
+            return self.parse_var_decl_header_statement();
+        }
+
+        if self.is_map_lookup_statement_start() {
+            return self.parse_map_lookup_header_statement();
+        }
+
+        let expression = self.parse_expression()?;
+        if self.match_kind(&TokenKind::Assign) {
+            let target = assignment_target_from_expression(expression)?;
+            let value = self.parse_expression()?;
+            return Ok(HeaderStatement::Assign { target, value });
+        }
+
+        Ok(HeaderStatement::Expr(expression))
+    }
+
+    fn parse_for_post_statement(&mut self) -> Result<ForPostStatement, ParseError> {
+        if self.is_map_lookup_statement_start() {
+            let header = self.parse_map_lookup_header_statement()?;
+            let HeaderStatement::MapLookup {
+                bindings,
+                binding_mode,
+                target,
+                key,
+            } = header
+            else {
+                unreachable!("map lookup parsing always returns map lookup data");
+            };
+            if binding_mode == BindingMode::Define {
+                return Err(
+                    self.error_at_current("for post statement does not support `:=` map lookups")
+                );
+            }
+            return Ok(ForPostStatement::MapLookup {
+                bindings,
+                target,
+                key,
+            });
+        }
+
+        let expression = self.parse_expression()?;
+        if self.match_kind(&TokenKind::Assign) {
+            let target = assignment_target_from_expression(expression)?;
+            let value = self.parse_expression()?;
+            return Ok(ForPostStatement::Assign { target, value });
+        }
+
+        Ok(ForPostStatement::Expr(expression))
+    }
+
     fn parse_binding(&mut self) -> Result<Binding, ParseError> {
         let name = self.expect_identifier()?;
         if name == "_" {
@@ -389,5 +491,26 @@ impl<'a> Parser<'a> {
                 Some(TokenKind::Define | TokenKind::Assign),
             )
         )
+    }
+
+    fn for_statement_uses_clause_form(&self) -> bool {
+        for index in self.index..self.tokens.len() {
+            match self.tokens[index].kind {
+                TokenKind::LeftBrace | TokenKind::Eof => return false,
+                TokenKind::Semicolon => return true,
+                _ => {}
+            }
+        }
+        false
+    }
+
+    fn reject_labeled_control_statement(&self, keyword: &str) -> Result<(), ParseError> {
+        if matches!(
+            self.current_kind(),
+            Some(TokenKind::Semicolon | TokenKind::RightBrace | TokenKind::Eof)
+        ) {
+            return Ok(());
+        }
+        Err(self.error_at_current(&format!("labeled `{keyword}` statements are not supported")))
     }
 }

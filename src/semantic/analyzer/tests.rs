@@ -450,3 +450,69 @@ fn reject_nil_equals_nil() {
             .contains("does not support untyped `nil` operands")
     );
 }
+
+#[test]
+fn analyze_for_clauses_and_loop_control_statements() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tvar counts = map[string]int{\"go\": 2, \"nova\": 3}\n\tvar total int\n\tfor var i int = 0; i < 4; i = i + 1 {\n\t\tif i == 1 {\n\t\t\tcontinue\n\t\t}\n\t\tswitch i {\n\t\tcase 3:\n\t\t\tbreak\n\t\t}\n\t\ttotal = total + i\n\t}\n\tvar seen string\n\tfor key, value := range counts {\n\t\tif value < 3 {\n\t\t\tcontinue\n\t\t}\n\t\tseen = seen + key\n\t\tbreak\n\t}\n\tprintln(total, seen)\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let program = analyze_package(&ast).expect("analysis should succeed");
+
+    assert_eq!(program.functions.len(), 1);
+}
+
+#[test]
+fn reject_break_outside_breakable_statement() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tbreak\n}\n".to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let error = analyze_package(&ast).expect_err("analysis should reject top-level break");
+
+    assert!(error.to_string().contains("`break` requires an enclosing"));
+}
+
+#[test]
+fn reject_continue_outside_loop() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tswitch 1 {\n\tdefault:\n\t\tcontinue\n\t}\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let error = analyze_package(&ast).expect_err("analysis should reject switch-only continue");
+
+    assert!(
+        error
+            .to_string()
+            .contains("`continue` requires an enclosing `for` or `range` loop")
+    );
+}
+
+#[test]
+fn reject_infinite_loop_with_break_as_missing_return() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc helper() int {\n\tfor {\n\t\tbreak\n\t}\n}\n".to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let error = analyze_package(&ast).expect_err("analysis should reject fallthrough via break");
+
+    assert!(
+        error
+            .to_string()
+            .contains("must return a `int` on every path")
+    );
+}

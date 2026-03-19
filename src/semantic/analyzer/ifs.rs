@@ -106,8 +106,10 @@ fn checked_statement_to_header_statement(
         },
         CheckedStatement::If(_)
         | CheckedStatement::Switch(_)
-        | CheckedStatement::For { .. }
+        | CheckedStatement::For(_)
         | CheckedStatement::RangeFor { .. }
+        | CheckedStatement::Break
+        | CheckedStatement::Continue
         | CheckedStatement::Return(_) => {
             return Err(SemanticError::new(
                 "control-flow header requires a simple statement supported by the current frontend",

@@ -37,10 +37,7 @@ pub enum CheckedStatement {
     Expr(CheckedExpression),
     If(CheckedIfStatement),
     Switch(CheckedSwitchStatement),
-    For {
-        condition: CheckedExpression,
-        body: CheckedBlock,
-    },
+    For(CheckedForStatement),
     RangeFor {
         source: CheckedExpression,
         key_binding: Option<CheckedBinding>,
@@ -53,6 +50,8 @@ pub enum CheckedStatement {
         value_binding: CheckedBinding,
         ok_binding: CheckedBinding,
     },
+    Break,
+    Continue,
     Return(Option<CheckedExpression>),
 }
 
@@ -104,6 +103,29 @@ pub enum CheckedSwitchClause {
         body: CheckedBlock,
     },
     Default(CheckedBlock),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CheckedForStatement {
+    pub init: Option<CheckedHeaderStatement>,
+    pub condition: Option<CheckedExpression>,
+    pub post: Option<CheckedForPostStatement>,
+    pub body: CheckedBlock,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CheckedForPostStatement {
+    Assign {
+        target: CheckedAssignmentTarget,
+        value: CheckedExpression,
+    },
+    Expr(CheckedExpression),
+    MapLookup {
+        map: CheckedExpression,
+        key: CheckedExpression,
+        value_binding: CheckedBinding,
+        ok_binding: CheckedBinding,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

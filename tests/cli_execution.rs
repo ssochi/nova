@@ -22,6 +22,12 @@ fn run_executes_loops() {
 }
 
 #[test]
+fn run_executes_loop_control_statements() {
+    let output = run_cli(&["run", "examples/loop_control.go"]).expect("program should run");
+    assert_eq!(output, "5\nnova\n");
+}
+
+#[test]
 fn run_executes_range_loops() {
     let output = run_cli(&["run", "examples/range_loops.go"]).expect("program should run");
     assert_eq!(output, "go 2\nnova 3\n8 1 2\n5 gonova\n0 0\n");
@@ -157,6 +163,16 @@ fn dump_ast_renders_loops() {
 }
 
 #[test]
+fn dump_ast_renders_classic_for_clauses_and_loop_control() {
+    let output =
+        run_cli(&["dump-ast", "examples/loop_control.go"]).expect("ast should be rendered");
+
+    assert!(output.contains("for var i int = 0; (i < 5); i = (i + 1) {"));
+    assert!(output.contains("continue"));
+    assert!(output.contains("break"));
+}
+
+#[test]
 fn dump_ast_renders_range_loops() {
     let output = run_cli(&["dump-ast", "examples/range_loops.go"]).expect("ast should be rendered");
 
@@ -220,6 +236,15 @@ fn dump_tokens_show_range_loop_tokens() {
 
     assert!(output.contains("range"));
     assert!(output.contains(":="));
+}
+
+#[test]
+fn dump_tokens_show_loop_control_keywords() {
+    let output =
+        run_cli(&["dump-tokens", "examples/loop_control.go"]).expect("tokens should be rendered");
+
+    assert!(output.contains("break"));
+    assert!(output.contains("continue"));
 }
 
 #[test]
@@ -405,6 +430,16 @@ fn dump_bytecode_shows_loop_jumps() {
     assert!(output.contains("function 1: climbPast"));
     assert!(output.matches("jump-if-false").count() >= 2);
     assert!(output.contains("jump 2"));
+}
+
+#[test]
+fn dump_bytecode_shows_break_and_continue_lowering() {
+    let output = run_cli(&["dump-bytecode", "examples/loop_control.go"])
+        .expect("bytecode should be generated");
+
+    assert!(output.contains("function 0: main"));
+    assert!(output.contains("jump-if-false"));
+    assert!(output.matches("jump ").count() >= 6);
 }
 
 #[test]

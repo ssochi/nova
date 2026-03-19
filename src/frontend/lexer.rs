@@ -242,6 +242,8 @@ impl<'a> Lexer<'a> {
             "default" => TokenKind::Default,
             "for" => TokenKind::For,
             "range" => TokenKind::Range,
+            "break" => TokenKind::Break,
+            "continue" => TokenKind::Continue,
             "return" => TokenKind::Return,
             "map" => TokenKind::Map,
             "nil" => TokenKind::Nil,

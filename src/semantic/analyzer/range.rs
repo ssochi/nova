@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::frontend::ast::{Binding, BindingMode, Block, Expression};
-use crate::semantic::analyzer::{FunctionAnalyzer, SemanticError};
+use crate::semantic::analyzer::{ControlFlowContext, FunctionAnalyzer, SemanticError};
 use crate::semantic::model::{CheckedBinding, CheckedStatement, Type};
 
 impl<'a> FunctionAnalyzer<'a> {
@@ -34,7 +34,9 @@ impl<'a> FunctionAnalyzer<'a> {
         self.scopes.push(Default::default());
         let bindings =
             self.resolve_range_bindings(bindings, binding_mode, &key_type, &value_type)?;
+        self.control_flow_stack.push(ControlFlowContext::Loop);
         let body = self.analyze_block(body, true)?;
+        self.control_flow_stack.pop();
         self.scopes.pop();
 
         let mut bindings = bindings.into_iter();

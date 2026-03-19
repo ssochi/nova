@@ -18,6 +18,7 @@ use crate::semantic::support::{
 mod expressions;
 mod ifs;
 mod lookup;
+mod loops;
 mod range;
 mod switches;
 
@@ -101,6 +102,7 @@ struct FunctionAnalyzer<'a> {
     registry: &'a FunctionRegistry,
     imports: &'a ImportRegistry,
     scopes: Vec<HashMap<String, LocalBinding>>,
+    control_flow_stack: Vec<ControlFlowContext>,
     local_names: Vec<String>,
 }
 
@@ -127,6 +129,7 @@ impl<'a> FunctionAnalyzer<'a> {
             registry,
             imports,
             scopes,
+            control_flow_stack: Vec::new(),
             local_names,
         }
     }
@@ -201,12 +204,7 @@ impl<'a> FunctionAnalyzer<'a> {
             Statement::Expr(expression) => self.analyze_expression_statement(expression),
             Statement::If(if_statement) => self.analyze_if_statement(if_statement),
             Statement::Switch(switch_statement) => self.analyze_switch_statement(switch_statement),
-            Statement::For { condition, body } => {
-                let condition = self.analyze_expression(condition)?;
-                expect_type(&Type::Bool, &condition.ty, "for condition")?;
-                let body = self.analyze_block(body, true)?;
-                Ok(CheckedStatement::For { condition, body })
-            }
+            Statement::For(for_statement) => self.analyze_for_statement(for_statement),
             Statement::RangeFor {
                 bindings,
                 binding_mode,
@@ -219,6 +217,8 @@ impl<'a> FunctionAnalyzer<'a> {
                 target,
                 key,
             } => self.analyze_map_lookup_statement(bindings, *binding_mode, target, key),
+            Statement::Break => self.analyze_break_statement(),
+            Statement::Continue => self.analyze_continue_statement(),
             Statement::Return(value) => {
                 let expected = self
                     .registry
@@ -441,6 +441,12 @@ impl<'a> FunctionAnalyzer<'a> {
 struct LocalBinding {
     slot: usize,
     ty: Type,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ControlFlowContext {
+    Loop,
+    Switch,
 }
 
 #[cfg(test)]

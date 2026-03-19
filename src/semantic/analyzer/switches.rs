@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::frontend::ast::{SwitchClause, SwitchStatement};
-use crate::semantic::analyzer::{FunctionAnalyzer, SemanticError};
+use crate::semantic::analyzer::{ControlFlowContext, FunctionAnalyzer, SemanticError};
 use crate::semantic::model::{
     CheckedExpression, CheckedExpressionKind, CheckedStatement, CheckedSwitchClause,
     CheckedSwitchStatement, Type,
@@ -25,7 +25,9 @@ impl<'a> FunctionAnalyzer<'a> {
             .map(|expression| self.analyze_expression(expression))
             .transpose()?;
         let match_type = self.validate_switch_expression(expression.as_ref())?;
+        self.control_flow_stack.push(ControlFlowContext::Switch);
         let clauses = self.analyze_switch_clauses(&switch_statement.clauses, &match_type)?;
+        self.control_flow_stack.pop();
         self.scopes.pop();
 
         Ok(CheckedStatement::Switch(CheckedSwitchStatement {

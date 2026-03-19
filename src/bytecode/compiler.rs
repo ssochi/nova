@@ -6,9 +6,10 @@ use crate::bytecode::instruction::{
 };
 use crate::semantic::model::{
     CallTarget, CheckedAssignmentTarget, CheckedBinaryOperator, CheckedBinding, CheckedBlock,
-    CheckedElseBranch, CheckedExpression, CheckedExpressionKind, CheckedFunction,
-    CheckedHeaderStatement, CheckedIfStatement, CheckedMapLiteralEntry, CheckedProgram,
-    CheckedStatement, CheckedSwitchClause, CheckedSwitchStatement, Type,
+    CheckedElseBranch, CheckedExpression, CheckedExpressionKind, CheckedForPostStatement,
+    CheckedForStatement, CheckedFunction, CheckedHeaderStatement, CheckedIfStatement,
+    CheckedMapLiteralEntry, CheckedProgram, CheckedStatement, CheckedSwitchClause,
+    CheckedSwitchStatement, Type,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,6 +51,7 @@ struct FunctionCompiler<'a> {
     function: &'a CheckedFunction,
     local_names: Vec<String>,
     instructions: Vec<Instruction>,
+    control_flow_stack: Vec<ControlFlowContext>,
 }
 
 impl<'a> FunctionCompiler<'a> {
@@ -58,6 +60,7 @@ impl<'a> FunctionCompiler<'a> {
             function,
             local_names: function.local_names.clone(),
             instructions: Vec::new(),
+            control_flow_stack: Vec::new(),
         }
     }
 
@@ -122,15 +125,7 @@ impl<'a> FunctionCompiler<'a> {
             CheckedStatement::Switch(switch_statement) => {
                 self.compile_switch_statement(switch_statement)?
             }
-            CheckedStatement::For { condition, body } => {
-                let loop_start = self.instructions.len();
-                self.compile_expression(condition)?;
-                let jump_to_end = self.push_instruction(Instruction::JumpIfFalse(usize::MAX));
-                self.compile_block(body)?;
-                self.instructions.push(Instruction::Jump(loop_start));
-                let loop_end = self.instructions.len();
-                self.patch_jump(jump_to_end, Instruction::JumpIfFalse(loop_end));
-            }
+            CheckedStatement::For(for_statement) => self.compile_for_statement(for_statement)?,
             CheckedStatement::RangeFor {
                 source,
                 key_binding,
@@ -148,6 +143,8 @@ impl<'a> FunctionCompiler<'a> {
                 value_binding,
                 ok_binding,
             } => self.compile_map_lookup_statement(map, key, value_binding, ok_binding)?,
+            CheckedStatement::Break => self.compile_break_statement()?,
+            CheckedStatement::Continue => self.compile_continue_statement()?,
             CheckedStatement::Return(value) => {
                 if let Some(expression) = value {
                     self.compile_expression(expression)?;
@@ -157,6 +154,45 @@ impl<'a> FunctionCompiler<'a> {
             }
         }
 
+        Ok(())
+    }
+
+    fn compile_for_statement(
+        &mut self,
+        for_statement: &CheckedForStatement,
+    ) -> Result<(), CompileError> {
+        if let Some(init) = &for_statement.init {
+            self.compile_header_statement(init, "for init")?;
+        }
+
+        let loop_start = self.instructions.len();
+        let jump_to_end = if let Some(condition) = &for_statement.condition {
+            self.compile_expression(condition)?;
+            self.expect_value(&condition.ty, "for condition")?;
+            Some(self.push_instruction(Instruction::JumpIfFalse(usize::MAX)))
+        } else {
+            None
+        };
+
+        self.control_flow_stack.push(ControlFlowContext::Loop {
+            break_jumps: Vec::new(),
+            continue_jumps: Vec::new(),
+        });
+        self.compile_block(&for_statement.body)?;
+
+        let continue_target = self.instructions.len();
+        self.patch_loop_continue_jumps(continue_target)?;
+        if let Some(post) = &for_statement.post {
+            self.compile_for_post_statement(post)?;
+        }
+        self.instructions.push(Instruction::Jump(loop_start));
+
+        let loop_end = self.instructions.len();
+        if let Some(jump_to_end) = jump_to_end {
+            self.patch_jump(jump_to_end, Instruction::JumpIfFalse(loop_end));
+        }
+        self.patch_loop_break_jumps(loop_end)?;
+        self.control_flow_stack.pop();
         Ok(())
     }
 
@@ -213,6 +249,9 @@ impl<'a> FunctionCompiler<'a> {
                 CheckedSwitchClause::Default(body) => Some(body),
                 CheckedSwitchClause::Case { .. } => None,
             });
+        self.control_flow_stack.push(ControlFlowContext::Switch {
+            break_jumps: Vec::new(),
+        });
 
         for clause in &switch_statement.clauses {
             let CheckedSwitchClause::Case { expressions, body } = clause else {
@@ -259,6 +298,8 @@ impl<'a> FunctionCompiler<'a> {
         for jump in end_jumps {
             self.patch_jump(jump, Instruction::Jump(end));
         }
+        self.patch_switch_break_jumps(end)?;
+        self.control_flow_stack.pop();
         Ok(())
     }
 
@@ -326,6 +367,77 @@ impl<'a> FunctionCompiler<'a> {
             .push(Instruction::LookupMap(lower_value_type(&map.ty)?));
         self.consume_binding_value(ok_binding);
         self.consume_binding_value(value_binding);
+        Ok(())
+    }
+
+    fn compile_for_post_statement(
+        &mut self,
+        post: &CheckedForPostStatement,
+    ) -> Result<(), CompileError> {
+        match post {
+            CheckedForPostStatement::Assign { target, value } => match target {
+                CheckedAssignmentTarget::Local { slot, .. } => {
+                    self.compile_expression(value)?;
+                    self.expect_value(&value.ty, "for post assignment")?;
+                    self.instructions.push(Instruction::StoreLocal(*slot));
+                }
+                CheckedAssignmentTarget::Index { target, index } => {
+                    self.compile_expression(target)?;
+                    self.expect_value(&target.ty, "for post assignment")?;
+                    self.compile_expression(index)?;
+                    self.expect_value(&index.ty, "for post assignment")?;
+                    self.compile_expression(value)?;
+                    self.expect_value(&value.ty, "for post assignment")?;
+                    if matches!(target.ty, Type::Map { .. }) {
+                        self.instructions.push(Instruction::SetMapIndex);
+                    } else {
+                        self.instructions.push(Instruction::SetIndex);
+                    }
+                }
+            },
+            CheckedForPostStatement::Expr(expression) => {
+                self.compile_expression(expression)?;
+                if expression.ty.produces_value() {
+                    self.instructions.push(Instruction::Pop);
+                }
+            }
+            CheckedForPostStatement::MapLookup {
+                map,
+                key,
+                value_binding,
+                ok_binding,
+            } => self.compile_map_lookup_statement(map, key, value_binding, ok_binding)?,
+        }
+        Ok(())
+    }
+
+    fn compile_break_statement(&mut self) -> Result<(), CompileError> {
+        let Some(index) = self
+            .control_flow_stack
+            .iter()
+            .rposition(ControlFlowContext::supports_break)
+        else {
+            return Err(CompileError::new(
+                "`break` lowering requires an enclosing control-flow target",
+            ));
+        };
+        let jump = self.push_instruction(Instruction::Jump(usize::MAX));
+        self.control_flow_stack[index].record_break_jump(jump);
+        Ok(())
+    }
+
+    fn compile_continue_statement(&mut self) -> Result<(), CompileError> {
+        let Some(index) = self
+            .control_flow_stack
+            .iter()
+            .rposition(ControlFlowContext::supports_continue)
+        else {
+            return Err(CompileError::new(
+                "`continue` lowering requires an enclosing loop target",
+            ));
+        };
+        let jump = self.push_instruction(Instruction::Jump(usize::MAX));
+        self.control_flow_stack[index].record_continue_jump(jump)?;
         Ok(())
     }
 
@@ -525,6 +637,62 @@ impl<'a> FunctionCompiler<'a> {
         slot
     }
 
+    fn patch_loop_continue_jumps(&mut self, target: usize) -> Result<(), CompileError> {
+        let Some(ControlFlowContext::Loop { continue_jumps, .. }) = self.control_flow_stack.last()
+        else {
+            return Err(CompileError::new(
+                "loop continue patching requires an active loop context",
+            ));
+        };
+        let jumps = continue_jumps.clone();
+        for jump in jumps {
+            self.patch_jump(jump, Instruction::Jump(target));
+        }
+        if let Some(ControlFlowContext::Loop { continue_jumps, .. }) =
+            self.control_flow_stack.last_mut()
+        {
+            continue_jumps.clear();
+        }
+        Ok(())
+    }
+
+    fn patch_loop_break_jumps(&mut self, target: usize) -> Result<(), CompileError> {
+        let Some(ControlFlowContext::Loop { break_jumps, .. }) = self.control_flow_stack.last()
+        else {
+            return Err(CompileError::new(
+                "loop break patching requires an active loop context",
+            ));
+        };
+        let jumps = break_jumps.clone();
+        for jump in jumps {
+            self.patch_jump(jump, Instruction::Jump(target));
+        }
+        if let Some(ControlFlowContext::Loop { break_jumps, .. }) =
+            self.control_flow_stack.last_mut()
+        {
+            break_jumps.clear();
+        }
+        Ok(())
+    }
+
+    fn patch_switch_break_jumps(&mut self, target: usize) -> Result<(), CompileError> {
+        let Some(ControlFlowContext::Switch { break_jumps }) = self.control_flow_stack.last()
+        else {
+            return Err(CompileError::new(
+                "switch break patching requires an active switch context",
+            ));
+        };
+        let jumps = break_jumps.clone();
+        for jump in jumps {
+            self.patch_jump(jump, Instruction::Jump(target));
+        }
+        if let Some(ControlFlowContext::Switch { break_jumps }) = self.control_flow_stack.last_mut()
+        {
+            break_jumps.clear();
+        }
+        Ok(())
+    }
+
     fn compile_range_statement(
         &mut self,
         source: &CheckedExpression,
@@ -536,6 +704,10 @@ impl<'a> FunctionCompiler<'a> {
         self.expect_value(&source.ty, "range loop")?;
         let source_slot = self.allocate_hidden_local("range$source");
         self.instructions.push(Instruction::StoreLocal(source_slot));
+        self.control_flow_stack.push(ControlFlowContext::Loop {
+            break_jumps: Vec::new(),
+            continue_jumps: Vec::new(),
+        });
 
         match &source.ty {
             Type::Slice(_) => {
@@ -571,6 +743,8 @@ impl<'a> FunctionCompiler<'a> {
                 })?;
 
                 self.compile_block(body)?;
+                let continue_target = self.instructions.len();
+                self.patch_loop_continue_jumps(continue_target)?;
                 self.instructions.push(Instruction::LoadLocal(index_slot));
                 self.instructions.push(Instruction::PushInt(1));
                 self.instructions.push(Instruction::Add);
@@ -578,6 +752,7 @@ impl<'a> FunctionCompiler<'a> {
                 self.instructions.push(Instruction::Jump(loop_start));
                 let loop_end = self.instructions.len();
                 self.patch_jump(jump_to_end, Instruction::JumpIfFalse(loop_end));
+                self.patch_loop_break_jumps(loop_end)?;
             }
             Type::Map { key, .. } => {
                 let keys_slot = self.allocate_hidden_local("range$keys");
@@ -629,6 +804,8 @@ impl<'a> FunctionCompiler<'a> {
                 })?;
 
                 self.compile_block(body)?;
+                let continue_target = self.instructions.len();
+                self.patch_loop_continue_jumps(continue_target)?;
                 self.instructions.push(Instruction::LoadLocal(index_slot));
                 self.instructions.push(Instruction::PushInt(1));
                 self.instructions.push(Instruction::Add);
@@ -636,6 +813,7 @@ impl<'a> FunctionCompiler<'a> {
                 self.instructions.push(Instruction::Jump(loop_start));
                 let loop_end = self.instructions.len();
                 self.patch_jump(jump_to_end, Instruction::JumpIfFalse(loop_end));
+                self.patch_loop_break_jumps(loop_end)?;
             }
             _ => {
                 return Err(CompileError::new(format!(
@@ -644,6 +822,8 @@ impl<'a> FunctionCompiler<'a> {
                 )));
             }
         }
+
+        self.control_flow_stack.pop();
 
         Ok(())
     }
@@ -667,6 +847,46 @@ impl<'a> FunctionCompiler<'a> {
                 self.instructions.push(Instruction::StoreLocal(*slot));
             }
             CheckedBinding::Discard => self.instructions.push(Instruction::Pop),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum ControlFlowContext {
+    Loop {
+        break_jumps: Vec<usize>,
+        continue_jumps: Vec<usize>,
+    },
+    Switch {
+        break_jumps: Vec<usize>,
+    },
+}
+
+impl ControlFlowContext {
+    fn supports_break(&self) -> bool {
+        true
+    }
+
+    fn supports_continue(&self) -> bool {
+        matches!(self, ControlFlowContext::Loop { .. })
+    }
+
+    fn record_break_jump(&mut self, jump: usize) {
+        match self {
+            ControlFlowContext::Loop { break_jumps, .. }
+            | ControlFlowContext::Switch { break_jumps } => break_jumps.push(jump),
+        }
+    }
+
+    fn record_continue_jump(&mut self, jump: usize) -> Result<(), CompileError> {
+        match self {
+            ControlFlowContext::Loop { continue_jumps, .. } => {
+                continue_jumps.push(jump);
+                Ok(())
+            }
+            ControlFlowContext::Switch { .. } => Err(CompileError::new(
+                "`continue` lowering requires a loop context",
+            )),
         }
     }
 }

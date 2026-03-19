@@ -118,10 +118,7 @@ pub enum Statement {
     Expr(Expression),
     If(IfStatement),
     Switch(SwitchStatement),
-    For {
-        condition: Expression,
-        body: Block,
-    },
+    For(ForStatement),
     RangeFor {
         bindings: Vec<Binding>,
         binding_mode: Option<BindingMode>,
@@ -134,6 +131,8 @@ pub enum Statement {
         target: Expression,
         key: Expression,
     },
+    Break,
+    Continue,
     Return(Option<Expression>),
 }
 
@@ -187,6 +186,28 @@ pub enum SwitchClause {
     Default(Block),
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ForStatement {
+    pub init: Option<HeaderStatement>,
+    pub condition: Option<Expression>,
+    pub post: Option<ForPostStatement>,
+    pub body: Block,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ForPostStatement {
+    Assign {
+        target: AssignmentTarget,
+        value: Expression,
+    },
+    Expr(Expression),
+    MapLookup {
+        bindings: Vec<Binding>,
+        target: Expression,
+        key: Expression,
+    },
+}
+
 impl Statement {
     fn render(&self, indent: usize) -> String {
         match self {
@@ -221,18 +242,7 @@ impl Statement {
             Statement::Switch(switch_statement) => {
                 render_switch_statement(switch_statement, indent).join("\n")
             }
-            Statement::For { condition, body } => {
-                let mut lines = vec![format!(
-                    "{}for {} {{",
-                    indent_str(indent),
-                    condition.render()
-                )];
-                for statement in &body.statements {
-                    lines.push(statement.render(indent + 1));
-                }
-                lines.push(format!("{}}}", indent_str(indent)));
-                lines.join("\n")
-            }
+            Statement::For(for_statement) => render_for_statement(for_statement, indent).join("\n"),
             Statement::RangeFor {
                 bindings,
                 binding_mode,
@@ -257,6 +267,8 @@ impl Statement {
                 indent_str(indent),
                 render_map_lookup_statement(bindings, *binding_mode, target, key)
             ),
+            Statement::Break => format!("{}break", indent_str(indent)),
+            Statement::Continue => format!("{}continue", indent_str(indent)),
             Statement::Return(Some(expression)) => {
                 format!("{}return {}", indent_str(indent), expression.render())
             }
@@ -294,6 +306,22 @@ impl HeaderStatement {
                 target,
                 key,
             } => render_map_lookup_statement(bindings, *binding_mode, target, key),
+        }
+    }
+}
+
+impl ForPostStatement {
+    fn render(&self) -> String {
+        match self {
+            ForPostStatement::Assign { target, value } => {
+                format!("{} = {}", target.render(), value.render())
+            }
+            ForPostStatement::Expr(expression) => expression.render(),
+            ForPostStatement::MapLookup {
+                bindings,
+                target,
+                key,
+            } => render_map_lookup_statement(bindings, BindingMode::Assign, target, key),
         }
     }
 }
@@ -599,6 +627,54 @@ fn render_switch_header(switch_statement: &SwitchStatement) -> String {
         (None, Some(expression)) => format!("{} ", expression.render()),
         (None, None) => String::new(),
     }
+}
+
+fn render_for_statement(for_statement: &ForStatement, indent: usize) -> Vec<String> {
+    let mut lines = vec![format!(
+        "{}for {}{{",
+        indent_str(indent),
+        render_for_header(for_statement)
+    )];
+    for statement in &for_statement.body.statements {
+        lines.push(statement.render(indent + 1));
+    }
+    lines.push(format!("{}}}", indent_str(indent)));
+    lines
+}
+
+fn render_for_header(for_statement: &ForStatement) -> String {
+    if let (None, Some(condition), None) = (
+        for_statement.init.as_ref(),
+        for_statement.condition.as_ref(),
+        for_statement.post.as_ref(),
+    ) {
+        return format!("{} ", condition.render());
+    }
+
+    if let (None, None, None) = (
+        for_statement.init.as_ref(),
+        for_statement.condition.as_ref(),
+        for_statement.post.as_ref(),
+    ) {
+        return String::new();
+    }
+
+    let init = for_statement
+        .init
+        .as_ref()
+        .map(HeaderStatement::render)
+        .unwrap_or_default();
+    let condition = for_statement
+        .condition
+        .as_ref()
+        .map(Expression::render)
+        .unwrap_or_default();
+    let post = for_statement
+        .post
+        .as_ref()
+        .map(ForPostStatement::render)
+        .unwrap_or_default();
+    format!("{init}; {condition}; {post} ")
 }
 
 fn render_range_header(

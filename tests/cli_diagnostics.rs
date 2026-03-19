@@ -55,6 +55,32 @@ fn check_rejects_non_boolean_for_condition() {
 }
 
 #[test]
+fn check_rejects_break_outside_breakable_statement() {
+    let path = write_temp_source(
+        "check-bad-break",
+        "package main\n\nfunc main() {\n\tbreak\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("`break` requires an enclosing `for`, `range`, or `switch`"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_continue_outside_loop() {
+    let path = write_temp_source(
+        "check-bad-continue",
+        "package main\n\nfunc main() {\n\tswitch 1 {\n\tdefault:\n\t\tcontinue\n\t}\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("`continue` requires an enclosing `for` or `range` loop"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
 fn check_rejects_range_with_non_iterable_source() {
     let path = write_temp_source(
         "check-bad-range-source",
@@ -178,6 +204,19 @@ fn check_rejects_value_function_with_only_conditional_loop_return() {
     let path = write_temp_source(
         "check-loop-missing-return",
         "package main\n\nfunc helper(value int) int {\n\tfor value > 0 {\n\t\treturn value\n\t}\n}\n\nfunc main() {\n\tprintln(helper(1))\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("must return a `int` on every path"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_value_function_with_breaking_infinite_loop() {
+    let path = write_temp_source(
+        "check-loop-break-return",
+        "package main\n\nfunc helper() int {\n\tfor {\n\t\tbreak\n\t}\n}\n\nfunc main() {\n\tprintln(helper())\n}\n",
     );
 
     let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");

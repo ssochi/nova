@@ -34,6 +34,7 @@ This directory stores validation evidence that "proves the change holds."
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `2026-03-20-loop-control-flow.md`: validates staged classic `for` clauses, unlabeled `break` / `continue`, and conservative loop termination analysis
 - `2026-03-20-switch-statements.md`: validates staged expression `switch` statements, tagless `switch`, shared control-flow headers, and duplicate-clause diagnostics
 - `2026-03-20-if-statement-headers.md`: validates staged `if` statement initializers, shared header scoping, and `else if` chains across the full CLI and VM stack
 - `2026-03-20-map-comma-ok-lookups.md`: validates staged comma-ok `map` lookups and duplicate constant-key diagnostics across the full CLI and VM stack
