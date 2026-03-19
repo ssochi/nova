@@ -6,8 +6,9 @@ use crate::bytecode::instruction::{
 };
 use crate::semantic::model::{
     CallTarget, CheckedAssignmentTarget, CheckedBinaryOperator, CheckedBinding, CheckedBlock,
-    CheckedExpression, CheckedExpressionKind, CheckedFunction, CheckedMapLiteralEntry,
-    CheckedProgram, CheckedStatement, Type,
+    CheckedElseBranch, CheckedExpression, CheckedExpressionKind, CheckedFunction,
+    CheckedIfInitializer, CheckedIfStatement, CheckedMapLiteralEntry, CheckedProgram,
+    CheckedStatement, Type,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -117,26 +118,7 @@ impl<'a> FunctionCompiler<'a> {
                     self.instructions.push(Instruction::Pop);
                 }
             }
-            CheckedStatement::If {
-                condition,
-                then_block,
-                else_block,
-            } => {
-                self.compile_expression(condition)?;
-                let jump_to_else = self.push_instruction(Instruction::JumpIfFalse(usize::MAX));
-                self.compile_block(then_block)?;
-                if let Some(else_block) = else_block {
-                    let jump_to_end = self.push_instruction(Instruction::Jump(usize::MAX));
-                    let else_start = self.instructions.len();
-                    self.patch_jump(jump_to_else, Instruction::JumpIfFalse(else_start));
-                    self.compile_block(else_block)?;
-                    let end = self.instructions.len();
-                    self.patch_jump(jump_to_end, Instruction::Jump(end));
-                } else {
-                    let end = self.instructions.len();
-                    self.patch_jump(jump_to_else, Instruction::JumpIfFalse(end));
-                }
-            }
+            CheckedStatement::If(if_statement) => self.compile_if_statement(if_statement)?,
             CheckedStatement::For { condition, body } => {
                 let loop_start = self.instructions.len();
                 self.compile_expression(condition)?;
@@ -172,6 +154,81 @@ impl<'a> FunctionCompiler<'a> {
             }
         }
 
+        Ok(())
+    }
+
+    fn compile_if_statement(
+        &mut self,
+        if_statement: &CheckedIfStatement,
+    ) -> Result<(), CompileError> {
+        if let Some(initializer) = &if_statement.initializer {
+            self.compile_if_initializer(initializer)?;
+        }
+        self.compile_expression(&if_statement.condition)?;
+        let jump_to_else = self.push_instruction(Instruction::JumpIfFalse(usize::MAX));
+        self.compile_block(&if_statement.then_block)?;
+        if let Some(else_branch) = &if_statement.else_branch {
+            let jump_to_end = self.push_instruction(Instruction::Jump(usize::MAX));
+            let else_start = self.instructions.len();
+            self.patch_jump(jump_to_else, Instruction::JumpIfFalse(else_start));
+            match else_branch {
+                CheckedElseBranch::Block(else_block) => self.compile_block(else_block)?,
+                CheckedElseBranch::If(else_if) => self.compile_if_statement(else_if)?,
+            }
+            let end = self.instructions.len();
+            self.patch_jump(jump_to_end, Instruction::Jump(end));
+        } else {
+            let end = self.instructions.len();
+            self.patch_jump(jump_to_else, Instruction::JumpIfFalse(end));
+        }
+        Ok(())
+    }
+
+    fn compile_if_initializer(
+        &mut self,
+        initializer: &CheckedIfInitializer,
+    ) -> Result<(), CompileError> {
+        match initializer {
+            CheckedIfInitializer::VarDecl { slot, value, .. } => {
+                if let Some(value) = value {
+                    self.compile_expression(value)?;
+                    self.expect_value(&value.ty, "if initializer variable declaration")?;
+                    self.instructions.push(Instruction::StoreLocal(*slot));
+                }
+            }
+            CheckedIfInitializer::Assign { target, value } => match target {
+                CheckedAssignmentTarget::Local { slot, .. } => {
+                    self.compile_expression(value)?;
+                    self.expect_value(&value.ty, "if initializer assignment")?;
+                    self.instructions.push(Instruction::StoreLocal(*slot));
+                }
+                CheckedAssignmentTarget::Index { target, index } => {
+                    self.compile_expression(target)?;
+                    self.expect_value(&target.ty, "if initializer assignment")?;
+                    self.compile_expression(index)?;
+                    self.expect_value(&index.ty, "if initializer assignment")?;
+                    self.compile_expression(value)?;
+                    self.expect_value(&value.ty, "if initializer assignment")?;
+                    if matches!(target.ty, Type::Map { .. }) {
+                        self.instructions.push(Instruction::SetMapIndex);
+                    } else {
+                        self.instructions.push(Instruction::SetIndex);
+                    }
+                }
+            },
+            CheckedIfInitializer::Expr(expression) => {
+                self.compile_expression(expression)?;
+                if expression.ty.produces_value() {
+                    self.instructions.push(Instruction::Pop);
+                }
+            }
+            CheckedIfInitializer::MapLookup {
+                map,
+                key,
+                value_binding,
+                ok_binding,
+            } => self.compile_map_lookup_statement(map, key, value_binding, ok_binding)?,
+        }
         Ok(())
     }
 

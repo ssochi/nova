@@ -2,9 +2,12 @@ use std::collections::HashMap;
 use std::fmt;
 
 use crate::config::ExecutionConfig;
-use crate::frontend::ast::{AssignmentTarget, Block, FunctionDecl, SourceFileAst, Statement};
+use crate::frontend::ast::{
+    AssignmentTarget, Block, FunctionDecl, SourceFileAst, Statement, TypeRef,
+};
 use crate::semantic::model::{
-    CheckedAssignmentTarget, CheckedBlock, CheckedFunction, CheckedProgram, CheckedStatement, Type,
+    CheckedAssignmentTarget, CheckedBlock, CheckedExpression, CheckedFunction, CheckedProgram,
+    CheckedStatement, Type,
 };
 use crate::semantic::registry::{FunctionRegistry, ImportRegistry};
 use crate::semantic::support::{
@@ -13,6 +16,7 @@ use crate::semantic::support::{
 };
 
 mod expressions;
+mod ifs;
 mod lookup;
 mod range;
 
@@ -191,133 +195,10 @@ impl<'a> FunctionAnalyzer<'a> {
                 name,
                 type_ref,
                 value,
-            } => {
-                if self.current_scope().contains_key(name) {
-                    return Err(SemanticError::new(format!(
-                        "variable `{name}` is already defined in the current scope"
-                    )));
-                }
-
-                let declared_type = type_ref
-                    .as_ref()
-                    .map(|type_ref| {
-                        let ty = resolve_type_ref(type_ref).ok_or_else(|| {
-                            SemanticError::new(format!(
-                                "unsupported variable type `{}` in declaration of `{name}`",
-                                type_ref.render()
-                            ))
-                        })?;
-                        validate_runtime_type(&ty, &format!("variable `{name}`"))?;
-                        Ok(ty)
-                    })
-                    .transpose()?;
-                let value = match value {
-                    Some(expression) => {
-                        let value = self.analyze_expression(expression)?;
-                        if value.ty == Type::UntypedNil && declared_type.is_none() {
-                            return Err(SemanticError::new(format!(
-                                "variable `{name}` requires an explicit type when initialized with `nil`"
-                            )));
-                        }
-                        if !value.ty.produces_value() && value.ty != Type::UntypedNil {
-                            return Err(SemanticError::new(format!(
-                                "variable `{name}` requires a value-producing expression"
-                            )));
-                        }
-                        Some(if let Some(declared_type) = &declared_type {
-                            coerce_expression_to_type(
-                                declared_type,
-                                value,
-                                &format!("variable `{name}`"),
-                            )?
-                        } else {
-                            value
-                        })
-                    }
-                    None => None,
-                };
-                let local_type = declared_type.unwrap_or_else(|| {
-                    value
-                        .as_ref()
-                        .expect("untyped variable declarations require an initializer")
-                        .ty
-                        .clone()
-                });
-                let value = if value.is_some() {
-                    value
-                } else {
-                    Some(zero_value_expression(local_type.clone()))
-                };
-                let slot = self.allocate_local(name.clone(), local_type);
-                Ok(CheckedStatement::VarDecl {
-                    slot,
-                    name: name.clone(),
-                    value,
-                })
-            }
-            Statement::Assign { target, value } => {
-                let target = self.analyze_assignment_target(target)?;
-                let value = self.analyze_expression(value)?;
-                let value = match &target {
-                    CheckedAssignmentTarget::Local { name, .. } => {
-                        let binding = self.lookup_local(name)?;
-                        coerce_expression_to_type(
-                            &binding.ty,
-                            value,
-                            &format!("assignment to `{name}`"),
-                        )?
-                    }
-                    CheckedAssignmentTarget::Index {
-                        target: target_expression,
-                        ..
-                    } => match &target_expression.ty {
-                        Type::Slice(element) => coerce_expression_to_type(
-                            element.as_ref(),
-                            value,
-                            "slice element assignment",
-                        )?,
-                        Type::Map { value: element, .. } => coerce_expression_to_type(
-                            element.as_ref(),
-                            value,
-                            "map element assignment",
-                        )?,
-                        _ => {
-                            return Err(SemanticError::new(format!(
-                                "index assignment requires `slice` or `map` target, found `{}`",
-                                target_expression.ty.render()
-                            )));
-                        }
-                    },
-                };
-                Ok(CheckedStatement::Assign { target, value })
-            }
-            Statement::Expr(expression) => {
-                let expression = self.analyze_expression(expression)?;
-                if expression.ty == Type::UntypedNil {
-                    return Err(SemanticError::new(
-                        "expression statement requires a typed value, found `nil`",
-                    ));
-                }
-                Ok(CheckedStatement::Expr(expression))
-            }
-            Statement::If {
-                condition,
-                then_block,
-                else_block,
-            } => {
-                let condition = self.analyze_expression(condition)?;
-                expect_type(&Type::Bool, &condition.ty, "if condition")?;
-                let then_block = self.analyze_block(then_block, true)?;
-                let else_block = else_block
-                    .as_ref()
-                    .map(|block| self.analyze_block(block, true))
-                    .transpose()?;
-                Ok(CheckedStatement::If {
-                    condition,
-                    then_block,
-                    else_block,
-                })
-            }
+            } => self.analyze_var_decl_statement(name, type_ref.as_ref(), value.as_ref()),
+            Statement::Assign { target, value } => self.analyze_assignment_statement(target, value),
+            Statement::Expr(expression) => self.analyze_expression_statement(expression),
+            Statement::If(if_statement) => self.analyze_if_statement(if_statement),
             Statement::For { condition, body } => {
                 let condition = self.analyze_expression(condition)?;
                 expect_type(&Type::Bool, &condition.ty, "for condition")?;
@@ -363,6 +244,132 @@ impl<'a> FunctionAnalyzer<'a> {
                     ))),
                 }
             }
+        }
+    }
+
+    pub(super) fn analyze_var_decl_statement(
+        &mut self,
+        name: &str,
+        type_ref: Option<&TypeRef>,
+        value: Option<&crate::frontend::ast::Expression>,
+    ) -> Result<CheckedStatement, SemanticError> {
+        if self.current_scope().contains_key(name) {
+            return Err(SemanticError::new(format!(
+                "variable `{name}` is already defined in the current scope"
+            )));
+        }
+
+        let declared_type = type_ref
+            .map(|type_ref| {
+                let ty = resolve_type_ref(type_ref).ok_or_else(|| {
+                    SemanticError::new(format!(
+                        "unsupported variable type `{}` in declaration of `{name}`",
+                        type_ref.render()
+                    ))
+                })?;
+                validate_runtime_type(&ty, &format!("variable `{name}`"))?;
+                Ok(ty)
+            })
+            .transpose()?;
+        let value = self.analyze_var_initializer(name, declared_type.as_ref(), value)?;
+        let local_type = declared_type.unwrap_or_else(|| {
+            value
+                .as_ref()
+                .expect("untyped variable declarations require an initializer")
+                .ty
+                .clone()
+        });
+        let value = if value.is_some() {
+            value
+        } else {
+            Some(zero_value_expression(local_type.clone()))
+        };
+        let slot = self.allocate_local(name.to_string(), local_type);
+        Ok(CheckedStatement::VarDecl {
+            slot,
+            name: name.to_string(),
+            value,
+        })
+    }
+
+    pub(super) fn analyze_assignment_statement(
+        &mut self,
+        target: &AssignmentTarget,
+        value: &crate::frontend::ast::Expression,
+    ) -> Result<CheckedStatement, SemanticError> {
+        let target = self.analyze_assignment_target(target)?;
+        let value = self.analyze_assignment_value(&target, value)?;
+        Ok(CheckedStatement::Assign { target, value })
+    }
+
+    pub(super) fn analyze_expression_statement(
+        &mut self,
+        expression: &crate::frontend::ast::Expression,
+    ) -> Result<CheckedStatement, SemanticError> {
+        let expression = self.analyze_expression(expression)?;
+        if expression.ty == Type::UntypedNil {
+            return Err(SemanticError::new(
+                "expression statement requires a typed value, found `nil`",
+            ));
+        }
+        Ok(CheckedStatement::Expr(expression))
+    }
+
+    fn analyze_var_initializer(
+        &mut self,
+        name: &str,
+        declared_type: Option<&Type>,
+        value: Option<&crate::frontend::ast::Expression>,
+    ) -> Result<Option<CheckedExpression>, SemanticError> {
+        match value {
+            Some(expression) => {
+                let value = self.analyze_expression(expression)?;
+                if value.ty == Type::UntypedNil && declared_type.is_none() {
+                    return Err(SemanticError::new(format!(
+                        "variable `{name}` requires an explicit type when initialized with `nil`"
+                    )));
+                }
+                if !value.ty.produces_value() && value.ty != Type::UntypedNil {
+                    return Err(SemanticError::new(format!(
+                        "variable `{name}` requires a value-producing expression"
+                    )));
+                }
+                Ok(Some(if let Some(declared_type) = declared_type {
+                    coerce_expression_to_type(declared_type, value, &format!("variable `{name}`"))?
+                } else {
+                    value
+                }))
+            }
+            None => Ok(None),
+        }
+    }
+
+    fn analyze_assignment_value(
+        &mut self,
+        target: &CheckedAssignmentTarget,
+        value: &crate::frontend::ast::Expression,
+    ) -> Result<CheckedExpression, SemanticError> {
+        let value = self.analyze_expression(value)?;
+        match target {
+            CheckedAssignmentTarget::Local { name, .. } => {
+                let binding = self.lookup_local(name)?;
+                coerce_expression_to_type(&binding.ty, value, &format!("assignment to `{name}`"))
+            }
+            CheckedAssignmentTarget::Index {
+                target: target_expression,
+                ..
+            } => match &target_expression.ty {
+                Type::Slice(element) => {
+                    coerce_expression_to_type(element.as_ref(), value, "slice element assignment")
+                }
+                Type::Map { value: element, .. } => {
+                    coerce_expression_to_type(element.as_ref(), value, "map element assignment")
+                }
+                _ => Err(SemanticError::new(format!(
+                    "index assignment requires `slice` or `map` target, found `{}`",
+                    target_expression.ty.render()
+                ))),
+            },
         }
     }
 

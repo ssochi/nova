@@ -1,6 +1,7 @@
 use super::parse_source_file;
 use crate::frontend::ast::{
-    AssignmentTarget, Binding, BindingMode, Expression, Statement, TypeRef,
+    AssignmentTarget, Binding, BindingMode, ElseBranch, Expression, IfInitializer, Statement,
+    TypeRef,
 };
 use crate::frontend::lexer::lex;
 use crate::source::SourceFile;
@@ -325,6 +326,61 @@ fn parse_map_lookup_statement_forms() {
             assert_eq!(binding_mode, &BindingMode::Assign);
         }
         _ => panic!("expected assign-style map lookup"),
+    }
+}
+
+#[test]
+fn parse_if_initializer_and_else_if_chain() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tvar counts = map[string]int{\"go\": 2}\n\tif value, ok := counts[\"go\"]; ok {\n\t\tprintln(value)\n\t} else if var ready bool = false; ready {\n\t\tprintln(0)\n\t} else {\n\t\tprintln(2)\n\t}\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let function = &ast.functions[0];
+
+    match &function.body.statements[1] {
+        Statement::If(if_statement) => {
+            match if_statement.initializer.as_ref() {
+                Some(IfInitializer::MapLookup {
+                    bindings,
+                    binding_mode,
+                    target,
+                    key,
+                }) => {
+                    assert_eq!(
+                        bindings,
+                        &vec![
+                            Binding::Identifier("value".into()),
+                            Binding::Identifier("ok".into())
+                        ]
+                    );
+                    assert_eq!(binding_mode, &BindingMode::Define);
+                    assert_eq!(target, &Expression::Identifier("counts".into()));
+                    assert_eq!(key, &Expression::String("go".into()));
+                }
+                _ => panic!("expected map lookup if initializer"),
+            }
+            assert_eq!(if_statement.condition, Expression::Identifier("ok".into()));
+            match if_statement.else_branch.as_ref() {
+                Some(ElseBranch::If(else_if)) => match else_if.initializer.as_ref() {
+                    Some(IfInitializer::VarDecl {
+                        name,
+                        type_ref,
+                        value,
+                    }) => {
+                        assert_eq!(name, "ready");
+                        assert_eq!(type_ref, &Some(TypeRef::Named("bool".into())));
+                        assert_eq!(value.as_ref(), Some(&Expression::Bool(false)));
+                    }
+                    _ => panic!("expected var-decl else-if initializer"),
+                },
+                _ => panic!("expected else-if branch"),
+            }
+        }
+        _ => panic!("expected if statement"),
     }
 }
 

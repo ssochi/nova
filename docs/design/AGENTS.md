@@ -32,6 +32,7 @@ This directory stores feature and subsystem designs. It describes intent, scope 
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `if-statement-headers.md`: design baseline for staged `if` statement initializers, shared header scope, and `else if` chains
 - `bootstrap-vm-execution.md`: design baseline for the bootstrap VM execution loop
 - `semantic-functions-branches.md`: design baseline for semantic analysis, user-defined calls, and branch control flow
 - `for-loop-control-flow.md`: design baseline for condition-only `for` loops and loop-aware path analysis

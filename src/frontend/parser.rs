@@ -1,8 +1,9 @@
 use std::fmt;
 
 use crate::frontend::ast::{
-    AssignmentTarget, BinaryOperator, Binding, BindingMode, Block, Expression, FunctionDecl,
-    ImportDecl, MapLiteralEntry, Parameter, SourceFileAst, Statement, TypeRef,
+    AssignmentTarget, BinaryOperator, Binding, BindingMode, Block, ElseBranch, Expression,
+    FunctionDecl, IfInitializer, IfStatement, ImportDecl, MapLiteralEntry, Parameter,
+    SourceFileAst, Statement, TypeRef,
 };
 use crate::frontend::token::{Token, TokenKind};
 
@@ -127,21 +128,14 @@ impl<'a> Parser<'a> {
 
     fn parse_statement(&mut self) -> Result<Statement, ParseError> {
         if self.match_kind(&TokenKind::Var) {
-            let name = self.expect_identifier()?;
-            let (type_ref, value) = if self.match_kind(&TokenKind::Assign) {
-                (None, Some(self.parse_expression()?))
-            } else if self.check_type_start() {
-                let type_ref = self.parse_type_ref()?;
-                let value = if self.match_kind(&TokenKind::Assign) {
-                    Some(self.parse_expression()?)
-                } else {
-                    None
-                };
-                (Some(type_ref), value)
-            } else {
-                return Err(
-                    self.error_at_current("variable declaration requires a type or initializer")
-                );
+            let initializer = self.parse_var_decl_initializer()?;
+            let IfInitializer::VarDecl {
+                name,
+                type_ref,
+                value,
+            } = initializer
+            else {
+                unreachable!("variable declaration parsing always returns var data");
             };
             return Ok(Statement::VarDecl {
                 name,
@@ -160,18 +154,7 @@ impl<'a> Parser<'a> {
         }
 
         if self.match_kind(&TokenKind::If) {
-            let condition = self.parse_expression()?;
-            let then_block = self.parse_block()?;
-            let else_block = if self.match_kind(&TokenKind::Else) {
-                Some(self.parse_block()?)
-            } else {
-                None
-            };
-            return Ok(Statement::If {
-                condition,
-                then_block,
-                else_block,
-            });
+            return Ok(Statement::If(self.parse_if_statement()?));
         }
 
         if self.match_kind(&TokenKind::For) {
@@ -244,6 +227,101 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_map_lookup_statement(&mut self) -> Result<Statement, ParseError> {
+        let initializer = self.parse_map_lookup_initializer()?;
+        let IfInitializer::MapLookup {
+            bindings,
+            binding_mode,
+            target,
+            key,
+        } = initializer
+        else {
+            unreachable!("map lookup initializer parsing always returns map lookup data");
+        };
+        Ok(Statement::MapLookup {
+            bindings,
+            binding_mode,
+            target,
+            key,
+        })
+    }
+
+    fn parse_if_statement(&mut self) -> Result<IfStatement, ParseError> {
+        let (initializer, condition) = self.parse_if_header()?;
+        let then_block = self.parse_block()?;
+        let else_branch = if self.match_kind(&TokenKind::Else) {
+            if self.match_kind(&TokenKind::If) {
+                Some(ElseBranch::If(Box::new(self.parse_if_statement()?)))
+            } else {
+                Some(ElseBranch::Block(self.parse_block()?))
+            }
+        } else {
+            None
+        };
+        Ok(IfStatement {
+            initializer,
+            condition,
+            then_block,
+            else_branch,
+        })
+    }
+
+    fn parse_if_header(&mut self) -> Result<(Option<IfInitializer>, Expression), ParseError> {
+        if self.match_kind(&TokenKind::Var) {
+            let initializer = self.parse_var_decl_initializer()?;
+            self.expect(TokenKind::Semicolon)?;
+            let condition = self.parse_expression()?;
+            return Ok((Some(initializer), condition));
+        }
+
+        if self.is_map_lookup_statement_start() {
+            let initializer = self.parse_map_lookup_initializer()?;
+            self.expect(TokenKind::Semicolon)?;
+            let condition = self.parse_expression()?;
+            return Ok((Some(initializer), condition));
+        }
+
+        let expression = self.parse_expression()?;
+        if self.match_kind(&TokenKind::Assign) {
+            let target = assignment_target_from_expression(expression)?;
+            let value = self.parse_expression()?;
+            self.expect(TokenKind::Semicolon)?;
+            let condition = self.parse_expression()?;
+            return Ok((Some(IfInitializer::Assign { target, value }), condition));
+        }
+
+        if self.match_kind(&TokenKind::Semicolon) {
+            let condition = self.parse_expression()?;
+            return Ok((Some(IfInitializer::Expr(expression)), condition));
+        }
+
+        Ok((None, expression))
+    }
+
+    fn parse_var_decl_initializer(&mut self) -> Result<IfInitializer, ParseError> {
+        let name = self.expect_identifier()?;
+        let (type_ref, value) = if self.match_kind(&TokenKind::Assign) {
+            (None, Some(self.parse_expression()?))
+        } else if self.check_type_start() {
+            let type_ref = self.parse_type_ref()?;
+            let value = if self.match_kind(&TokenKind::Assign) {
+                Some(self.parse_expression()?)
+            } else {
+                None
+            };
+            (Some(type_ref), value)
+        } else {
+            return Err(
+                self.error_at_current("variable declaration requires a type or initializer")
+            );
+        };
+        Ok(IfInitializer::VarDecl {
+            name,
+            type_ref,
+            value,
+        })
+    }
+
+    fn parse_map_lookup_initializer(&mut self) -> Result<IfInitializer, ParseError> {
         let mut bindings = vec![self.parse_binding()?];
         self.expect(TokenKind::Comma)?;
         bindings.push(self.parse_binding()?);
@@ -259,7 +337,7 @@ impl<'a> Parser<'a> {
                 "comma-ok lookup requires a map index expression on the right side",
             ));
         };
-        Ok(Statement::MapLookup {
+        Ok(IfInitializer::MapLookup {
             bindings,
             binding_mode,
             target: *target,

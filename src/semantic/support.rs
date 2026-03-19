@@ -1,7 +1,8 @@
 use crate::frontend::ast::TypeRef;
 use crate::semantic::analyzer::SemanticError;
 use crate::semantic::model::{
-    CheckedBlock, CheckedExpression, CheckedExpressionKind, CheckedStatement, Type,
+    CheckedBlock, CheckedElseBranch, CheckedExpression, CheckedExpressionKind, CheckedIfStatement,
+    CheckedStatement, Type,
 };
 
 pub fn resolve_type_ref(type_ref: &TypeRef) -> Option<Type> {
@@ -155,15 +156,20 @@ pub fn validate_make_literal_bounds(
 fn statement_guarantees_termination(statement: &CheckedStatement) -> bool {
     match statement {
         CheckedStatement::Return(_) => true,
-        CheckedStatement::If {
-            then_block,
-            else_block: Some(else_block),
-            ..
-        } => block_guarantees_return(then_block) && block_guarantees_return(else_block),
+        CheckedStatement::If(if_statement) => if_statement_guarantees_termination(if_statement),
         CheckedStatement::For { condition, .. } => expression_is_compile_time_true(condition),
         CheckedStatement::RangeFor { .. } => false,
         _ => false,
     }
+}
+
+fn if_statement_guarantees_termination(if_statement: &CheckedIfStatement) -> bool {
+    block_guarantees_return(&if_statement.then_block)
+        && match &if_statement.else_branch {
+            Some(CheckedElseBranch::Block(else_block)) => block_guarantees_return(else_block),
+            Some(CheckedElseBranch::If(else_if)) => if_statement_guarantees_termination(else_if),
+            None => false,
+        }
 }
 
 fn expression_is_compile_time_true(expression: &CheckedExpression) -> bool {

@@ -459,6 +459,32 @@ fn check_rejects_map_lookup_define_without_new_name() {
 }
 
 #[test]
+fn check_rejects_if_header_scope_leak() {
+    let path = write_temp_source(
+        "check-bad-if-scope",
+        "package main\n\nfunc main() {\n\tif value, ok := map[string]int{\"go\": 2}[\"go\"]; ok {\n\t\tprintln(value)\n\t}\n\tprintln(ok)\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("unknown variable `ok`"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_missing_if_header_semicolon() {
+    let path = write_temp_source(
+        "check-bad-if-header-semicolon",
+        "package main\n\nfunc main() {\n\tvar counts = map[string]int{\"go\": 2}\n\tif value, ok := counts[\"go\"] {\n\t\tprintln(value, ok)\n\t}\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("expected `;`"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
 fn check_rejects_delete_with_wrong_key_type() {
     let path = write_temp_source(
         "check-bad-delete-key",

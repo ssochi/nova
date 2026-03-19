@@ -107,6 +107,12 @@ fn run_executes_map_lookup_statements() {
 }
 
 #[test]
+fn run_executes_if_statement_headers() {
+    let output = run_cli(&["run", "examples/if_headers.go"]).expect("program should run");
+    assert_eq!(output, "3 true\n2\nprobe\n7\n");
+}
+
+#[test]
 fn run_executes_explicit_nil_values_and_comparisons() {
     let output = run_cli(&["run", "examples/nil_values.go"]).expect("program should run");
     assert_eq!(
@@ -355,6 +361,15 @@ fn dump_ast_renders_map_lookup_statements() {
 }
 
 #[test]
+fn dump_ast_renders_if_statement_headers() {
+    let output = run_cli(&["dump-ast", "examples/if_headers.go"]).expect("ast should be rendered");
+
+    assert!(output.contains("if value, ok := counts[\"nova\"]; ok {"));
+    assert!(output.contains("else if fallback = counts[\"fallback\"]; (fallback > 0) {"));
+    assert!(output.contains("else if var ready bool = false; ready {"));
+}
+
+#[test]
 fn dump_bytecode_shows_loop_jumps() {
     let output =
         run_cli(&["dump-bytecode", "examples/loops.go"]).expect("bytecode should be generated");
@@ -488,6 +503,17 @@ fn dump_bytecode_shows_map_lookup_instructions() {
     assert!(output.contains("lookup-map map[string]int"));
     assert!(output.contains("store-local 1"));
     assert!(output.contains("store-local 2"));
+}
+
+#[test]
+fn dump_bytecode_shows_if_header_lowering() {
+    let output = run_cli(&["dump-bytecode", "examples/if_headers.go"])
+        .expect("bytecode should be generated");
+
+    assert!(output.contains("lookup-map map[string]int"));
+    assert!(output.matches("jump-if-false").count() >= 4);
+    assert!(output.contains("store-local 2"));
+    assert!(output.contains("call-builtin println 1"));
 }
 
 #[test]

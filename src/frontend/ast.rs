@@ -116,11 +116,7 @@ pub enum Statement {
         value: Expression,
     },
     Expr(Expression),
-    If {
-        condition: Expression,
-        then_block: Block,
-        else_block: Option<Block>,
-    },
+    If(IfStatement),
     For {
         condition: Expression,
         body: Block,
@@ -138,6 +134,40 @@ pub enum Statement {
         key: Expression,
     },
     Return(Option<Expression>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct IfStatement {
+    pub initializer: Option<IfInitializer>,
+    pub condition: Expression,
+    pub then_block: Block,
+    pub else_branch: Option<ElseBranch>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum IfInitializer {
+    VarDecl {
+        name: String,
+        type_ref: Option<TypeRef>,
+        value: Option<Expression>,
+    },
+    Assign {
+        target: AssignmentTarget,
+        value: Expression,
+    },
+    Expr(Expression),
+    MapLookup {
+        bindings: Vec<Binding>,
+        binding_mode: BindingMode,
+        target: Expression,
+        key: Expression,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ElseBranch {
+    Block(Block),
+    If(Box<IfStatement>),
 }
 
 impl Statement {
@@ -170,29 +200,7 @@ impl Statement {
             Statement::Expr(expression) => {
                 format!("{}{}", indent_str(indent), expression.render())
             }
-            Statement::If {
-                condition,
-                then_block,
-                else_block,
-            } => {
-                let mut lines = vec![format!(
-                    "{}if {} {{",
-                    indent_str(indent),
-                    condition.render()
-                )];
-                for statement in &then_block.statements {
-                    lines.push(statement.render(indent + 1));
-                }
-                lines.push(format!("{}}}", indent_str(indent)));
-                if let Some(else_block) = else_block {
-                    lines.push(format!("{}else {{", indent_str(indent)));
-                    for statement in &else_block.statements {
-                        lines.push(statement.render(indent + 1));
-                    }
-                    lines.push(format!("{}}}", indent_str(indent)));
-                }
-                lines.join("\n")
-            }
+            Statement::If(if_statement) => render_if_statement(if_statement, indent).join("\n"),
             Statement::For { condition, body } => {
                 let mut lines = vec![format!(
                     "{}for {} {{",
@@ -233,6 +241,39 @@ impl Statement {
                 format!("{}return {}", indent_str(indent), expression.render())
             }
             Statement::Return(None) => format!("{}return", indent_str(indent)),
+        }
+    }
+}
+
+impl IfInitializer {
+    fn render(&self) -> String {
+        match self {
+            IfInitializer::VarDecl {
+                name,
+                type_ref,
+                value,
+            } => {
+                let mut rendered = format!("var {name}");
+                if let Some(type_ref) = type_ref {
+                    rendered.push(' ');
+                    rendered.push_str(&type_ref.render());
+                }
+                if let Some(value) = value {
+                    rendered.push_str(" = ");
+                    rendered.push_str(&value.render());
+                }
+                rendered
+            }
+            IfInitializer::Assign { target, value } => {
+                format!("{} = {}", target.render(), value.render())
+            }
+            IfInitializer::Expr(expression) => expression.render(),
+            IfInitializer::MapLookup {
+                bindings,
+                binding_mode,
+                target,
+                key,
+            } => render_map_lookup_statement(bindings, *binding_mode, target, key),
         }
     }
 }
@@ -457,6 +498,46 @@ impl BinaryOperator {
 
 fn indent_str(indent: usize) -> String {
     "    ".repeat(indent)
+}
+
+fn render_if_statement(if_statement: &IfStatement, indent: usize) -> Vec<String> {
+    let mut lines = vec![format!(
+        "{}if {} {{",
+        indent_str(indent),
+        render_if_header(if_statement)
+    )];
+    for statement in &if_statement.then_block.statements {
+        lines.push(statement.render(indent + 1));
+    }
+    lines.push(format!("{}}}", indent_str(indent)));
+    match &if_statement.else_branch {
+        Some(ElseBranch::Block(else_block)) => {
+            lines.push(format!("{}else {{", indent_str(indent)));
+            for statement in &else_block.statements {
+                lines.push(statement.render(indent + 1));
+            }
+            lines.push(format!("{}}}", indent_str(indent)));
+        }
+        Some(ElseBranch::If(else_if)) => {
+            let mut nested = render_if_statement(else_if, indent);
+            let first = nested.remove(0);
+            lines.push(format!("{}else {}", indent_str(indent), first.trim_start()));
+            lines.extend(nested);
+        }
+        None => {}
+    }
+    lines
+}
+
+fn render_if_header(if_statement: &IfStatement) -> String {
+    match &if_statement.initializer {
+        Some(initializer) => format!(
+            "{}; {}",
+            initializer.render(),
+            if_statement.condition.render()
+        ),
+        None => if_statement.condition.render(),
+    }
 }
 
 fn render_range_header(

@@ -2,10 +2,35 @@ use std::collections::HashSet;
 
 use crate::frontend::ast::{Binding, BindingMode, Expression};
 use crate::semantic::analyzer::{FunctionAnalyzer, SemanticError};
-use crate::semantic::model::{CheckedBinding, CheckedStatement, Type};
+use crate::semantic::model::{CheckedBinding, CheckedIfInitializer, CheckedStatement, Type};
 use crate::semantic::support::expect_type;
 
 impl<'a> FunctionAnalyzer<'a> {
+    pub(super) fn analyze_map_lookup_initializer(
+        &mut self,
+        bindings: &[Binding],
+        binding_mode: BindingMode,
+        target: &Expression,
+        key: &Expression,
+    ) -> Result<CheckedIfInitializer, SemanticError> {
+        let statement = self.analyze_map_lookup_statement(bindings, binding_mode, target, key)?;
+        let CheckedStatement::MapLookup {
+            map,
+            key,
+            value_binding,
+            ok_binding,
+        } = statement
+        else {
+            unreachable!("map lookup analysis always returns a map lookup statement");
+        };
+        Ok(CheckedIfInitializer::MapLookup {
+            map,
+            key,
+            value_binding,
+            ok_binding,
+        })
+    }
+
     pub(super) fn analyze_map_lookup_statement(
         &mut self,
         bindings: &[Binding],

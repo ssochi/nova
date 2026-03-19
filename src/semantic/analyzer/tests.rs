@@ -175,6 +175,36 @@ fn analyze_map_lookup_statements() {
 }
 
 #[test]
+fn analyze_if_initializers_and_else_if_chains() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tvar counts = map[string]int{\"go\": 2, \"fallback\": 1}\n\tif value, ok := counts[\"go\"]; ok {\n\t\tprintln(value, ok)\n\t} else {\n\t\tprintln(ok)\n\t}\n\tvar seen int\n\tif seen = counts[\"missing\"]; seen > 0 {\n\t\tprintln(seen)\n\t} else if var ready bool = false; ready {\n\t\tprintln(1)\n\t} else {\n\t\tprintln(seen)\n\t}\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let program = analyze_package(&ast).expect("analysis should succeed");
+
+    assert_eq!(program.functions.len(), 1);
+}
+
+#[test]
+fn reject_if_initializer_scope_leak() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tif value, ok := map[string]int{\"go\": 2}[\"go\"]; ok {\n\t\tprintln(value)\n\t}\n\tprintln(ok)\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let error = analyze_package(&ast).expect_err("analysis should reject leaked if binding");
+
+    assert!(error.to_string().contains("unknown variable `ok`"));
+}
+
+#[test]
 fn reject_range_loop_with_non_iterable_source() {
     let source = SourceFile {
         path: "test.go".into(),

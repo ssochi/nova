@@ -28,6 +28,7 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 - Validate the builtin `copy` special case for `[]byte` <- `string` centrally instead of hiding it in the runtime.
 - Validate staged map key comparability centrally so unsupported key types fail during semantic analysis before reaching the VM.
 - Validate staged comma-ok map lookup statements centrally, including map-only right-hand sides, typed `=` assignments, same-block `:=` freshness rules, and blank-identifier handling.
+- Validate staged `if` statement headers centrally, including the current simple-statement subset, dedicated header scopes shared by the condition / `then` / `else` path, and explicit `else if` chaining.
 - Validate builtin `delete(map, key)` centrally so map mutation rules stay aligned with map indexing and assignment typing.
 - Validate `slice/map == nil` and `slice/map != nil` centrally while continuing to reject broader composite equality.
 - Validate staged `range` loops over `slice` and `map`, including no-binding, `:=`, and `=` forms, nil zero-iteration behavior, and typed iteration-variable assignments.
@@ -68,3 +69,4 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 - Explicit `nil` still needs typed slice/map context; `var value = nil`, `nil == nil`, and broader nilable-type work remain deferred.
 - General conversion syntax beyond the narrow `[]byte(string)` / `string([]byte)` pair is still deferred.
 - Range support is still staged: only `slice` and `map` are iterable, assignment-form left sides are identifier-only, and string/channel/integer/function ranges plus `break` / `continue` remain deferred.
+- Statement-header support is still staged: only `if` supports header simple statements, and that support is limited to expression statements, assignments, `var` declarations, and staged comma-ok `map` lookups.

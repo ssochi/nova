@@ -35,11 +35,7 @@ pub enum CheckedStatement {
         value: CheckedExpression,
     },
     Expr(CheckedExpression),
-    If {
-        condition: CheckedExpression,
-        then_block: CheckedBlock,
-        else_block: Option<CheckedBlock>,
-    },
+    If(CheckedIfStatement),
     For {
         condition: CheckedExpression,
         body: CheckedBlock,
@@ -57,6 +53,40 @@ pub enum CheckedStatement {
         ok_binding: CheckedBinding,
     },
     Return(Option<CheckedExpression>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CheckedIfStatement {
+    pub initializer: Option<CheckedIfInitializer>,
+    pub condition: CheckedExpression,
+    pub then_block: CheckedBlock,
+    pub else_branch: Option<CheckedElseBranch>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CheckedIfInitializer {
+    VarDecl {
+        slot: usize,
+        name: String,
+        value: Option<CheckedExpression>,
+    },
+    Assign {
+        target: CheckedAssignmentTarget,
+        value: CheckedExpression,
+    },
+    Expr(CheckedExpression),
+    MapLookup {
+        map: CheckedExpression,
+        key: CheckedExpression,
+        value_binding: CheckedBinding,
+        ok_binding: CheckedBinding,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CheckedElseBranch {
+    Block(CheckedBlock),
+    If(Box<CheckedIfStatement>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

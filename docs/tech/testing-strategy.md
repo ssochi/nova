@@ -15,6 +15,7 @@ Describe the current layered validation strategy so later iterations can expand 
   - `tests/cli_execution.rs`: happy-path runs plus `dump-*` inspection surfaces
   - `tests/cli_diagnostics.rs`: invalid programs and diagnostic expectations
   - `tests/support/mod.rs`: shared CLI invocation and temporary source helpers
+- When a feature adds an explicit staged surface such as `range`, comma-ok `map` lookup, or `if` headers, cover both `dump-ast` and `dump-bytecode` so users can inspect it without reading the implementation.
 - When a feature relies on staged lowering rather than a dedicated instruction for every case, use CLI `dump-bytecode` assertions on hidden locals or explicit helper instructions so the new path remains discoverable.
 - Manual serial CLI validation
   - Real `cargo run -- ...` commands remain the evidence trail for subcommand experience
