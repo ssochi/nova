@@ -1,7 +1,7 @@
 use super::parse_source_file;
 use crate::frontend::ast::{
-    AssignmentTarget, Binding, BindingMode, ElseBranch, Expression, IfInitializer, Statement,
-    TypeRef,
+    AssignmentTarget, Binding, BindingMode, ElseBranch, Expression, HeaderStatement, Statement,
+    SwitchClause, TypeRef,
 };
 use crate::frontend::lexer::lex;
 use crate::source::SourceFile;
@@ -343,8 +343,8 @@ fn parse_if_initializer_and_else_if_chain() {
 
     match &function.body.statements[1] {
         Statement::If(if_statement) => {
-            match if_statement.initializer.as_ref() {
-                Some(IfInitializer::MapLookup {
+            match if_statement.header.as_ref() {
+                Some(HeaderStatement::MapLookup {
                     bindings,
                     binding_mode,
                     target,
@@ -365,8 +365,8 @@ fn parse_if_initializer_and_else_if_chain() {
             }
             assert_eq!(if_statement.condition, Expression::Identifier("ok".into()));
             match if_statement.else_branch.as_ref() {
-                Some(ElseBranch::If(else_if)) => match else_if.initializer.as_ref() {
-                    Some(IfInitializer::VarDecl {
+                Some(ElseBranch::If(else_if)) => match else_if.header.as_ref() {
+                    Some(HeaderStatement::VarDecl {
                         name,
                         type_ref,
                         value,
@@ -381,6 +381,69 @@ fn parse_if_initializer_and_else_if_chain() {
             }
         }
         _ => panic!("expected if statement"),
+    }
+}
+
+#[test]
+fn parse_switch_statement_forms() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tvar counts = map[string]int{\"nova\": 3}\n\tswitch value, ok := counts[\"nova\"]; {\n\tcase ok:\n\t\tprintln(value)\n\tdefault:\n\t\tprintln(0)\n\t}\n\tswitch value {\n\tcase 1, 2:\n\t\tprintln(1)\n\tdefault:\n\t\tprintln(2)\n\t}\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let function = &ast.functions[0];
+
+    match &function.body.statements[1] {
+        Statement::Switch(switch_statement) => {
+            assert!(switch_statement.expression.is_none());
+            match switch_statement.header.as_ref() {
+                Some(HeaderStatement::MapLookup {
+                    bindings,
+                    binding_mode,
+                    ..
+                }) => {
+                    assert_eq!(
+                        bindings,
+                        &vec![
+                            Binding::Identifier("value".into()),
+                            Binding::Identifier("ok".into())
+                        ]
+                    );
+                    assert_eq!(binding_mode, &BindingMode::Define);
+                }
+                _ => panic!("expected map lookup switch header"),
+            }
+            assert!(matches!(
+                &switch_statement.clauses[0],
+                SwitchClause::Case { expressions, .. }
+                    if expressions == &vec![Expression::Identifier("ok".into())]
+            ));
+            assert!(matches!(
+                &switch_statement.clauses[1],
+                SwitchClause::Default(_)
+            ));
+        }
+        _ => panic!("expected switch statement"),
+    }
+
+    match &function.body.statements[2] {
+        Statement::Switch(switch_statement) => {
+            assert_eq!(
+                switch_statement.expression,
+                Some(Expression::Identifier("value".into()))
+            );
+            assert!(switch_statement.header.is_none());
+            assert!(matches!(
+                &switch_statement.clauses[0],
+                SwitchClause::Case { expressions, .. }
+                    if expressions
+                        == &vec![Expression::Integer(1), Expression::Integer(2)]
+            ));
+        }
+        _ => panic!("expected expression switch"),
     }
 }
 

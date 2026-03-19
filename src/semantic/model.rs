@@ -36,6 +36,7 @@ pub enum CheckedStatement {
     },
     Expr(CheckedExpression),
     If(CheckedIfStatement),
+    Switch(CheckedSwitchStatement),
     For {
         condition: CheckedExpression,
         body: CheckedBlock,
@@ -57,14 +58,14 @@ pub enum CheckedStatement {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CheckedIfStatement {
-    pub initializer: Option<CheckedIfInitializer>,
+    pub header: Option<CheckedHeaderStatement>,
     pub condition: CheckedExpression,
     pub then_block: CheckedBlock,
     pub else_branch: Option<CheckedElseBranch>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum CheckedIfInitializer {
+pub enum CheckedHeaderStatement {
     VarDecl {
         slot: usize,
         name: String,
@@ -87,6 +88,22 @@ pub enum CheckedIfInitializer {
 pub enum CheckedElseBranch {
     Block(CheckedBlock),
     If(Box<CheckedIfStatement>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CheckedSwitchStatement {
+    pub header: Option<CheckedHeaderStatement>,
+    pub expression: Option<CheckedExpression>,
+    pub clauses: Vec<CheckedSwitchClause>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CheckedSwitchClause {
+    Case {
+        expressions: Vec<CheckedExpression>,
+        body: CheckedBlock,
+    },
+    Default(CheckedBlock),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

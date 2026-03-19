@@ -40,4 +40,5 @@ This directory stores complete archives of closed plans. It serves historical co
 - `2026-03-20-03-42-30-map-runtime-groundwork/`: archived M3 plan for staged `map[K]V` support with `make`, indexing, and nil-map behavior
 - `2026-03-20-04-07-11-map-literals-delete/`: archived M3 plan for staged map literals, empty-map construction, and builtin `delete`
 - `2026-03-20-04-28-25-explicit-nil-comparisons/`: archived M3 plan for explicit `nil` expressions and `slice/map` nil comparisons
+- `2026-03-20-05-46-33-switch-statements/`: archived M3 plan for staged expression `switch`, tagless `switch`, shared control-flow headers, and duplicate-clause diagnostics
 - `2026-03-20-05-29-16-if-initializers-else-if/`: archived M3 plan for staged `if` statement initializers, shared header scoping, and `else if` chains

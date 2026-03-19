@@ -1,7 +1,7 @@
-use crate::frontend::ast::{ElseBranch, IfInitializer, IfStatement};
+use crate::frontend::ast::{ElseBranch, HeaderStatement, IfStatement};
 use crate::semantic::analyzer::{FunctionAnalyzer, SemanticError};
 use crate::semantic::model::{
-    CheckedElseBranch, CheckedIfInitializer, CheckedIfStatement, CheckedStatement, Type,
+    CheckedElseBranch, CheckedHeaderStatement, CheckedIfStatement, CheckedStatement, Type,
 };
 use crate::semantic::support::expect_type;
 
@@ -11,10 +11,10 @@ impl<'a> FunctionAnalyzer<'a> {
         if_statement: &IfStatement,
     ) -> Result<CheckedStatement, SemanticError> {
         self.scopes.push(Default::default());
-        let initializer = if_statement
-            .initializer
+        let header = if_statement
+            .header
             .as_ref()
-            .map(|initializer| self.analyze_if_initializer(initializer))
+            .map(|header| self.analyze_header_statement(header))
             .transpose()?;
         let condition = self.analyze_expression(&if_statement.condition)?;
         expect_type(&Type::Bool, &condition.ty, "if condition")?;
@@ -27,34 +27,34 @@ impl<'a> FunctionAnalyzer<'a> {
         self.scopes.pop();
 
         Ok(CheckedStatement::If(CheckedIfStatement {
-            initializer,
+            header,
             condition,
             then_block,
             else_branch,
         }))
     }
 
-    fn analyze_if_initializer(
+    pub(super) fn analyze_header_statement(
         &mut self,
-        initializer: &IfInitializer,
-    ) -> Result<CheckedIfInitializer, SemanticError> {
-        match initializer {
-            IfInitializer::VarDecl {
+        header: &HeaderStatement,
+    ) -> Result<CheckedHeaderStatement, SemanticError> {
+        match header {
+            HeaderStatement::VarDecl {
                 name,
                 type_ref,
                 value,
-            } => checked_statement_to_if_initializer(self.analyze_var_decl_statement(
+            } => checked_statement_to_header_statement(self.analyze_var_decl_statement(
                 name,
                 type_ref.as_ref(),
                 value.as_ref(),
             )?),
-            IfInitializer::Assign { target, value } => checked_statement_to_if_initializer(
+            HeaderStatement::Assign { target, value } => checked_statement_to_header_statement(
                 self.analyze_assignment_statement(target, value)?,
             ),
-            IfInitializer::Expr(expression) => {
-                checked_statement_to_if_initializer(self.analyze_expression_statement(expression)?)
-            }
-            IfInitializer::MapLookup {
+            HeaderStatement::Expr(expression) => checked_statement_to_header_statement(
+                self.analyze_expression_statement(expression)?,
+            ),
+            HeaderStatement::MapLookup {
                 bindings,
                 binding_mode,
                 target,
@@ -82,34 +82,35 @@ impl<'a> FunctionAnalyzer<'a> {
     }
 }
 
-fn checked_statement_to_if_initializer(
+fn checked_statement_to_header_statement(
     statement: CheckedStatement,
-) -> Result<CheckedIfInitializer, SemanticError> {
+) -> Result<CheckedHeaderStatement, SemanticError> {
     Ok(match statement {
         CheckedStatement::VarDecl { slot, name, value } => {
-            CheckedIfInitializer::VarDecl { slot, name, value }
+            CheckedHeaderStatement::VarDecl { slot, name, value }
         }
         CheckedStatement::Assign { target, value } => {
-            CheckedIfInitializer::Assign { target, value }
+            CheckedHeaderStatement::Assign { target, value }
         }
-        CheckedStatement::Expr(expression) => CheckedIfInitializer::Expr(expression),
+        CheckedStatement::Expr(expression) => CheckedHeaderStatement::Expr(expression),
         CheckedStatement::MapLookup {
             map,
             key,
             value_binding,
             ok_binding,
-        } => CheckedIfInitializer::MapLookup {
+        } => CheckedHeaderStatement::MapLookup {
             map,
             key,
             value_binding,
             ok_binding,
         },
         CheckedStatement::If(_)
+        | CheckedStatement::Switch(_)
         | CheckedStatement::For { .. }
         | CheckedStatement::RangeFor { .. }
         | CheckedStatement::Return(_) => {
             return Err(SemanticError::new(
-                "if initializer requires a simple statement supported by the current frontend",
+                "control-flow header requires a simple statement supported by the current frontend",
             ));
         }
     })

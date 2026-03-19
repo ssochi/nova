@@ -190,6 +190,36 @@ fn analyze_if_initializers_and_else_if_chains() {
 }
 
 #[test]
+fn analyze_switch_statements() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tvar counts = map[string]int{\"nova\": 3}\n\tswitch value, ok := counts[\"nova\"]; {\n\tcase ok:\n\t\tprintln(value)\n\tdefault:\n\t\tprintln(0)\n\t}\n\tvar score int = 2\n\tswitch score {\n\tcase 0, 1:\n\t\tprintln(0)\n\tcase 2:\n\t\tprintln(score)\n\tdefault:\n\t\tprintln(9)\n\t}\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let program = analyze_package(&ast).expect("analysis should succeed");
+
+    assert_eq!(program.functions.len(), 1);
+}
+
+#[test]
+fn reject_switch_header_scope_leak() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tswitch var value int = 1; value {\n\tcase 1:\n\t\tprintln(value)\n\t}\n\tprintln(value)\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let error = analyze_package(&ast).expect_err("analysis should reject leaked switch binding");
+
+    assert!(error.to_string().contains("unknown variable `value`"));
+}
+
+#[test]
 fn reject_if_initializer_scope_leak() {
     let source = SourceFile {
         path: "test.go".into(),

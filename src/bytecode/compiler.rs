@@ -7,8 +7,8 @@ use crate::bytecode::instruction::{
 use crate::semantic::model::{
     CallTarget, CheckedAssignmentTarget, CheckedBinaryOperator, CheckedBinding, CheckedBlock,
     CheckedElseBranch, CheckedExpression, CheckedExpressionKind, CheckedFunction,
-    CheckedIfInitializer, CheckedIfStatement, CheckedMapLiteralEntry, CheckedProgram,
-    CheckedStatement, Type,
+    CheckedHeaderStatement, CheckedIfStatement, CheckedMapLiteralEntry, CheckedProgram,
+    CheckedStatement, CheckedSwitchClause, CheckedSwitchStatement, Type,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -119,6 +119,9 @@ impl<'a> FunctionCompiler<'a> {
                 }
             }
             CheckedStatement::If(if_statement) => self.compile_if_statement(if_statement)?,
+            CheckedStatement::Switch(switch_statement) => {
+                self.compile_switch_statement(switch_statement)?
+            }
             CheckedStatement::For { condition, body } => {
                 let loop_start = self.instructions.len();
                 self.compile_expression(condition)?;
@@ -161,8 +164,8 @@ impl<'a> FunctionCompiler<'a> {
         &mut self,
         if_statement: &CheckedIfStatement,
     ) -> Result<(), CompileError> {
-        if let Some(initializer) = &if_statement.initializer {
-            self.compile_if_initializer(initializer)?;
+        if let Some(header) = &if_statement.header {
+            self.compile_header_statement(header, "if header")?;
         }
         self.compile_expression(&if_statement.condition)?;
         let jump_to_else = self.push_instruction(Instruction::JumpIfFalse(usize::MAX));
@@ -184,31 +187,107 @@ impl<'a> FunctionCompiler<'a> {
         Ok(())
     }
 
-    fn compile_if_initializer(
+    fn compile_switch_statement(
         &mut self,
-        initializer: &CheckedIfInitializer,
+        switch_statement: &CheckedSwitchStatement,
     ) -> Result<(), CompileError> {
-        match initializer {
-            CheckedIfInitializer::VarDecl { slot, value, .. } => {
+        if let Some(header) = &switch_statement.header {
+            self.compile_header_statement(header, "switch header")?;
+        }
+
+        let tag_slot = if let Some(expression) = &switch_statement.expression {
+            self.compile_expression(expression)?;
+            self.expect_value(&expression.ty, "switch expression")?;
+            let slot = self.allocate_hidden_local("switch$tag");
+            self.instructions.push(Instruction::StoreLocal(slot));
+            Some(slot)
+        } else {
+            None
+        };
+
+        let mut end_jumps = Vec::new();
+        let default_body = switch_statement
+            .clauses
+            .iter()
+            .find_map(|clause| match clause {
+                CheckedSwitchClause::Default(body) => Some(body),
+                CheckedSwitchClause::Case { .. } => None,
+            });
+
+        for clause in &switch_statement.clauses {
+            let CheckedSwitchClause::Case { expressions, body } = clause else {
+                continue;
+            };
+            let mut next_test_jump = None;
+            let mut success_jumps = Vec::new();
+            for expression in expressions {
+                let test_start = self.instructions.len();
+                if let Some(previous_jump) = next_test_jump.take() {
+                    self.patch_jump(previous_jump, Instruction::JumpIfFalse(test_start));
+                }
+                if let Some(tag_slot) = tag_slot {
+                    self.instructions.push(Instruction::LoadLocal(tag_slot));
+                    self.compile_expression(expression)?;
+                    self.expect_value(&expression.ty, "switch case expression")?;
+                    self.instructions.push(Instruction::Equal);
+                } else {
+                    self.compile_expression(expression)?;
+                    self.expect_value(&expression.ty, "switch case expression")?;
+                }
+                next_test_jump = Some(self.push_instruction(Instruction::JumpIfFalse(usize::MAX)));
+                success_jumps.push(self.push_instruction(Instruction::Jump(usize::MAX)));
+            }
+
+            let body_start = self.instructions.len();
+            for jump in success_jumps {
+                self.patch_jump(jump, Instruction::Jump(body_start));
+            }
+            self.compile_block(body)?;
+            end_jumps.push(self.push_instruction(Instruction::Jump(usize::MAX)));
+
+            let next_clause_start = self.instructions.len();
+            if let Some(jump) = next_test_jump {
+                self.patch_jump(jump, Instruction::JumpIfFalse(next_clause_start));
+            }
+        }
+
+        if let Some(default_body) = default_body {
+            self.compile_block(default_body)?;
+        }
+
+        let end = self.instructions.len();
+        for jump in end_jumps {
+            self.patch_jump(jump, Instruction::Jump(end));
+        }
+        Ok(())
+    }
+
+    fn compile_header_statement(
+        &mut self,
+        header: &CheckedHeaderStatement,
+        context: &str,
+    ) -> Result<(), CompileError> {
+        match header {
+            CheckedHeaderStatement::VarDecl { slot, value, .. } => {
                 if let Some(value) = value {
                     self.compile_expression(value)?;
-                    self.expect_value(&value.ty, "if initializer variable declaration")?;
+                    self.expect_value(&value.ty, &format!("{context} variable declaration"))?;
                     self.instructions.push(Instruction::StoreLocal(*slot));
                 }
             }
-            CheckedIfInitializer::Assign { target, value } => match target {
+            CheckedHeaderStatement::Assign { target, value } => match target {
                 CheckedAssignmentTarget::Local { slot, .. } => {
                     self.compile_expression(value)?;
-                    self.expect_value(&value.ty, "if initializer assignment")?;
+                    self.expect_value(&value.ty, &format!("{context} assignment"))?;
                     self.instructions.push(Instruction::StoreLocal(*slot));
                 }
                 CheckedAssignmentTarget::Index { target, index } => {
                     self.compile_expression(target)?;
-                    self.expect_value(&target.ty, "if initializer assignment")?;
+                    self.expect_value(&target.ty, &format!("{context} assignment"))?;
                     self.compile_expression(index)?;
-                    self.expect_value(&index.ty, "if initializer assignment")?;
+                    self.expect_value(&index.ty, &format!("{context} assignment"))?;
                     self.compile_expression(value)?;
-                    self.expect_value(&value.ty, "if initializer assignment")?;
+                    self.expect_value(&value.ty, &format!("{context} assignment"))?;
                     if matches!(target.ty, Type::Map { .. }) {
                         self.instructions.push(Instruction::SetMapIndex);
                     } else {
@@ -216,13 +295,13 @@ impl<'a> FunctionCompiler<'a> {
                     }
                 }
             },
-            CheckedIfInitializer::Expr(expression) => {
+            CheckedHeaderStatement::Expr(expression) => {
                 self.compile_expression(expression)?;
                 if expression.ty.produces_value() {
                     self.instructions.push(Instruction::Pop);
                 }
             }
-            CheckedIfInitializer::MapLookup {
+            CheckedHeaderStatement::MapLookup {
                 map,
                 key,
                 value_binding,
@@ -442,7 +521,7 @@ impl<'a> FunctionCompiler<'a> {
 
     fn allocate_hidden_local(&mut self, label: &str) -> usize {
         let slot = self.local_names.len();
-        self.local_names.push(format!("range${label}{slot}"));
+        self.local_names.push(format!("{label}{slot}"));
         slot
     }
 
@@ -455,12 +534,12 @@ impl<'a> FunctionCompiler<'a> {
     ) -> Result<(), CompileError> {
         self.compile_expression(source)?;
         self.expect_value(&source.ty, "range loop")?;
-        let source_slot = self.allocate_hidden_local("source");
+        let source_slot = self.allocate_hidden_local("range$source");
         self.instructions.push(Instruction::StoreLocal(source_slot));
 
         match &source.ty {
             Type::Slice(_) => {
-                let index_slot = self.allocate_hidden_local("index");
+                let index_slot = self.allocate_hidden_local("range$index");
                 self.instructions.push(Instruction::PushInt(0));
                 self.instructions.push(Instruction::StoreLocal(index_slot));
 
@@ -501,8 +580,8 @@ impl<'a> FunctionCompiler<'a> {
                 self.patch_jump(jump_to_end, Instruction::JumpIfFalse(loop_end));
             }
             Type::Map { key, .. } => {
-                let keys_slot = self.allocate_hidden_local("keys");
-                let index_slot = self.allocate_hidden_local("index");
+                let keys_slot = self.allocate_hidden_local("range$keys");
+                let index_slot = self.allocate_hidden_local("range$index");
                 self.instructions.push(Instruction::LoadLocal(source_slot));
                 self.instructions
                     .push(Instruction::MapKeys(lower_value_type(key.as_ref())?));

@@ -2,7 +2,7 @@ use crate::frontend::ast::TypeRef;
 use crate::semantic::analyzer::SemanticError;
 use crate::semantic::model::{
     CheckedBlock, CheckedElseBranch, CheckedExpression, CheckedExpressionKind, CheckedIfStatement,
-    CheckedStatement, Type,
+    CheckedStatement, CheckedSwitchClause, CheckedSwitchStatement, Type,
 };
 
 pub fn resolve_type_ref(type_ref: &TypeRef) -> Option<Type> {
@@ -157,6 +157,9 @@ fn statement_guarantees_termination(statement: &CheckedStatement) -> bool {
     match statement {
         CheckedStatement::Return(_) => true,
         CheckedStatement::If(if_statement) => if_statement_guarantees_termination(if_statement),
+        CheckedStatement::Switch(switch_statement) => {
+            switch_statement_guarantees_termination(switch_statement)
+        }
         CheckedStatement::For { condition, .. } => expression_is_compile_time_true(condition),
         CheckedStatement::RangeFor { .. } => false,
         _ => false,
@@ -170,6 +173,26 @@ fn if_statement_guarantees_termination(if_statement: &CheckedIfStatement) -> boo
             Some(CheckedElseBranch::If(else_if)) => if_statement_guarantees_termination(else_if),
             None => false,
         }
+}
+
+fn switch_statement_guarantees_termination(switch_statement: &CheckedSwitchStatement) -> bool {
+    let mut has_default = false;
+    for clause in &switch_statement.clauses {
+        match clause {
+            CheckedSwitchClause::Case { body, .. } => {
+                if !block_guarantees_return(body) {
+                    return false;
+                }
+            }
+            CheckedSwitchClause::Default(body) => {
+                has_default = true;
+                if !block_guarantees_return(body) {
+                    return false;
+                }
+            }
+        }
+    }
+    has_default
 }
 
 fn expression_is_compile_time_true(expression: &CheckedExpression) -> bool {

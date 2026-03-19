@@ -113,6 +113,12 @@ fn run_executes_if_statement_headers() {
 }
 
 #[test]
+fn run_executes_switch_statements() {
+    let output = run_cli(&["run", "examples/switch_statements.go"]).expect("program should run");
+    assert_eq!(output, "3\ntwo\nprobe\ndone\ngo\n");
+}
+
+#[test]
 fn run_executes_explicit_nil_values_and_comparisons() {
     let output = run_cli(&["run", "examples/nil_values.go"]).expect("program should run");
     assert_eq!(
@@ -214,6 +220,16 @@ fn dump_tokens_show_range_loop_tokens() {
 
     assert!(output.contains("range"));
     assert!(output.contains(":="));
+}
+
+#[test]
+fn dump_tokens_show_switch_keywords() {
+    let output = run_cli(&["dump-tokens", "examples/switch_statements.go"])
+        .expect("tokens should be rendered");
+
+    assert!(output.contains("switch"));
+    assert!(output.contains("case"));
+    assert!(output.contains("default"));
 }
 
 #[test]
@@ -370,6 +386,17 @@ fn dump_ast_renders_if_statement_headers() {
 }
 
 #[test]
+fn dump_ast_renders_switch_statements() {
+    let output =
+        run_cli(&["dump-ast", "examples/switch_statements.go"]).expect("ast should be rendered");
+
+    assert!(output.contains("switch value, ok := counts[\"nova\"]; {"));
+    assert!(output.contains("case ok:"));
+    assert!(output.contains("switch score {"));
+    assert!(output.contains("case 0, 1:"));
+}
+
+#[test]
 fn dump_bytecode_shows_loop_jumps() {
     let output =
         run_cli(&["dump-bytecode", "examples/loops.go"]).expect("bytecode should be generated");
@@ -514,6 +541,17 @@ fn dump_bytecode_shows_if_header_lowering() {
     assert!(output.matches("jump-if-false").count() >= 4);
     assert!(output.contains("store-local 2"));
     assert!(output.contains("call-builtin println 1"));
+}
+
+#[test]
+fn dump_bytecode_shows_switch_lowering() {
+    let output = run_cli(&["dump-bytecode", "examples/switch_statements.go"])
+        .expect("bytecode should be generated");
+
+    assert!(output.contains("switch$tag"));
+    assert!(output.contains("equal"));
+    assert!(output.contains("jump-if-false"));
+    assert!(output.contains("lookup-map map[string]int"));
 }
 
 #[test]

@@ -25,6 +25,7 @@
 
 ## Related Plans
 
+- `2026-03-20-05-46-33-switch-statements`: completed staged expression `switch`, tagless `switch`, shared control-flow header modeling, and duplicate-clause diagnostics
 - `2026-03-20-05-29-16-if-initializers-else-if`: completed staged `if` statement initializers, shared header scope, and `else if` chains
 - `2026-03-20-05-11-15-map-comma-ok-and-literal-diagnostics`: completed staged comma-ok `map` lookups, short redeclaration rules, and duplicate literal-key diagnostics
 - `2026-03-20-04-49-50-slice-map-range-loops`: completed staged `range` loops over `slice` and `map`
@@ -44,13 +45,13 @@
 
 ## Current Risks
 
-- Runtime-surface growth can sprawl quickly if types, builtins, and imports are mixed into the same plan.
+- Runtime-surface growth can sprawl quickly if types, builtins, imports, and control-flow work are mixed into the same plan.
 - Builtin additions can become hardcoded special cases unless their contracts stay centralized.
 - Supporting more realistic Go programs will require careful staging so the VM remains understandable.
-- The current runtime now has byte-oriented strings, slice allocation, narrow explicit string/byte conversions, staged map groundwork, staged map literals plus `delete`, explicit `nil` for slice/map contexts, staged `range` loops over slices/maps, duplicate constant literal-key diagnostics, staged comma-ok lookups, and staged `if` headers; channels, fuller append growth semantics, real import graphs, broader package-backed runtime services, `switch`, and richer statement-header ergonomics remain open.
+- The current runtime now has byte-oriented strings, slice allocation, narrow explicit string/byte conversions, staged map groundwork, staged map literals plus `delete`, explicit `nil` for slice/map contexts, staged `range` loops over slices/maps, duplicate constant literal-key diagnostics, staged comma-ok lookups, staged `if` headers, and staged expression `switch`; channels, fuller append growth semantics, real import graphs, broader package-backed runtime services, `break` / `continue`, and richer statement-header ergonomics remain open.
 
 ## Next-Round Recommendations
 
-- Open the next `M3` plan either for the first `chan` runtime slice or for the next staged control-flow surface such as `switch`, depending on which blocks more realistic target programs.
-- If control-flow stays the next priority, reuse the new explicit `if`-header abstraction instead of inventing a second statement-header path from scratch.
+- Open the next `M3` plan either for the first `chan` runtime slice or for the next staged control-flow slice such as `break` / `continue` plus richer `for` syntax, depending on which blocks more realistic target programs.
+- If control-flow stays the next priority, reuse the shared `HeaderStatement` abstraction instead of inventing a third statement-header path from scratch.
 - Reuse the `docs/research/` flow before locking the next compatibility-sensitive slice.

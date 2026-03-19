@@ -32,6 +32,7 @@ This directory stores feature and subsystem designs. It describes intent, scope 
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `switch-statements.md`: design baseline for staged expression `switch` statements, tagless `switch`, clause scopes, and single-evaluation lowering
 - `if-statement-headers.md`: design baseline for staged `if` statement initializers, shared header scope, and `else if` chains
 - `bootstrap-vm-execution.md`: design baseline for the bootstrap VM execution loop
 - `semantic-functions-branches.md`: design baseline for semantic analysis, user-defined calls, and branch control flow

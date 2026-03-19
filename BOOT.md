@@ -52,6 +52,7 @@ Operational clarifications:
 17. When extending comma-ok `map` lookups, keep them explicit as statement-scoped AST / checked / bytecode forms; do not hide them inside generic tuple expressions before the broader multi-result model exists.
 18. Duplicate constant `map` literal keys should fail during semantic analysis for the currently modeled scalar literal-key forms before lowering; do not rely on runtime last-write-wins behavior for user-facing diagnostics.
 19. When extending `if` statement headers, keep the initializer explicit in the AST and checked model and give it one dedicated scope shared by the condition plus both branches; do not lower it into a synthetic preceding statement that leaks bindings.
+20. When extending `switch`, keep the optional header and omitted-tag form explicit in the AST / checked model, and ensure expression-switch tags are evaluated exactly once during lowering instead of being recomputed per case.
 
 If no task is explicitly specified, you must proactively choose the most worthwhile piece of work to advance, with the following priorities:
 1. **Obvious gaps in functionality, core experience, or core flow** (search the web more, do research, refer to relevant experience from similar high-quality projects, and established methodologies)

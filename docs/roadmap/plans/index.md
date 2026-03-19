@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-05-46-33-switch-statements`
+- Opened `2026-03-20-05-46-33-switch-statements` for staged `switch` statements and shared control-flow header modeling under `M3`
 - Completed and archived `2026-03-20-05-29-16-if-initializers-else-if`
 - Opened `2026-03-20-05-29-16-if-initializers-else-if` for staged `if` initializers and `else if` chains under `M3`
 - Completed and archived `2026-03-20-05-11-15-map-comma-ok-and-literal-diagnostics`

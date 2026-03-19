@@ -20,14 +20,14 @@ Add Go-style `if` header ergonomics on top of the current branch model so common
 
 ## Deferred Scope
 
-- `switch` and `for` initializers
+- `for` initializers
 - Inc/dec statements, send statements, `go`, `defer`, and general short variable declarations
-- A generalized statement-header abstraction shared by every control-flow form
+- A fully generalized statement-header abstraction shared by every later control-flow form
 - Source span tracking and richer parser recovery around header semicolons
 
 ## Interfaces and Extension Hooks
 
-- `src/frontend/ast.rs`: `if` statements should carry optional initializer data and an explicit else-branch representation instead of synthetic surrounding blocks
-- `src/frontend/parser.rs`: header parsing should reuse simple-statement parsing helpers without silently consuming statement terminators that belong to outer blocks
-- `src/semantic/analyzer.rs`: branch analysis should create one dedicated header scope that wraps condition analysis and both branch blocks
-- `src/bytecode/compiler.rs`: lowering should emit initializer instructions before condition evaluation while preserving the scoped local layout chosen by semantic analysis
+- `src/frontend/ast.rs`: `if` statements should carry optional header data and an explicit else-branch representation instead of synthetic surrounding blocks
+- `src/frontend/parser/statements.rs`: header parsing should reuse simple-statement parsing helpers without silently consuming statement terminators that belong to outer blocks
+- `src/semantic/analyzer/ifs.rs`: branch analysis should create one dedicated header scope that wraps condition analysis and both branch blocks
+- `src/bytecode/compiler.rs`: lowering should emit header instructions before condition evaluation while preserving the scoped local layout chosen by semantic analysis

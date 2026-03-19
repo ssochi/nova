@@ -43,14 +43,14 @@ Describe the concrete execution pipeline shipped in the bootstrap milestone, inc
 - Builtin calls, user-defined function calls, and metadata-backed `fmt` / `strings` package seams are supported.
 - Current builtin coverage includes `print`, `println`, `len`, `cap`, `append`, `copy`, `delete`, and typed `make` handling.
 - Current imported package coverage is `fmt.Print`, `fmt.Println`, `fmt.Sprint`, `strings.Join`, `strings.Contains`, `strings.HasPrefix`, and `strings.Repeat`.
-- Branch and loop conditions must produce boolean values, and staged `if` headers now run their initializer instructions before the condition jump sequence.
-- The current branch model supports `if`, `else`, and explicit `else if` lowering with header scopes chosen during semantic analysis.
+- Branch and loop conditions must produce boolean values, staged control-flow headers run before condition or clause dispatch, and expression-switch tags are evaluated once before clause comparison.
+- The current branch model supports `if`, `else`, explicit `else if`, and staged expression `switch` lowering with header scopes chosen during semantic analysis.
 - Condition-only `for` loops and staged `range` loops over `slice` / `map` are lowered into the existing jump and helper instruction set.
 - Strings, slices, and maps are now first-class runtime values with dedicated bytecode instructions and builtin interoperability.
 
 ## Near-Term Extension Path
 
 1. Add the next runtime category or service seam, most likely `chan` support or broader package-backed runtime helpers.
-2. Expand control-flow ergonomics beyond the current staged `if` headers, such as `switch`, `break`, `continue`, and richer `for` syntax.
+2. Expand control-flow ergonomics beyond the current staged `if` / `switch` headers, such as `break`, `continue`, and richer `for` syntax.
 3. Keep package-backed services growing without collapsing into ad hoc dispatch tables spread across the VM.
 4. Separate bytecode IR from runtime-specific instruction encoding if the VM grows significantly.

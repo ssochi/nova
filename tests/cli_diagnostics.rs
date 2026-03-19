@@ -485,6 +485,45 @@ fn check_rejects_missing_if_header_semicolon() {
 }
 
 #[test]
+fn check_rejects_switch_header_scope_leak() {
+    let path = write_temp_source(
+        "check-bad-switch-scope",
+        "package main\n\nfunc main() {\n\tswitch var value int = 1; value {\n\tcase 1:\n\t\tprintln(value)\n\t}\n\tprintln(value)\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("unknown variable `value`"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_duplicate_switch_default() {
+    let path = write_temp_source(
+        "check-bad-switch-default",
+        "package main\n\nfunc main() {\n\tswitch 1 {\n\tdefault:\n\t\tprintln(0)\n\tcase 1:\n\t\tprintln(1)\n\tdefault:\n\t\tprintln(2)\n\t}\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("may only contain one `default` clause"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_duplicate_switch_literal_case() {
+    let path = write_temp_source(
+        "check-bad-switch-case",
+        "package main\n\nfunc main() {\n\tswitch 1 {\n\tcase 1:\n\t\tprintln(1)\n\tcase 1:\n\t\tprintln(2)\n\t}\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("duplicate switch case literal 1"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
 fn check_rejects_delete_with_wrong_key_type() {
     let path = write_temp_source(
         "check-bad-delete-key",

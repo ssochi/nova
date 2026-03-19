@@ -117,6 +117,7 @@ pub enum Statement {
     },
     Expr(Expression),
     If(IfStatement),
+    Switch(SwitchStatement),
     For {
         condition: Expression,
         body: Block,
@@ -138,14 +139,14 @@ pub enum Statement {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IfStatement {
-    pub initializer: Option<IfInitializer>,
+    pub header: Option<HeaderStatement>,
     pub condition: Expression,
     pub then_block: Block,
     pub else_branch: Option<ElseBranch>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum IfInitializer {
+pub enum HeaderStatement {
     VarDecl {
         name: String,
         type_ref: Option<TypeRef>,
@@ -168,6 +169,22 @@ pub enum IfInitializer {
 pub enum ElseBranch {
     Block(Block),
     If(Box<IfStatement>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SwitchStatement {
+    pub header: Option<HeaderStatement>,
+    pub expression: Option<Expression>,
+    pub clauses: Vec<SwitchClause>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SwitchClause {
+    Case {
+        expressions: Vec<Expression>,
+        body: Block,
+    },
+    Default(Block),
 }
 
 impl Statement {
@@ -201,6 +218,9 @@ impl Statement {
                 format!("{}{}", indent_str(indent), expression.render())
             }
             Statement::If(if_statement) => render_if_statement(if_statement, indent).join("\n"),
+            Statement::Switch(switch_statement) => {
+                render_switch_statement(switch_statement, indent).join("\n")
+            }
             Statement::For { condition, body } => {
                 let mut lines = vec![format!(
                     "{}for {} {{",
@@ -245,10 +265,10 @@ impl Statement {
     }
 }
 
-impl IfInitializer {
+impl HeaderStatement {
     fn render(&self) -> String {
         match self {
-            IfInitializer::VarDecl {
+            HeaderStatement::VarDecl {
                 name,
                 type_ref,
                 value,
@@ -264,11 +284,11 @@ impl IfInitializer {
                 }
                 rendered
             }
-            IfInitializer::Assign { target, value } => {
+            HeaderStatement::Assign { target, value } => {
                 format!("{} = {}", target.render(), value.render())
             }
-            IfInitializer::Expr(expression) => expression.render(),
-            IfInitializer::MapLookup {
+            HeaderStatement::Expr(expression) => expression.render(),
+            HeaderStatement::MapLookup {
                 bindings,
                 binding_mode,
                 target,
@@ -530,13 +550,54 @@ fn render_if_statement(if_statement: &IfStatement, indent: usize) -> Vec<String>
 }
 
 fn render_if_header(if_statement: &IfStatement) -> String {
-    match &if_statement.initializer {
-        Some(initializer) => format!(
-            "{}; {}",
-            initializer.render(),
-            if_statement.condition.render()
-        ),
+    match &if_statement.header {
+        Some(header) => format!("{}; {}", header.render(), if_statement.condition.render()),
         None => if_statement.condition.render(),
+    }
+}
+
+fn render_switch_statement(switch_statement: &SwitchStatement, indent: usize) -> Vec<String> {
+    let mut lines = vec![format!(
+        "{}switch {}{{",
+        indent_str(indent),
+        render_switch_header(switch_statement)
+    )];
+    for clause in &switch_statement.clauses {
+        match clause {
+            SwitchClause::Case { expressions, body } => {
+                lines.push(format!(
+                    "{}case {}:",
+                    indent_str(indent + 1),
+                    expressions
+                        .iter()
+                        .map(Expression::render)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
+                for statement in &body.statements {
+                    lines.push(statement.render(indent + 2));
+                }
+            }
+            SwitchClause::Default(body) => {
+                lines.push(format!("{}default:", indent_str(indent + 1)));
+                for statement in &body.statements {
+                    lines.push(statement.render(indent + 2));
+                }
+            }
+        }
+    }
+    lines.push(format!("{}}}", indent_str(indent)));
+    lines
+}
+
+fn render_switch_header(switch_statement: &SwitchStatement) -> String {
+    match (&switch_statement.header, &switch_statement.expression) {
+        (Some(header), Some(expression)) => {
+            format!("{}; {} ", header.render(), expression.render())
+        }
+        (Some(header), None) => format!("{}; ", header.render()),
+        (None, Some(expression)) => format!("{} ", expression.render()),
+        (None, None) => String::new(),
     }
 }
 

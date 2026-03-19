@@ -1,11 +1,12 @@
 use std::fmt;
 
 use crate::frontend::ast::{
-    AssignmentTarget, BinaryOperator, Binding, BindingMode, Block, ElseBranch, Expression,
-    FunctionDecl, IfInitializer, IfStatement, ImportDecl, MapLiteralEntry, Parameter,
-    SourceFileAst, Statement, TypeRef,
+    AssignmentTarget, BinaryOperator, Block, Expression, FunctionDecl, ImportDecl, MapLiteralEntry,
+    Parameter, SourceFileAst, TypeRef,
 };
 use crate::frontend::token::{Token, TokenKind};
+
+mod statements;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseError {
@@ -126,223 +127,8 @@ impl<'a> Parser<'a> {
         Ok(Block { statements })
     }
 
-    fn parse_statement(&mut self) -> Result<Statement, ParseError> {
-        if self.match_kind(&TokenKind::Var) {
-            let initializer = self.parse_var_decl_initializer()?;
-            let IfInitializer::VarDecl {
-                name,
-                type_ref,
-                value,
-            } = initializer
-            else {
-                unreachable!("variable declaration parsing always returns var data");
-            };
-            return Ok(Statement::VarDecl {
-                name,
-                type_ref,
-                value,
-            });
-        }
-
-        if self.match_kind(&TokenKind::Return) {
-            if self.check(&TokenKind::Semicolon) || self.check(&TokenKind::RightBrace) {
-                return Ok(Statement::Return(None));
-            }
-
-            let value = self.parse_expression()?;
-            return Ok(Statement::Return(Some(value)));
-        }
-
-        if self.match_kind(&TokenKind::If) {
-            return Ok(Statement::If(self.parse_if_statement()?));
-        }
-
-        if self.match_kind(&TokenKind::For) {
-            return self.parse_for_statement();
-        }
-
-        if self.is_map_lookup_statement_start() {
-            return self.parse_map_lookup_statement();
-        }
-
-        let expression = self.parse_expression()?;
-        if self.match_kind(&TokenKind::Assign) {
-            let target = assignment_target_from_expression(expression)?;
-            let value = self.parse_expression()?;
-            return Ok(Statement::Assign { target, value });
-        }
-        Ok(Statement::Expr(expression))
-    }
-
     fn parse_expression(&mut self) -> Result<Expression, ParseError> {
         self.parse_equality_expression()
-    }
-
-    fn parse_for_statement(&mut self) -> Result<Statement, ParseError> {
-        if self.check(&TokenKind::LeftBrace) {
-            let body = self.parse_block()?;
-            return Ok(Statement::For {
-                condition: Expression::Bool(true),
-                body,
-            });
-        }
-
-        if self.match_kind(&TokenKind::Range) {
-            let target = self.parse_expression()?;
-            let body = self.parse_block()?;
-            return Ok(Statement::RangeFor {
-                bindings: Vec::new(),
-                binding_mode: None,
-                target,
-                body,
-            });
-        }
-
-        if self.is_range_header_start() {
-            let first = self.parse_binding()?;
-            let mut bindings = vec![first];
-            if self.match_kind(&TokenKind::Comma) {
-                bindings.push(self.parse_binding()?);
-            }
-            let binding_mode = if self.match_kind(&TokenKind::Define) {
-                BindingMode::Define
-            } else {
-                self.expect(TokenKind::Assign)?;
-                BindingMode::Assign
-            };
-            self.expect(TokenKind::Range)?;
-            let target = self.parse_expression()?;
-            let body = self.parse_block()?;
-            return Ok(Statement::RangeFor {
-                bindings,
-                binding_mode: Some(binding_mode),
-                target,
-                body,
-            });
-        }
-
-        let condition = self.parse_expression()?;
-        let body = self.parse_block()?;
-        Ok(Statement::For { condition, body })
-    }
-
-    fn parse_map_lookup_statement(&mut self) -> Result<Statement, ParseError> {
-        let initializer = self.parse_map_lookup_initializer()?;
-        let IfInitializer::MapLookup {
-            bindings,
-            binding_mode,
-            target,
-            key,
-        } = initializer
-        else {
-            unreachable!("map lookup initializer parsing always returns map lookup data");
-        };
-        Ok(Statement::MapLookup {
-            bindings,
-            binding_mode,
-            target,
-            key,
-        })
-    }
-
-    fn parse_if_statement(&mut self) -> Result<IfStatement, ParseError> {
-        let (initializer, condition) = self.parse_if_header()?;
-        let then_block = self.parse_block()?;
-        let else_branch = if self.match_kind(&TokenKind::Else) {
-            if self.match_kind(&TokenKind::If) {
-                Some(ElseBranch::If(Box::new(self.parse_if_statement()?)))
-            } else {
-                Some(ElseBranch::Block(self.parse_block()?))
-            }
-        } else {
-            None
-        };
-        Ok(IfStatement {
-            initializer,
-            condition,
-            then_block,
-            else_branch,
-        })
-    }
-
-    fn parse_if_header(&mut self) -> Result<(Option<IfInitializer>, Expression), ParseError> {
-        if self.match_kind(&TokenKind::Var) {
-            let initializer = self.parse_var_decl_initializer()?;
-            self.expect(TokenKind::Semicolon)?;
-            let condition = self.parse_expression()?;
-            return Ok((Some(initializer), condition));
-        }
-
-        if self.is_map_lookup_statement_start() {
-            let initializer = self.parse_map_lookup_initializer()?;
-            self.expect(TokenKind::Semicolon)?;
-            let condition = self.parse_expression()?;
-            return Ok((Some(initializer), condition));
-        }
-
-        let expression = self.parse_expression()?;
-        if self.match_kind(&TokenKind::Assign) {
-            let target = assignment_target_from_expression(expression)?;
-            let value = self.parse_expression()?;
-            self.expect(TokenKind::Semicolon)?;
-            let condition = self.parse_expression()?;
-            return Ok((Some(IfInitializer::Assign { target, value }), condition));
-        }
-
-        if self.match_kind(&TokenKind::Semicolon) {
-            let condition = self.parse_expression()?;
-            return Ok((Some(IfInitializer::Expr(expression)), condition));
-        }
-
-        Ok((None, expression))
-    }
-
-    fn parse_var_decl_initializer(&mut self) -> Result<IfInitializer, ParseError> {
-        let name = self.expect_identifier()?;
-        let (type_ref, value) = if self.match_kind(&TokenKind::Assign) {
-            (None, Some(self.parse_expression()?))
-        } else if self.check_type_start() {
-            let type_ref = self.parse_type_ref()?;
-            let value = if self.match_kind(&TokenKind::Assign) {
-                Some(self.parse_expression()?)
-            } else {
-                None
-            };
-            (Some(type_ref), value)
-        } else {
-            return Err(
-                self.error_at_current("variable declaration requires a type or initializer")
-            );
-        };
-        Ok(IfInitializer::VarDecl {
-            name,
-            type_ref,
-            value,
-        })
-    }
-
-    fn parse_map_lookup_initializer(&mut self) -> Result<IfInitializer, ParseError> {
-        let mut bindings = vec![self.parse_binding()?];
-        self.expect(TokenKind::Comma)?;
-        bindings.push(self.parse_binding()?);
-        let binding_mode = if self.match_kind(&TokenKind::Define) {
-            BindingMode::Define
-        } else {
-            self.expect(TokenKind::Assign)?;
-            BindingMode::Assign
-        };
-        let expression = self.parse_expression()?;
-        let Expression::Index { target, index } = expression else {
-            return Err(ParseError::new(
-                "comma-ok lookup requires a map index expression on the right side",
-            ));
-        };
-        Ok(IfInitializer::MapLookup {
-            bindings,
-            binding_mode,
-            target: *target,
-            key: *index,
-        })
     }
 
     fn parse_equality_expression(&mut self) -> Result<Expression, ParseError> {
@@ -703,58 +489,6 @@ impl<'a> Parser<'a> {
             || matches!(self.current_token().kind, TokenKind::Identifier(_))
     }
 
-    fn parse_binding(&mut self) -> Result<Binding, ParseError> {
-        let name = self.expect_identifier()?;
-        if name == "_" {
-            Ok(Binding::Blank)
-        } else {
-            Ok(Binding::Identifier(name))
-        }
-    }
-
-    fn is_range_header_start(&self) -> bool {
-        match (
-            self.current_kind(),
-            self.peek_kind(),
-            self.peek_second_kind(),
-            self.peek_third_kind(),
-            self.peek_fourth_kind(),
-        ) {
-            (
-                Some(TokenKind::Identifier(_)),
-                Some(TokenKind::Define | TokenKind::Assign),
-                Some(TokenKind::Range),
-                _,
-                _,
-            ) => true,
-            (
-                Some(TokenKind::Identifier(_)),
-                Some(TokenKind::Comma),
-                Some(TokenKind::Identifier(_)),
-                Some(TokenKind::Define | TokenKind::Assign),
-                Some(TokenKind::Range),
-            ) => true,
-            _ => false,
-        }
-    }
-
-    fn is_map_lookup_statement_start(&self) -> bool {
-        matches!(
-            (
-                self.current_kind(),
-                self.peek_kind(),
-                self.peek_second_kind(),
-                self.peek_third_kind(),
-            ),
-            (
-                Some(TokenKind::Identifier(_)),
-                Some(TokenKind::Comma),
-                Some(TokenKind::Identifier(_)),
-                Some(TokenKind::Define | TokenKind::Assign),
-            )
-        )
-    }
-
     fn match_binary_operator(&mut self, candidates: &[TokenKind]) -> Option<BinaryOperator> {
         for candidate in candidates {
             if self.match_kind(candidate) {
@@ -897,9 +631,6 @@ fn is_supported_named_type(name: &str) -> bool {
     matches!(name, "int" | "byte" | "bool" | "string")
 }
 
-#[cfg(test)]
-mod tests;
-
 fn assignment_target_from_expression(
     expression: Expression,
 ) -> Result<AssignmentTarget, ParseError> {
@@ -914,3 +645,6 @@ fn assignment_target_from_expression(
         )),
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -33,6 +33,7 @@ This directory stores research notes that inform roadmap choices and implementat
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `2026-03-20-switch-statements.md`: official behavior baseline for staged expression `switch` statements, tagless `switch`, shared header scope, and duplicate-clause diagnostics
 - `2026-03-20-if-statement-headers.md`: official behavior baseline for `if` statement initializers, scope visibility, and `else if` chains
 - `2026-03-20-map-comma-ok-lookups.md`: official behavior baseline for comma-ok `map` lookups, short redeclaration rules, and duplicate constant-key diagnostics
 - `2026-03-20-range-loops-slices-maps.md`: official behavior baseline for staged `range` loops over `slice` and `map`

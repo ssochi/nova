@@ -19,6 +19,7 @@ mod expressions;
 mod ifs;
 mod lookup;
 mod range;
+mod switches;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SemanticError {
@@ -199,6 +200,7 @@ impl<'a> FunctionAnalyzer<'a> {
             Statement::Assign { target, value } => self.analyze_assignment_statement(target, value),
             Statement::Expr(expression) => self.analyze_expression_statement(expression),
             Statement::If(if_statement) => self.analyze_if_statement(if_statement),
+            Statement::Switch(switch_statement) => self.analyze_switch_statement(switch_statement),
             Statement::For { condition, body } => {
                 let condition = self.analyze_expression(condition)?;
                 expect_type(&Type::Bool, &condition.ty, "for condition")?;
