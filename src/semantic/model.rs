@@ -58,9 +58,16 @@ pub enum CheckedExpressionKind {
     Integer(i64),
     Bool(bool),
     String(String),
+    SliceLiteral {
+        elements: Vec<CheckedExpression>,
+    },
     Local {
         slot: usize,
         name: String,
+    },
+    Index {
+        target: Box<CheckedExpression>,
+        index: Box<CheckedExpression>,
     },
     Binary {
         left: Box<CheckedExpression>,
@@ -95,25 +102,38 @@ pub enum CheckedBinaryOperator {
     GreaterEqual,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Type {
     Int,
     Bool,
     String,
+    Slice(Box<Type>),
     Void,
 }
 
 impl Type {
-    pub fn render(&self) -> &'static str {
+    pub fn render(&self) -> String {
         match self {
-            Type::Int => "int",
-            Type::Bool => "bool",
-            Type::String => "string",
-            Type::Void => "void",
+            Type::Int => "int".to_string(),
+            Type::Bool => "bool".to_string(),
+            Type::String => "string".to_string(),
+            Type::Slice(element) => format!("[]{}", element.render()),
+            Type::Void => "void".to_string(),
         }
     }
 
     pub fn produces_value(&self) -> bool {
         *self != Type::Void
+    }
+
+    pub fn slice_element_type(&self) -> Option<&Type> {
+        match self {
+            Type::Slice(element) => Some(element.as_ref()),
+            _ => None,
+        }
+    }
+
+    pub fn supports_equality(&self) -> bool {
+        matches!(self, Type::Int | Type::Bool | Type::String)
     }
 }

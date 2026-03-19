@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-00-55-55-slice-runtime-testing`
+- Opened `2026-03-20-00-55-55-slice-runtime-testing` for slice runtime values and layered test coverage under `M3`
 - Completed and archived `2026-03-20-00-35-11-import-fmt-seam`
 - Opened `2026-03-20-00-35-11-import-fmt-seam` for the first narrow import and standard-library package slice
 - Completed and archived `2026-03-20-00-09-59-string-runtime-builtins`

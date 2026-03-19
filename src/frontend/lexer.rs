@@ -86,6 +86,8 @@ impl<'a> Lexer<'a> {
                 }
                 '(' => self.push_simple(TokenKind::LeftParen, &mut tokens),
                 ')' => self.push_simple(TokenKind::RightParen, &mut tokens),
+                '[' => self.push_simple(TokenKind::LeftBracket, &mut tokens),
+                ']' => self.push_simple(TokenKind::RightBracket, &mut tokens),
                 '{' => self.push_simple(TokenKind::LeftBrace, &mut tokens),
                 '}' => self.push_simple(TokenKind::RightBrace, &mut tokens),
                 ',' => self.push_simple(TokenKind::Comma, &mut tokens),

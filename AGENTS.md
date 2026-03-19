@@ -11,6 +11,6 @@
 
 
 ## 备注
-1. 每次完成迭代,需要提交全部代码.
+1. 每次完成迭代,需要提交全部代码. 并推送到远程 (git@github.com:ssochi/nova.git)
 
 ## Documentation Architecture (keep updating, not limited to the existing architecture)

@@ -80,12 +80,12 @@ impl<'a> FunctionCompiler<'a> {
         match statement {
             CheckedStatement::VarDecl { slot, value, .. } => {
                 self.compile_expression(value)?;
-                self.expect_value(value.ty, "variable declaration")?;
+                self.expect_value(&value.ty, "variable declaration")?;
                 self.instructions.push(Instruction::StoreLocal(*slot));
             }
             CheckedStatement::Assign { slot, value, .. } => {
                 self.compile_expression(value)?;
-                self.expect_value(value.ty, "assignment")?;
+                self.expect_value(&value.ty, "assignment")?;
                 self.instructions.push(Instruction::StoreLocal(*slot));
             }
             CheckedStatement::Expr(expression) => {
@@ -126,7 +126,7 @@ impl<'a> FunctionCompiler<'a> {
             CheckedStatement::Return(value) => {
                 if let Some(expression) = value {
                     self.compile_expression(expression)?;
-                    self.expect_value(expression.ty, "return")?;
+                    self.expect_value(&expression.ty, "return")?;
                 }
                 self.instructions.push(Instruction::Return);
             }
@@ -147,8 +147,23 @@ impl<'a> FunctionCompiler<'a> {
                 self.instructions
                     .push(Instruction::PushString(value.clone()));
             }
+            CheckedExpressionKind::SliceLiteral { elements } => {
+                for element in elements {
+                    self.compile_expression(element)?;
+                    self.expect_value(&element.ty, "slice literal element")?;
+                }
+                self.instructions
+                    .push(Instruction::BuildSlice(elements.len()));
+            }
             CheckedExpressionKind::Local { slot, .. } => {
                 self.instructions.push(Instruction::LoadLocal(*slot));
+            }
+            CheckedExpressionKind::Index { target, index } => {
+                self.compile_expression(target)?;
+                self.expect_value(&target.ty, "index expression")?;
+                self.compile_expression(index)?;
+                self.expect_value(&index.ty, "index expression")?;
+                self.instructions.push(Instruction::Index);
             }
             CheckedExpressionKind::Binary {
                 left,
@@ -156,9 +171,9 @@ impl<'a> FunctionCompiler<'a> {
                 right,
             } => {
                 self.compile_expression(left)?;
-                self.expect_value(left.ty, "binary expression")?;
+                self.expect_value(&left.ty, "binary expression")?;
                 self.compile_expression(right)?;
-                self.expect_value(right.ty, "binary expression")?;
+                self.expect_value(&right.ty, "binary expression")?;
                 self.instructions.push(match operator {
                     CheckedBinaryOperator::Add => Instruction::Add,
                     CheckedBinaryOperator::Concat => Instruction::Concat,
@@ -176,7 +191,7 @@ impl<'a> FunctionCompiler<'a> {
             CheckedExpressionKind::Call { target, arguments } => {
                 for argument in arguments {
                     self.compile_expression(argument)?;
-                    self.expect_value(argument.ty, "function call")?;
+                    self.expect_value(&argument.ty, "function call")?;
                 }
 
                 match target {
@@ -199,7 +214,7 @@ impl<'a> FunctionCompiler<'a> {
         Ok(())
     }
 
-    fn expect_value(&self, ty: Type, context: &str) -> Result<(), CompileError> {
+    fn expect_value(&self, ty: &Type, context: &str) -> Result<(), CompileError> {
         if ty.produces_value() {
             Ok(())
         } else {

@@ -33,7 +33,7 @@ impl ImportDecl {
 pub struct FunctionDecl {
     pub name: String,
     pub parameters: Vec<Parameter>,
-    pub return_type: Option<String>,
+    pub return_type: Option<TypeRef>,
     pub body: Block,
 }
 
@@ -48,7 +48,7 @@ impl FunctionDecl {
         let return_type = self
             .return_type
             .as_ref()
-            .map(|value| format!(" {value}"))
+            .map(|value| format!(" {}", value.render()))
             .unwrap_or_default();
         let mut lines = vec![format!(
             "{}func {}({}){} {{",
@@ -68,12 +68,27 @@ impl FunctionDecl {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Parameter {
     pub name: String,
-    pub type_name: String,
+    pub type_ref: TypeRef,
 }
 
 impl Parameter {
     fn render(&self) -> String {
-        format!("{} {}", self.name, self.type_name)
+        format!("{} {}", self.name, self.type_ref.render())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TypeRef {
+    Named(String),
+    Slice(Box<TypeRef>),
+}
+
+impl TypeRef {
+    pub fn render(&self) -> String {
+        match self {
+            TypeRef::Named(name) => name.clone(),
+            TypeRef::Slice(element) => format!("[]{}", element.render()),
+        }
     }
 }
 
@@ -166,10 +181,18 @@ pub enum Expression {
     Bool(bool),
     String(String),
     Identifier(String),
+    SliceLiteral {
+        element_type: TypeRef,
+        elements: Vec<Expression>,
+    },
     Binary {
         left: Box<Expression>,
         operator: BinaryOperator,
         right: Box<Expression>,
+    },
+    Index {
+        target: Box<Expression>,
+        index: Box<Expression>,
     },
     Selector {
         target: Box<Expression>,
@@ -188,6 +211,18 @@ impl Expression {
             Expression::Bool(value) => value.to_string(),
             Expression::String(value) => render_string_literal(value),
             Expression::Identifier(name) => name.clone(),
+            Expression::SliceLiteral {
+                element_type,
+                elements,
+            } => format!(
+                "{}{{{}}}",
+                element_type.render(),
+                elements
+                    .iter()
+                    .map(Expression::render)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             Expression::Binary {
                 left,
                 operator,
@@ -198,6 +233,9 @@ impl Expression {
                 operator.render(),
                 right.render()
             ),
+            Expression::Index { target, index } => {
+                format!("{}[{}]", target.render(), index.render())
+            }
             Expression::Selector { target, member } => {
                 format!("{}.{}", target.render(), member)
             }

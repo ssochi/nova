@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::frontend::ast::{
     BinaryOperator, Block, Expression, FunctionDecl, ImportDecl, Parameter, SourceFileAst,
-    Statement,
+    Statement, TypeRef,
 };
 use crate::frontend::token::{Token, TokenKind};
 
@@ -76,8 +76,8 @@ impl<'a> Parser<'a> {
         self.expect(TokenKind::LeftParen)?;
         let parameters = self.parse_parameter_list()?;
         self.expect(TokenKind::RightParen)?;
-        let return_type = if matches!(self.current_token().kind, TokenKind::Identifier(_)) {
-            Some(self.expect_identifier()?)
+        let return_type = if self.check_type_start() {
+            Some(self.parse_type_ref()?)
         } else {
             None
         };
@@ -98,8 +98,8 @@ impl<'a> Parser<'a> {
 
         loop {
             let name = self.expect_identifier()?;
-            let type_name = self.expect_identifier()?;
-            parameters.push(Parameter { name, type_name });
+            let type_ref = self.parse_type_ref()?;
+            parameters.push(Parameter { name, type_ref });
             if !self.match_kind(&TokenKind::Comma) {
                 break;
             }
@@ -260,6 +260,16 @@ impl<'a> Parser<'a> {
                 continue;
             }
 
+            if self.match_kind(&TokenKind::LeftBracket) {
+                let index = self.parse_expression()?;
+                self.expect(TokenKind::RightBracket)?;
+                expression = Expression::Index {
+                    target: Box::new(expression),
+                    index: Box::new(index),
+                };
+                continue;
+            }
+
             if self.match_kind(&TokenKind::LeftParen) {
                 let mut arguments = Vec::new();
                 if !self.check(&TokenKind::RightParen) {
@@ -300,6 +310,9 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Ok(Expression::Identifier(name))
             }
+            TokenKind::LeftBracket if self.peek_kind() == Some(&TokenKind::RightBracket) => {
+                self.parse_slice_literal()
+            }
             TokenKind::LeftParen => {
                 self.advance();
                 let expression = self.parse_expression()?;
@@ -308,6 +321,39 @@ impl<'a> Parser<'a> {
             }
             _ => Err(self.error_at_current("expected expression")),
         }
+    }
+
+    fn parse_slice_literal(&mut self) -> Result<Expression, ParseError> {
+        let element_type = self.parse_type_ref()?;
+        self.expect(TokenKind::LeftBrace)?;
+        let mut elements = Vec::new();
+        if !self.check(&TokenKind::RightBrace) {
+            loop {
+                elements.push(self.parse_expression()?);
+                if !self.match_kind(&TokenKind::Comma) {
+                    break;
+                }
+            }
+        }
+        self.expect(TokenKind::RightBrace)?;
+        Ok(Expression::SliceLiteral {
+            element_type,
+            elements,
+        })
+    }
+
+    fn parse_type_ref(&mut self) -> Result<TypeRef, ParseError> {
+        if self.match_kind(&TokenKind::LeftBracket) {
+            self.expect(TokenKind::RightBracket)?;
+            return Ok(TypeRef::Slice(Box::new(self.parse_type_ref()?)));
+        }
+
+        Ok(TypeRef::Named(self.expect_identifier()?))
+    }
+
+    fn check_type_start(&self) -> bool {
+        self.check(&TokenKind::LeftBracket)
+            || matches!(self.current_token().kind, TokenKind::Identifier(_))
     }
 
     fn match_binary_operator(&mut self, candidates: &[TokenKind]) -> Option<BinaryOperator> {
@@ -419,6 +465,10 @@ impl<'a> Parser<'a> {
         self.tokens.get(self.index + 1)
     }
 
+    fn peek_kind(&self) -> Option<&TokenKind> {
+        self.peek().map(|token| &token.kind)
+    }
+
     fn advance(&mut self) {
         if !self.is_at_end() {
             self.index += 1;
@@ -427,5 +477,47 @@ impl<'a> Parser<'a> {
 
     fn is_at_end(&self) -> bool {
         matches!(self.current_token().kind, TokenKind::Eof)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_source_file;
+    use crate::frontend::ast::{Expression, Statement, TypeRef};
+    use crate::frontend::lexer::lex;
+    use crate::source::SourceFile;
+
+    #[test]
+    fn parse_slice_literal_and_index_expression() {
+        let source = SourceFile {
+            path: "test.go".into(),
+            contents:
+                "package main\n\nfunc main() {\n\tvar values = []int{1, 2}\n\tprintln(values[1])\n}\n"
+                    .to_string(),
+        };
+
+        let tokens = lex(&source).expect("lexing should succeed");
+        let ast = parse_source_file(&tokens).expect("parsing should succeed");
+        let function = &ast.functions[0];
+
+        match &function.body.statements[0] {
+            Statement::VarDecl { value, .. } => match value {
+                Expression::SliceLiteral { element_type, .. } => {
+                    assert_eq!(
+                        element_type,
+                        &TypeRef::Slice(Box::new(TypeRef::Named("int".into())))
+                    );
+                }
+                _ => panic!("expected slice literal"),
+            },
+            _ => panic!("expected variable declaration"),
+        }
+
+        match &function.body.statements[1] {
+            Statement::Expr(Expression::Call { arguments, .. }) => {
+                assert!(matches!(arguments[0], Expression::Index { .. }));
+            }
+            _ => panic!("expected call expression"),
+        }
     }
 }

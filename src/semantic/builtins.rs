@@ -5,46 +5,29 @@ use crate::semantic::model::Type;
 pub struct BuiltinContract {
     pub builtin: BuiltinFunction,
     pub name: &'static str,
-    pub arity: BuiltinArity,
-    pub arguments: BuiltinArguments,
-    pub return_type: Type,
+    pub validator: fn(&[Type]) -> Result<Type, String>,
 }
 
-#[derive(Clone, Copy)]
-pub enum BuiltinArity {
-    Variadic,
-    Exact(usize),
-}
-
-#[derive(Clone, Copy)]
-pub enum BuiltinArguments {
-    AnyValue,
-    Exact(&'static [Type]),
-}
-
-const LEN_ARGUMENTS: [Type; 1] = [Type::String];
-
-const BUILTIN_CONTRACTS: [BuiltinContract; 3] = [
+const BUILTIN_CONTRACTS: [BuiltinContract; 4] = [
     BuiltinContract {
         builtin: BuiltinFunction::Print,
         name: "print",
-        arity: BuiltinArity::Variadic,
-        arguments: BuiltinArguments::AnyValue,
-        return_type: Type::Void,
+        validator: validate_variadic_output_builtin,
     },
     BuiltinContract {
         builtin: BuiltinFunction::Println,
         name: "println",
-        arity: BuiltinArity::Variadic,
-        arguments: BuiltinArguments::AnyValue,
-        return_type: Type::Void,
+        validator: validate_variadic_output_builtin,
     },
     BuiltinContract {
         builtin: BuiltinFunction::Len,
         name: "len",
-        arity: BuiltinArity::Exact(1),
-        arguments: BuiltinArguments::Exact(&LEN_ARGUMENTS),
-        return_type: Type::Int,
+        validator: validate_len_builtin,
+    },
+    BuiltinContract {
+        builtin: BuiltinFunction::Append,
+        name: "append",
+        validator: validate_append_builtin,
     },
 ];
 
@@ -60,38 +43,7 @@ pub fn validate_builtin_call(
     argument_types: &[Type],
 ) -> Result<Type, String> {
     let contract = builtin_contract(builtin);
-    validate_builtin_arity(contract, argument_types.len())?;
-
-    match contract.arguments {
-        BuiltinArguments::AnyValue => {
-            for (index, argument) in argument_types.iter().enumerate() {
-                if !argument.produces_value() {
-                    return Err(format!(
-                        "argument {} in call to builtin `{}` must produce a value",
-                        index + 1,
-                        contract.name
-                    ));
-                }
-            }
-        }
-        BuiltinArguments::Exact(expected_types) => {
-            for (index, (expected, actual)) in
-                expected_types.iter().zip(argument_types.iter()).enumerate()
-            {
-                if expected != actual {
-                    return Err(format!(
-                        "argument {} in call to builtin `{}` requires `{}`, found `{}`",
-                        index + 1,
-                        contract.name,
-                        expected.render(),
-                        actual.render()
-                    ));
-                }
-            }
-        }
-    }
-
-    Ok(contract.return_type)
+    (contract.validator)(argument_types)
 }
 
 fn builtin_contract(builtin: BuiltinFunction) -> &'static BuiltinContract {
@@ -101,13 +53,99 @@ fn builtin_contract(builtin: BuiltinFunction) -> &'static BuiltinContract {
         .expect("all builtin functions must have a contract")
 }
 
-fn validate_builtin_arity(contract: &BuiltinContract, actual: usize) -> Result<(), String> {
-    match contract.arity {
-        BuiltinArity::Variadic => Ok(()),
-        BuiltinArity::Exact(expected) if expected == actual => Ok(()),
-        BuiltinArity::Exact(expected) => Err(format!(
-            "builtin `{}` expects {} arguments, found {}",
-            contract.name, expected, actual
-        )),
+fn validate_variadic_output_builtin(argument_types: &[Type]) -> Result<Type, String> {
+    for (index, argument) in argument_types.iter().enumerate() {
+        if !argument.produces_value() {
+            return Err(format!(
+                "argument {} in call to builtin output must produce a value",
+                index + 1
+            ));
+        }
+    }
+
+    Ok(Type::Void)
+}
+
+fn validate_len_builtin(argument_types: &[Type]) -> Result<Type, String> {
+    validate_exact_arity("len", 1, argument_types.len())?;
+    let actual = &argument_types[0];
+    if matches!(actual, Type::String | Type::Slice(_)) {
+        Ok(Type::Int)
+    } else {
+        Err(format!(
+            "argument 1 in call to builtin `len` requires `string` or `slice`, found `{}`",
+            actual.render()
+        ))
+    }
+}
+
+fn validate_append_builtin(argument_types: &[Type]) -> Result<Type, String> {
+    validate_min_arity("append", 1, argument_types.len())?;
+    let slice_type = argument_types[0].clone();
+    let element_type = slice_type.slice_element_type().cloned().ok_or_else(|| {
+        format!(
+            "argument 1 in call to builtin `append` requires `slice`, found `{}`",
+            argument_types[0].render()
+        )
+    })?;
+
+    for (index, argument) in argument_types.iter().enumerate().skip(1) {
+        if argument != &element_type {
+            return Err(format!(
+                "argument {} in call to builtin `append` requires `{}`, found `{}`",
+                index + 1,
+                element_type.render(),
+                argument.render()
+            ));
+        }
+    }
+
+    Ok(slice_type)
+}
+
+fn validate_exact_arity(name: &str, expected: usize, actual: usize) -> Result<(), String> {
+    if expected == actual {
+        Ok(())
+    } else {
+        Err(format!(
+            "builtin `{name}` expects {expected} arguments, found {actual}"
+        ))
+    }
+}
+
+fn validate_min_arity(name: &str, minimum: usize, actual: usize) -> Result<(), String> {
+    if actual >= minimum {
+        Ok(())
+    } else {
+        Err(format!(
+            "builtin `{name}` expects at least {minimum} arguments, found {actual}"
+        ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_builtin_call;
+    use crate::builtin::BuiltinFunction;
+    use crate::semantic::model::Type;
+
+    #[test]
+    fn len_accepts_slice_arguments() {
+        let result =
+            validate_builtin_call(BuiltinFunction::Len, &[Type::Slice(Box::new(Type::Int))])
+                .expect("len should accept slices");
+        assert_eq!(result, Type::Int);
+    }
+
+    #[test]
+    fn append_requires_matching_element_types() {
+        let error = validate_builtin_call(
+            BuiltinFunction::Append,
+            &[Type::Slice(Box::new(Type::Int)), Type::Int, Type::String],
+        )
+        .expect_err("append should reject mixed element types");
+
+        assert!(error.contains("argument 3"));
+        assert!(error.contains("requires `int`"));
     }
 }

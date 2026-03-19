@@ -58,6 +58,7 @@ pub enum Instruction {
     PushInt(i64),
     PushBool(bool),
     PushString(String),
+    BuildSlice(usize),
     LoadLocal(usize),
     StoreLocal(usize),
     Add,
@@ -71,6 +72,7 @@ pub enum Instruction {
     LessEqual,
     Greater,
     GreaterEqual,
+    Index,
     Jump(usize),
     JumpIfFalse(usize),
     Pop,
@@ -88,6 +90,7 @@ impl Instruction {
             Instruction::PushString(value) => {
                 format!("push-string {}", render_string_literal(value))
             }
+            Instruction::BuildSlice(count) => format!("build-slice {count}"),
             Instruction::LoadLocal(index) => format!("load-local {index}"),
             Instruction::StoreLocal(index) => format!("store-local {index}"),
             Instruction::Add => "add".to_string(),
@@ -101,6 +104,7 @@ impl Instruction {
             Instruction::LessEqual => "less-equal".to_string(),
             Instruction::Greater => "greater".to_string(),
             Instruction::GreaterEqual => "greater-equal".to_string(),
+            Instruction::Index => "index".to_string(),
             Instruction::Jump(target) => format!("jump {target}"),
             Instruction::JumpIfFalse(target) => format!("jump-if-false {target}"),
             Instruction::Pop => "pop".to_string(),

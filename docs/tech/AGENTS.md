@@ -13,3 +13,4 @@
 - `vm-execution-pipeline.md`: bootstrap execution pipeline reference
 - `runtime-values-and-builtins.md`: current runtime value categories and builtin contract model
 - `imports-and-package-contracts.md`: narrow import support and package-function contract model
+- `testing-strategy.md`: layered automated and CLI validation strategy

@@ -1,0 +1,6 @@
+- [done] Define the new `M3` plan surface and register it in roadmap indexes.
+- [done] Implement slice-aware frontend, semantic analysis, bytecode lowering, and VM execution.
+- [done] Restructure tests into reusable helpers and add slice-focused unit plus CLI coverage.
+- [done] Run formatting, automated tests, and serial CLI validation for the new slice flow.
+- [done] Sync design, tech, verification, experience, milestone, and handoff documents.
+- [done] Archive the plan, update indexes and `todo.md`, and commit the working tree.

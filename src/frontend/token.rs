@@ -28,6 +28,8 @@ pub enum TokenKind {
     String(String),
     LeftParen,
     RightParen,
+    LeftBracket,
+    RightBracket,
     LeftBrace,
     RightBrace,
     Comma,
@@ -56,6 +58,7 @@ impl TokenKind {
                 | TokenKind::Bool(_)
                 | TokenKind::String(_)
                 | TokenKind::RightParen
+                | TokenKind::RightBracket
                 | TokenKind::RightBrace
                 | TokenKind::Return
         )
@@ -77,6 +80,8 @@ impl TokenKind {
             TokenKind::String(value) => format!("string({})", render_string_literal(value)),
             TokenKind::LeftParen => "(".to_string(),
             TokenKind::RightParen => ")".to_string(),
+            TokenKind::LeftBracket => "[".to_string(),
+            TokenKind::RightBracket => "]".to_string(),
             TokenKind::LeftBrace => "{".to_string(),
             TokenKind::RightBrace => "}".to_string(),
             TokenKind::Comma => ",".to_string(),

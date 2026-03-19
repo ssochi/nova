@@ -1,7 +1,7 @@
 use crate::package::{ImportedPackage, PackageFunction};
 use crate::semantic::model::Type;
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct PackageFunctionContract {
     pub function: PackageFunction,
     pub member_name: &'static str,
@@ -82,7 +82,7 @@ pub fn validate_package_call(
         }
     }
 
-    Ok(contract.return_type)
+    Ok(contract.return_type.clone())
 }
 
 fn package_functions(package: ImportedPackage) -> &'static [PackageFunctionContract] {

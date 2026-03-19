@@ -85,6 +85,14 @@ impl VirtualMachine {
                 Instruction::PushInt(value) => self.stack.push(Value::Integer(value)),
                 Instruction::PushBool(value) => self.stack.push(Value::Boolean(value)),
                 Instruction::PushString(value) => self.stack.push(Value::String(value)),
+                Instruction::BuildSlice(count) => {
+                    let mut elements = Vec::with_capacity(count);
+                    for _ in 0..count {
+                        elements.push(self.pop_value()?);
+                    }
+                    elements.reverse();
+                    self.stack.push(Value::Slice(elements));
+                }
                 Instruction::LoadLocal(index) => {
                     let value = self.frames[frame_index]
                         .locals
@@ -122,6 +130,7 @@ impl VirtualMachine {
                 Instruction::GreaterEqual => {
                     self.binary_integer_compare(|left, right| left >= right)?
                 }
+                Instruction::Index => self.index_slice()?,
                 Instruction::Jump(target) => {
                     self.frames[frame_index].pc = target;
                     advance_pc = false;
@@ -257,14 +266,32 @@ impl VirtualMachine {
                     )));
                 }
                 let value = match arguments.into_iter().next().expect("arity checked above") {
-                    Value::String(value) => value,
+                    Value::String(value) => value.len() as i64,
+                    Value::Slice(elements) => elements.len() as i64,
                     _ => {
                         return Err(RuntimeError::new(
-                            "builtin `len` expected a string argument",
+                            "builtin `len` expected a string or slice argument",
                         ));
                     }
                 };
-                self.stack.push(Value::Integer(value.len() as i64));
+                self.stack.push(Value::Integer(value));
+            }
+            BuiltinFunction::Append => {
+                let Some((first, rest)) = arguments.split_first() else {
+                    return Err(RuntimeError::new(
+                        "builtin `append` expected at least 1 argument",
+                    ));
+                };
+                let mut elements = match first {
+                    Value::Slice(elements) => elements.clone(),
+                    _ => {
+                        return Err(RuntimeError::new(
+                            "builtin `append` expected a slice as the first argument",
+                        ));
+                    }
+                };
+                elements.extend(rest.iter().cloned());
+                self.stack.push(Value::Slice(elements));
             }
         }
 
@@ -306,11 +333,32 @@ impl VirtualMachine {
         Ok(arguments)
     }
 
+    fn index_slice(&mut self) -> Result<(), RuntimeError> {
+        let index = self.pop_integer()?;
+        if index < 0 {
+            return Err(RuntimeError::new(format!(
+                "slice index {index} is out of bounds"
+            )));
+        }
+        let target = self.pop_value()?;
+        let elements = match target {
+            Value::Slice(elements) => elements,
+            _ => return Err(RuntimeError::new("index target is not a slice")),
+        };
+        let value = elements
+            .get(index as usize)
+            .cloned()
+            .ok_or_else(|| RuntimeError::new(format!("slice index {index} is out of bounds")))?;
+        self.stack.push(value);
+        Ok(())
+    }
+
     fn pop_integer(&mut self) -> Result<i64, RuntimeError> {
         match self.pop_value()? {
             Value::Integer(value) => Ok(value),
             Value::Boolean(_) => Err(RuntimeError::new("expected integer value on the stack")),
             Value::String(_) => Err(RuntimeError::new("expected integer value on the stack")),
+            Value::Slice(_) => Err(RuntimeError::new("expected integer value on the stack")),
         }
     }
 
@@ -319,13 +367,14 @@ impl VirtualMachine {
             Value::Boolean(value) => Ok(value),
             Value::Integer(_) => Err(RuntimeError::new("expected boolean value on the stack")),
             Value::String(_) => Err(RuntimeError::new("expected boolean value on the stack")),
+            Value::Slice(_) => Err(RuntimeError::new("expected boolean value on the stack")),
         }
     }
 
     fn pop_string(&mut self) -> Result<String, RuntimeError> {
         match self.pop_value()? {
             Value::String(value) => Ok(value),
-            Value::Integer(_) | Value::Boolean(_) => {
+            Value::Integer(_) | Value::Boolean(_) | Value::Slice(_) => {
                 Err(RuntimeError::new("expected string value on the stack"))
             }
         }
@@ -369,4 +418,45 @@ fn render_package_arguments(arguments: &[Value], separator: &str) -> String {
         .map(ToString::to_string)
         .collect::<Vec<_>>()
         .join(separator)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::VirtualMachine;
+    use crate::builtin::BuiltinFunction;
+    use crate::bytecode::instruction::{CompiledFunction, Instruction, Program};
+
+    #[test]
+    fn execute_builds_and_indexes_slices() {
+        let program = Program {
+            package_name: "main".to_string(),
+            entry_function: "main".to_string(),
+            entry_function_index: 0,
+            functions: vec![CompiledFunction {
+                name: "main".to_string(),
+                parameter_count: 0,
+                returns_value: false,
+                local_names: vec!["values".to_string()],
+                instructions: vec![
+                    Instruction::PushInt(1),
+                    Instruction::PushInt(2),
+                    Instruction::BuildSlice(2),
+                    Instruction::StoreLocal(0),
+                    Instruction::LoadLocal(0),
+                    Instruction::CallBuiltin(BuiltinFunction::Len, 1),
+                    Instruction::LoadLocal(0),
+                    Instruction::PushInt(1),
+                    Instruction::Index,
+                    Instruction::CallBuiltin(BuiltinFunction::Println, 2),
+                    Instruction::Return,
+                ],
+            }],
+        };
+
+        let output = VirtualMachine::new()
+            .execute(&program)
+            .expect("program should execute")
+            .render_output();
+        assert_eq!(output, "2 2\n");
+    }
 }

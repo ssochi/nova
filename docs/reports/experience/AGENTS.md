@@ -39,3 +39,4 @@ This directory stores experience validation reports close to the real user path.
 - `2026-03-19-m2-loop-closeout-playtest.md`: records the milestone-closeout CLI walkthrough for branches and loops
 - `2026-03-20-string-runtime-builtins-playtest.md`: records the string and builtin CLI walkthrough for the first `M3` slice
 - `2026-03-20-import-fmt-seam-playtest.md`: records the CLI walkthrough for import declarations and the first `fmt` package seam
+- `2026-03-20-slice-runtime-testing-playtest.md`: records the CLI walkthrough for slice literals, indexing, and the layered test upgrade

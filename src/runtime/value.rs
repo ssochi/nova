@@ -5,6 +5,7 @@ pub enum Value {
     Integer(i64),
     Boolean(bool),
     String(String),
+    Slice(Vec<Value>),
 }
 
 impl Default for Value {
@@ -19,6 +20,15 @@ impl fmt::Display for Value {
             Value::Integer(value) => write!(f, "{value}"),
             Value::Boolean(value) => write!(f, "{value}"),
             Value::String(value) => f.write_str(value),
+            Value::Slice(elements) => write!(
+                f,
+                "[{}]",
+                elements
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
         }
     }
 }

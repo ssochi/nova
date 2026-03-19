@@ -3,7 +3,7 @@ use std::fmt;
 
 use crate::config::ExecutionConfig;
 use crate::frontend::ast::{
-    BinaryOperator, Block, Expression, FunctionDecl, SourceFileAst, Statement,
+    BinaryOperator, Block, Expression, FunctionDecl, SourceFileAst, Statement, TypeRef,
 };
 use crate::package::ImportedPackage;
 use crate::semantic::builtins::{resolve_builtin, validate_builtin_call};
@@ -118,18 +118,20 @@ impl FunctionRegistry {
                 .parameters
                 .iter()
                 .map(|parameter| {
-                    resolve_type_name(&parameter.type_name).ok_or_else(|| {
+                    resolve_type_ref(&parameter.type_ref).ok_or_else(|| {
                         SemanticError::new(format!(
                             "unsupported parameter type `{}` in function `{}`",
-                            parameter.type_name, function.name
+                            parameter.type_ref.render(),
+                            function.name
                         ))
                     })
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             let return_type = match &function.return_type {
-                Some(type_name) => resolve_type_name(type_name).ok_or_else(|| {
+                Some(type_ref) => resolve_type_ref(type_ref).ok_or_else(|| {
                     SemanticError::new(format!(
-                        "unsupported return type `{type_name}` in function `{}`",
+                        "unsupported return type `{}` in function `{}`",
+                        type_ref.render(),
                         function.name
                     ))
                 })?,
@@ -185,7 +187,7 @@ impl<'a> FunctionAnalyzer<'a> {
         let mut scopes = vec![HashMap::new()];
         let mut local_names = Vec::new();
         for parameter in &function.parameters {
-            let ty = resolve_type_name(&parameter.type_name)
+            let ty = resolve_type_ref(&parameter.type_ref)
                 .expect("function registry only keeps validated type names");
             let slot = local_names.len();
             scopes[0].insert(parameter.name.clone(), LocalBinding { slot, ty });
@@ -218,7 +220,7 @@ impl<'a> FunctionAnalyzer<'a> {
         Ok(CheckedFunction {
             name: self.function.name.clone(),
             parameter_count: self.function.parameters.len(),
-            return_type: signature.return_type,
+            return_type: signature.return_type.clone(),
             local_names: self.local_names,
             body,
         })
@@ -277,7 +279,7 @@ impl<'a> FunctionAnalyzer<'a> {
                     )));
                 }
 
-                let slot = self.allocate_local(name.clone(), value.ty);
+                let slot = self.allocate_local(name.clone(), value.ty.clone());
                 Ok(CheckedStatement::VarDecl {
                     slot,
                     name: name.clone(),
@@ -287,7 +289,7 @@ impl<'a> FunctionAnalyzer<'a> {
             Statement::Assign { name, value } => {
                 let binding = self.lookup_local(name)?.clone();
                 let value = self.analyze_expression(value)?;
-                expect_type(binding.ty, value.ty, &format!("assignment to `{name}`"))?;
+                expect_type(&binding.ty, &value.ty, &format!("assignment to `{name}`"))?;
                 Ok(CheckedStatement::Assign {
                     slot: binding.slot,
                     name: name.clone(),
@@ -303,7 +305,7 @@ impl<'a> FunctionAnalyzer<'a> {
                 else_block,
             } => {
                 let condition = self.analyze_expression(condition)?;
-                expect_type(Type::Bool, condition.ty, "if condition")?;
+                expect_type(&Type::Bool, &condition.ty, "if condition")?;
                 let then_block = self.analyze_block(then_block, true)?;
                 let else_block = else_block
                     .as_ref()
@@ -317,24 +319,28 @@ impl<'a> FunctionAnalyzer<'a> {
             }
             Statement::For { condition, body } => {
                 let condition = self.analyze_expression(condition)?;
-                expect_type(Type::Bool, condition.ty, "for condition")?;
+                expect_type(&Type::Bool, &condition.ty, "for condition")?;
                 let body = self.analyze_block(body, true)?;
                 Ok(CheckedStatement::For { condition, body })
             }
             Statement::Return(value) => {
-                let expected = self.registry.signature(self.function_index).return_type;
-                match (expected, value) {
+                let expected = self
+                    .registry
+                    .signature(self.function_index)
+                    .return_type
+                    .clone();
+                match (&expected, value) {
                     (Type::Void, None) => Ok(CheckedStatement::Return(None)),
                     (Type::Void, Some(_)) => Err(SemanticError::new(format!(
                         "function `{}` does not return a value",
                         self.function.name
                     ))),
-                    (expected, Some(expression)) => {
+                    (_, Some(expression)) => {
                         let expression = self.analyze_expression(expression)?;
-                        expect_type(expected, expression.ty, "return statement")?;
+                        expect_type(&expected, &expression.ty, "return statement")?;
                         Ok(CheckedStatement::Return(Some(expression)))
                     }
-                    (expected, None) => Err(SemanticError::new(format!(
+                    (_, None) => Err(SemanticError::new(format!(
                         "function `{}` must return a `{}` value",
                         self.function.name,
                         expected.render()
@@ -361,13 +367,67 @@ impl<'a> FunctionAnalyzer<'a> {
                 ty: Type::String,
                 kind: CheckedExpressionKind::String(value.clone()),
             }),
+            Expression::SliceLiteral {
+                element_type,
+                elements,
+            } => {
+                let slice_type = resolve_type_ref(element_type).ok_or_else(|| {
+                    SemanticError::new(format!(
+                        "unsupported slice literal type `{}`",
+                        element_type.render()
+                    ))
+                })?;
+                let element_type = slice_type.slice_element_type().cloned().ok_or_else(|| {
+                    SemanticError::new(format!(
+                        "slice literal requires `[]T` type syntax, found `{}`",
+                        element_type.render()
+                    ))
+                })?;
+                let checked_elements = elements
+                    .iter()
+                    .enumerate()
+                    .map(|(index, element)| {
+                        let checked = self.analyze_expression(element)?;
+                        expect_type(
+                            &element_type,
+                            &checked.ty,
+                            &format!("slice literal element {}", index + 1),
+                        )?;
+                        Ok(checked)
+                    })
+                    .collect::<Result<Vec<_>, SemanticError>>()?;
+                Ok(CheckedExpression {
+                    ty: slice_type,
+                    kind: CheckedExpressionKind::SliceLiteral {
+                        elements: checked_elements,
+                    },
+                })
+            }
             Expression::Identifier(name) => {
                 let binding = self.lookup_local(name)?.clone();
                 Ok(CheckedExpression {
-                    ty: binding.ty,
+                    ty: binding.ty.clone(),
                     kind: CheckedExpressionKind::Local {
                         slot: binding.slot,
                         name: name.clone(),
+                    },
+                })
+            }
+            Expression::Index { target, index } => {
+                let target = self.analyze_expression(target)?;
+                let index = self.analyze_expression(index)?;
+                expect_type(&Type::Int, &index.ty, "index expression")?;
+                let element_type = target.ty.slice_element_type().cloned().ok_or_else(|| {
+                    SemanticError::new(format!(
+                        "index expression requires `slice` target, found `{}`",
+                        target.ty.render()
+                    ))
+                })?;
+                Ok(CheckedExpression {
+                    ty: element_type,
+                    kind: CheckedExpressionKind::Index {
+                        target: Box::new(target),
+                        index: Box::new(index),
                     },
                 })
             }
@@ -381,7 +441,7 @@ impl<'a> FunctionAnalyzer<'a> {
             } => {
                 let left = self.analyze_expression(left)?;
                 let right = self.analyze_expression(right)?;
-                let (operator, ty) = analyze_binary_operator(*operator, left.ty, right.ty)?;
+                let (operator, ty) = analyze_binary_operator(*operator, &left.ty, &right.ty)?;
                 Ok(CheckedExpression {
                     ty,
                     kind: CheckedExpressionKind::Binary {
@@ -425,7 +485,7 @@ impl<'a> FunctionAnalyzer<'a> {
         if let Some(builtin) = resolve_builtin(callee) {
             let argument_types = checked_arguments
                 .iter()
-                .map(|argument| argument.ty)
+                .map(|argument| argument.ty.clone())
                 .collect::<Vec<_>>();
             let return_type =
                 validate_builtin_call(builtin, &argument_types).map_err(SemanticError::new)?;
@@ -457,14 +517,14 @@ impl<'a> FunctionAnalyzer<'a> {
             .enumerate()
         {
             expect_type(
-                *expected,
-                argument.ty,
+                expected,
+                &argument.ty,
                 &format!("argument {} in call to `{callee}`", index + 1),
             )?;
         }
 
         Ok(CheckedExpression {
-            ty: signature.return_type,
+            ty: signature.return_type.clone(),
             kind: CheckedExpressionKind::Call {
                 target: CallTarget::UserDefined {
                     function_index,
@@ -501,7 +561,7 @@ impl<'a> FunctionAnalyzer<'a> {
             })?;
         let argument_types = checked_arguments
             .iter()
-            .map(|argument| argument.ty)
+            .map(|argument| argument.ty.clone())
             .collect::<Vec<_>>();
         let return_type =
             validate_package_call(package_function, &argument_types).map_err(SemanticError::new)?;
@@ -576,22 +636,24 @@ impl ImportRegistry {
 
 fn analyze_binary_operator(
     operator: BinaryOperator,
-    left: Type,
-    right: Type,
+    left: &Type,
+    right: &Type,
 ) -> Result<(CheckedBinaryOperator, Type), SemanticError> {
     match operator {
-        BinaryOperator::Add => match (left, right) {
-            (Type::Int, Type::Int) => Ok((CheckedBinaryOperator::Add, Type::Int)),
-            (Type::String, Type::String) => Ok((CheckedBinaryOperator::Concat, Type::String)),
-            _ => Err(SemanticError::new(format!(
-                "addition requires matching `int` or `string` operands, found `{}` and `{}`",
-                left.render(),
-                right.render()
-            ))),
-        },
+        BinaryOperator::Add if left == &Type::Int && right == &Type::Int => {
+            Ok((CheckedBinaryOperator::Add, Type::Int))
+        }
+        BinaryOperator::Add if left == &Type::String && right == &Type::String => {
+            Ok((CheckedBinaryOperator::Concat, Type::String))
+        }
+        BinaryOperator::Add => Err(SemanticError::new(format!(
+            "addition requires matching `int` or `string` operands, found `{}` and `{}`",
+            left.render(),
+            right.render()
+        ))),
         BinaryOperator::Subtract | BinaryOperator::Multiply | BinaryOperator::Divide => {
-            expect_type(Type::Int, left, "left side of arithmetic expression")?;
-            expect_type(Type::Int, right, "right side of arithmetic expression")?;
+            expect_type(&Type::Int, left, "left side of arithmetic expression")?;
+            expect_type(&Type::Int, right, "right side of arithmetic expression")?;
             Ok((
                 match operator {
                     BinaryOperator::Subtract => CheckedBinaryOperator::Subtract,
@@ -604,6 +666,12 @@ fn analyze_binary_operator(
         }
         BinaryOperator::Equal | BinaryOperator::NotEqual => {
             expect_same_type(left, right, "equality expression")?;
+            if !left.supports_equality() {
+                return Err(SemanticError::new(format!(
+                    "equality expression does not support `{}` operands",
+                    left.render()
+                )));
+            }
             Ok((
                 match operator {
                     BinaryOperator::Equal => CheckedBinaryOperator::Equal,
@@ -617,8 +685,8 @@ fn analyze_binary_operator(
         | BinaryOperator::LessEqual
         | BinaryOperator::Greater
         | BinaryOperator::GreaterEqual => {
-            expect_type(Type::Int, left, "left side of comparison expression")?;
-            expect_type(Type::Int, right, "right side of comparison expression")?;
+            expect_type(&Type::Int, left, "left side of comparison expression")?;
+            expect_type(&Type::Int, right, "right side of comparison expression")?;
             Ok((
                 match operator {
                     BinaryOperator::Less => CheckedBinaryOperator::Less,
@@ -633,16 +701,19 @@ fn analyze_binary_operator(
     }
 }
 
-fn resolve_type_name(name: &str) -> Option<Type> {
-    match name {
-        "int" => Some(Type::Int),
-        "bool" => Some(Type::Bool),
-        "string" => Some(Type::String),
-        _ => None,
+fn resolve_type_ref(type_ref: &TypeRef) -> Option<Type> {
+    match type_ref {
+        TypeRef::Named(name) => match name.as_str() {
+            "int" => Some(Type::Int),
+            "bool" => Some(Type::Bool),
+            "string" => Some(Type::String),
+            _ => None,
+        },
+        TypeRef::Slice(element) => Some(Type::Slice(Box::new(resolve_type_ref(element)?))),
     }
 }
 
-fn expect_type(expected: Type, actual: Type, context: &str) -> Result<(), SemanticError> {
+fn expect_type(expected: &Type, actual: &Type, context: &str) -> Result<(), SemanticError> {
     if expected == actual {
         Ok(())
     } else {
@@ -654,7 +725,7 @@ fn expect_type(expected: Type, actual: Type, context: &str) -> Result<(), Semant
     }
 }
 
-fn expect_same_type(left: Type, right: Type, context: &str) -> Result<(), SemanticError> {
+fn expect_same_type(left: &Type, right: &Type, context: &str) -> Result<(), SemanticError> {
     if left == right {
         Ok(())
     } else {
@@ -690,4 +761,47 @@ fn statement_guarantees_termination(statement: &CheckedStatement) -> bool {
 
 fn expression_is_compile_time_true(expression: &CheckedExpression) -> bool {
     matches!(expression.kind, CheckedExpressionKind::Bool(true))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::analyze_package;
+    use crate::frontend::{lexer::lex, parser::parse_source_file};
+    use crate::source::SourceFile;
+
+    #[test]
+    fn analyze_slice_index_and_append() {
+        let source = SourceFile {
+            path: "test.go".into(),
+            contents:
+                "package main\n\nfunc main() {\n\tvar values = []int{1, 2}\n\tvalues = append(values, 3)\n\tprintln(values[1])\n}\n"
+                    .to_string(),
+        };
+
+        let tokens = lex(&source).expect("lexing should succeed");
+        let ast = parse_source_file(&tokens).expect("parsing should succeed");
+        let program = analyze_package(&ast).expect("analysis should succeed");
+
+        assert_eq!(program.functions.len(), 1);
+    }
+
+    #[test]
+    fn reject_slice_equality() {
+        let source = SourceFile {
+            path: "test.go".into(),
+            contents:
+                "package main\n\nfunc main() {\n\tvar left = []int{1}\n\tvar right = []int{1}\n\tprintln(left == right)\n}\n"
+                    .to_string(),
+        };
+
+        let tokens = lex(&source).expect("lexing should succeed");
+        let ast = parse_source_file(&tokens).expect("parsing should succeed");
+        let error = analyze_package(&ast).expect_err("slice equality should fail");
+
+        assert!(
+            error
+                .to_string()
+                .contains("does not support `[]int` operands")
+        );
+    }
 }
