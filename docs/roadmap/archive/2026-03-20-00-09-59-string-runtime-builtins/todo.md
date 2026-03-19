@@ -1,0 +1,5 @@
+- [done] Open the first active `M3` plan and synchronize the roadmap indexes.
+- [done] Add string literal and `string` runtime support across frontend, semantic analysis, lowering, and VM execution.
+- [done] Centralize builtin contracts and expand builtin coverage beyond `println`.
+- [done] Add examples, automated tests, CLI validation traces, and supporting docs.
+- [done] Close the plan loop by updating context, milestone progress, and archive state.

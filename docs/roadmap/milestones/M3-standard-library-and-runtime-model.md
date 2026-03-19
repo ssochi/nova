@@ -1,7 +1,7 @@
 # M3: Standard Library and Runtime Model
 
 - Status: `in_progress`
-- Current Main Plan: none yet
+- Current Main Plan: none currently
 
 ## Goals
 
@@ -25,15 +25,16 @@
 
 ## Related Plans
 
-- None yet
+- `2026-03-20-00-09-59-string-runtime-builtins`: completed first richer runtime value slice with builtin contract centralization
 
 ## Current Risks
 
 - Runtime-surface growth can sprawl quickly if types, builtins, and imports are mixed into the same plan.
 - Builtin additions can become hardcoded special cases unless their contracts stay centralized.
 - Supporting more realistic Go programs will require careful staging so the VM remains understandable.
+- The current string / builtin slice still lacks composite values, import seams, and package-backed runtime services.
 
 ## Next-Round Recommendations
 
-- Open the first `M3` plan around runtime data expansion and builtin contract centralization.
-- Prioritize work that improves real-program viability without collapsing into premature standard library breadth.
+- Open the next `M3` plan around either a composite runtime value or a narrow import / standard-library seam.
+- Preserve the centralized builtin contract pattern and avoid mixing package loading with too many new runtime categories in one step.

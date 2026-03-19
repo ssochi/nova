@@ -10,28 +10,32 @@ Define the current top-level architecture of `nova-go` so future rounds can exte
    - `src/main.rs`
    - `src/cli.rs`
    - Responsibility: accept commands, parse options, and expose a stable user entrypoint.
-2. Driver layer
+2. Shared builtin contract layer
+   - `src/builtin.rs`
+   - `src/semantic/builtins.rs`
+   - Responsibility: define builtin identities and semantic call contracts in one reusable place.
+3. Driver layer
    - `src/driver.rs`
    - Responsibility: orchestrate source loading, frontend, lowering, runtime execution, and error normalization.
-3. Frontend layer
+4. Frontend layer
    - `src/frontend/token.rs`
    - `src/frontend/lexer.rs`
    - `src/frontend/ast.rs`
    - `src/frontend/parser.rs`
    - Responsibility: source text to structured syntax.
-4. Semantic layer
+5. Semantic layer
    - `src/semantic/model.rs`
    - `src/semantic/analyzer.rs`
    - Responsibility: symbol resolution, scope validation, entrypoint validation, and typed checked-program construction.
-5. Lowering layer
+6. Lowering layer
    - `src/bytecode/compiler.rs`
    - `src/bytecode/instruction.rs`
    - Responsibility: transform checked programs into VM-ready bytecode.
-6. Runtime layer
+7. Runtime layer
    - `src/runtime/value.rs`
    - `src/runtime/vm.rs`
    - Responsibility: execute bytecode programs.
-7. Shared support layer
+8. Shared support layer
    - `src/config.rs`
    - `src/source.rs`
    - Responsibility: configuration and source loading primitives used across layers.
@@ -39,6 +43,7 @@ Define the current top-level architecture of `nova-go` so future rounds can exte
 ## Architectural Rules
 
 - The CLI layer may depend on the driver layer, but not on frontend/runtime internals directly.
+- Builtin identity is shared, but builtin argument and return contracts remain semantic-layer owned.
 - Frontend modules must not depend on bytecode or runtime modules.
 - The semantic layer may depend on frontend structures, but not on runtime execution details.
 - Bytecode lowering must consume semantic output rather than re-resolving source names from raw AST.
@@ -65,6 +70,8 @@ Define the current top-level architecture of `nova-go` so future rounds can exte
 - `docs/design/bootstrap-vm-execution.md`
 - `docs/design/semantic-functions-branches.md`
 - `docs/design/for-loop-control-flow.md`
+- `docs/design/string-runtime-builtins.md`
 - `docs/tech/semantic-analysis.md`
+- `docs/tech/runtime-values-and-builtins.md`
 - `docs/tech/vm-execution-pipeline.md`
 - `docs/roadmap/milestones/M2-frontend-expansion.md`

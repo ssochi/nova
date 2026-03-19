@@ -1,3 +1,4 @@
+pub mod builtin;
 pub mod bytecode;
 pub mod cli;
 pub mod config;

@@ -1,3 +1,5 @@
+use crate::builtin::BuiltinFunction;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Program {
     pub package_name: String,
@@ -50,9 +52,11 @@ impl Program {
 pub enum Instruction {
     PushInt(i64),
     PushBool(bool),
+    PushString(String),
     LoadLocal(usize),
     StoreLocal(usize),
     Add,
+    Concat,
     Subtract,
     Multiply,
     Divide,
@@ -65,7 +69,7 @@ pub enum Instruction {
     Jump(usize),
     JumpIfFalse(usize),
     Pop,
-    CallBuiltin(Builtin, usize),
+    CallBuiltin(BuiltinFunction, usize),
     CallFunction(usize, usize),
     Return,
 }
@@ -75,9 +79,11 @@ impl Instruction {
         match self {
             Instruction::PushInt(value) => format!("push-int {value}"),
             Instruction::PushBool(value) => format!("push-bool {value}"),
+            Instruction::PushString(value) => format!("push-string {}", render_string_literal(value)),
             Instruction::LoadLocal(index) => format!("load-local {index}"),
             Instruction::StoreLocal(index) => format!("store-local {index}"),
             Instruction::Add => "add".to_string(),
+            Instruction::Concat => "concat".to_string(),
             Instruction::Subtract => "subtract".to_string(),
             Instruction::Multiply => "multiply".to_string(),
             Instruction::Divide => "divide".to_string(),
@@ -99,15 +105,18 @@ impl Instruction {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Builtin {
-    Println,
-}
-
-impl Builtin {
-    pub fn render(&self) -> &'static str {
-        match self {
-            Builtin::Println => "println",
+fn render_string_literal(value: &str) -> String {
+    let mut rendered = String::from("\"");
+    for character in value.chars() {
+        match character {
+            '\\' => rendered.push_str("\\\\"),
+            '"' => rendered.push_str("\\\""),
+            '\n' => rendered.push_str("\\n"),
+            '\t' => rendered.push_str("\\t"),
+            '\r' => rendered.push_str("\\r"),
+            other => rendered.push(other),
         }
     }
+    rendered.push('"');
+    rendered
 }

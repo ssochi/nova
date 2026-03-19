@@ -143,6 +143,7 @@ impl Statement {
 pub enum Expression {
     Integer(i64),
     Bool(bool),
+    String(String),
     Identifier(String),
     Binary {
         left: Box<Expression>,
@@ -160,6 +161,7 @@ impl Expression {
         match self {
             Expression::Integer(value) => value.to_string(),
             Expression::Bool(value) => value.to_string(),
+            Expression::String(value) => render_string_literal(value),
             Expression::Identifier(name) => name.clone(),
             Expression::Binary {
                 left,
@@ -212,4 +214,20 @@ impl BinaryOperator {
 
 fn indent_str(indent: usize) -> String {
     "    ".repeat(indent)
+}
+
+fn render_string_literal(value: &str) -> String {
+    let mut rendered = String::from("\"");
+    for character in value.chars() {
+        match character {
+            '\\' => rendered.push_str("\\\\"),
+            '"' => rendered.push_str("\\\""),
+            '\n' => rendered.push_str("\\n"),
+            '\t' => rendered.push_str("\\t"),
+            '\r' => rendered.push_str("\\r"),
+            other => rendered.push(other),
+        }
+    }
+    rendered.push('"');
+    rendered
 }

@@ -74,6 +74,11 @@ impl<'a> Lexer<'a> {
                     self.previous_can_end_statement = token.kind.can_end_statement();
                     tokens.push(token);
                 }
+                '"' => {
+                    let token = self.lex_string()?;
+                    self.previous_can_end_statement = token.kind.can_end_statement();
+                    tokens.push(token);
+                }
                 'a'..='z' | 'A'..='Z' | '_' => {
                     let token = self.lex_identifier_or_keyword();
                     self.previous_can_end_statement = token.kind.can_end_statement();
@@ -147,6 +152,60 @@ impl<'a> Lexer<'a> {
             ))
         })?;
         Ok(Token::new(TokenKind::Integer(value), start))
+    }
+
+    fn lex_string(&mut self) -> Result<Token, LexError> {
+        let start = Span::new(self.line, self.column);
+        self.advance();
+
+        let mut literal = String::new();
+        while let Some(character) = self.peek() {
+            match character {
+                '"' => {
+                    self.advance();
+                    return Ok(Token::new(TokenKind::String(literal), start));
+                }
+                '\\' => {
+                    self.advance();
+                    let escape = self.peek().ok_or_else(|| {
+                        LexError::new(format!(
+                            "unterminated string literal at {}:{}",
+                            start.line, start.column
+                        ))
+                    })?;
+                    let escaped = match escape {
+                        '"' => '"',
+                        '\\' => '\\',
+                        'n' => '\n',
+                        't' => '\t',
+                        'r' => '\r',
+                        other => {
+                            return Err(LexError::new(format!(
+                                "unsupported escape `\\{other}` at {}:{}",
+                                self.line, self.column
+                            )));
+                        }
+                    };
+                    self.advance();
+                    literal.push(escaped);
+                }
+                '\n' => {
+                    return Err(LexError::new(format!(
+                        "unterminated string literal at {}:{}",
+                        start.line, start.column
+                    )));
+                }
+                other => {
+                    literal.push(other);
+                    self.advance();
+                }
+            }
+        }
+
+        Err(LexError::new(format!(
+            "unterminated string literal at {}:{}",
+            start.line, start.column
+        )))
     }
 
     fn lex_identifier_or_keyword(&mut self) -> Token {

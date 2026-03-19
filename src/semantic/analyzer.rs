@@ -3,9 +3,10 @@ use std::fmt;
 
 use crate::config::ExecutionConfig;
 use crate::frontend::ast::{BinaryOperator, Block, Expression, FunctionDecl, SourceFileAst, Statement};
+use crate::semantic::builtins::{resolve_builtin, validate_builtin_call};
 use crate::semantic::model::{
-    BuiltinFunction, CallTarget, CheckedBinaryOperator, CheckedBlock, CheckedExpression,
-    CheckedExpressionKind, CheckedFunction, CheckedProgram, CheckedStatement, Type,
+    CallTarget, CheckedBinaryOperator, CheckedBlock, CheckedExpression, CheckedExpressionKind,
+    CheckedFunction, CheckedProgram, CheckedStatement, Type,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -344,6 +345,10 @@ impl<'a> FunctionAnalyzer<'a> {
                 ty: Type::Bool,
                 kind: CheckedExpressionKind::Bool(*value),
             }),
+            Expression::String(value) => Ok(CheckedExpression {
+                ty: Type::String,
+                kind: CheckedExpressionKind::String(value.clone()),
+            }),
             Expression::Identifier(name) => {
                 let binding = self.lookup_local(name)?.clone();
                 Ok(CheckedExpression {
@@ -378,9 +383,12 @@ impl<'a> FunctionAnalyzer<'a> {
                     .collect::<Result<Vec<_>, _>>()?;
 
                 if let Some(builtin) = resolve_builtin(callee) {
-                    validate_builtin_call(builtin, &checked_arguments)?;
+                    let argument_types =
+                        checked_arguments.iter().map(|argument| argument.ty).collect::<Vec<_>>();
+                    let return_type =
+                        validate_builtin_call(builtin, &argument_types).map_err(SemanticError::new)?;
                     return Ok(CheckedExpression {
-                        ty: Type::Void,
+                        ty: return_type,
                         kind: CheckedExpressionKind::Call {
                             target: CallTarget::Builtin(builtin),
                             arguments: checked_arguments,
@@ -465,19 +473,24 @@ fn analyze_binary_operator(
     right: Type,
 ) -> Result<(CheckedBinaryOperator, Type), SemanticError> {
     match operator {
-        BinaryOperator::Add
-        | BinaryOperator::Subtract
-        | BinaryOperator::Multiply
-        | BinaryOperator::Divide => {
+        BinaryOperator::Add => match (left, right) {
+            (Type::Int, Type::Int) => Ok((CheckedBinaryOperator::Add, Type::Int)),
+            (Type::String, Type::String) => Ok((CheckedBinaryOperator::Concat, Type::String)),
+            _ => Err(SemanticError::new(format!(
+                "addition requires matching `int` or `string` operands, found `{}` and `{}`",
+                left.render(),
+                right.render()
+            ))),
+        },
+        BinaryOperator::Subtract | BinaryOperator::Multiply | BinaryOperator::Divide => {
             expect_type(Type::Int, left, "left side of arithmetic expression")?;
             expect_type(Type::Int, right, "right side of arithmetic expression")?;
             Ok((
                 match operator {
-                    BinaryOperator::Add => CheckedBinaryOperator::Add,
                     BinaryOperator::Subtract => CheckedBinaryOperator::Subtract,
                     BinaryOperator::Multiply => CheckedBinaryOperator::Multiply,
                     BinaryOperator::Divide => CheckedBinaryOperator::Divide,
-                    _ => unreachable!("arithmetic operators already matched"),
+                    _ => unreachable!("non-add arithmetic operators already matched"),
                 },
                 Type::Int,
             ))
@@ -513,36 +526,11 @@ fn analyze_binary_operator(
     }
 }
 
-fn validate_builtin_call(
-    builtin: BuiltinFunction,
-    arguments: &[CheckedExpression],
-) -> Result<(), SemanticError> {
-    match builtin {
-        BuiltinFunction::Println => {
-            for argument in arguments {
-                if !matches!(argument.ty, Type::Int | Type::Bool) {
-                    return Err(SemanticError::new(format!(
-                        "builtin `println` does not support `{}` values yet",
-                        argument.ty.render()
-                    )));
-                }
-            }
-            Ok(())
-        }
-    }
-}
-
 fn resolve_type_name(name: &str) -> Option<Type> {
     match name {
         "int" => Some(Type::Int),
         "bool" => Some(Type::Bool),
-        _ => None,
-    }
-}
-
-fn resolve_builtin(name: &str) -> Option<BuiltinFunction> {
-    match name {
-        "println" => Some(BuiltinFunction::Println),
+        "string" => Some(Type::String),
         _ => None,
     }
 }

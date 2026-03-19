@@ -1,9 +1,9 @@
 use std::fmt;
 
-use crate::bytecode::instruction::{Builtin, CompiledFunction, Instruction, Program};
+use crate::bytecode::instruction::{CompiledFunction, Instruction, Program};
 use crate::semantic::model::{
-    BuiltinFunction, CallTarget, CheckedBinaryOperator, CheckedBlock, CheckedExpression,
-    CheckedExpressionKind, CheckedFunction, CheckedProgram, CheckedStatement, Type,
+    CallTarget, CheckedBinaryOperator, CheckedBlock, CheckedExpression, CheckedExpressionKind,
+    CheckedFunction, CheckedProgram, CheckedStatement, Type,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -143,6 +143,10 @@ impl<'a> FunctionCompiler<'a> {
             CheckedExpressionKind::Bool(value) => {
                 self.instructions.push(Instruction::PushBool(*value));
             }
+            CheckedExpressionKind::String(value) => {
+                self.instructions
+                    .push(Instruction::PushString(value.clone()));
+            }
             CheckedExpressionKind::Local { slot, .. } => {
                 self.instructions.push(Instruction::LoadLocal(*slot));
             }
@@ -157,6 +161,7 @@ impl<'a> FunctionCompiler<'a> {
                 self.expect_value(right.ty, "binary expression")?;
                 self.instructions.push(match operator {
                     CheckedBinaryOperator::Add => Instruction::Add,
+                    CheckedBinaryOperator::Concat => Instruction::Concat,
                     CheckedBinaryOperator::Subtract => Instruction::Subtract,
                     CheckedBinaryOperator::Multiply => Instruction::Multiply,
                     CheckedBinaryOperator::Divide => Instruction::Divide,
@@ -176,10 +181,8 @@ impl<'a> FunctionCompiler<'a> {
 
                 match target {
                     CallTarget::Builtin(builtin) => {
-                        self.instructions.push(Instruction::CallBuiltin(
-                            map_builtin(*builtin)?,
-                            arguments.len(),
-                        ));
+                        self.instructions
+                            .push(Instruction::CallBuiltin(*builtin, arguments.len()));
                     }
                     CallTarget::UserDefined { function_index, .. } => {
                         self.instructions
@@ -210,11 +213,5 @@ impl<'a> FunctionCompiler<'a> {
 
     fn patch_jump(&mut self, index: usize, instruction: Instruction) {
         self.instructions[index] = instruction;
-    }
-}
-
-fn map_builtin(builtin: BuiltinFunction) -> Result<Builtin, CompileError> {
-    match builtin {
-        BuiltinFunction::Println => Ok(Builtin::Println),
     }
 }

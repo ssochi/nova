@@ -1,3 +1,5 @@
+use crate::builtin::BuiltinFunction;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CheckedProgram {
     pub package_name: String,
@@ -54,6 +56,7 @@ pub struct CheckedExpression {
 pub enum CheckedExpressionKind {
     Integer(i64),
     Bool(bool),
+    String(String),
     Local {
         slot: usize,
         name: String,
@@ -79,13 +82,9 @@ pub enum CallTarget {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BuiltinFunction {
-    Println,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CheckedBinaryOperator {
     Add,
+    Concat,
     Subtract,
     Multiply,
     Divide,
@@ -101,6 +100,7 @@ pub enum CheckedBinaryOperator {
 pub enum Type {
     Int,
     Bool,
+    String,
     Void,
 }
 
@@ -109,6 +109,7 @@ impl Type {
         match self {
             Type::Int => "int",
             Type::Bool => "bool",
+            Type::String => "string",
             Type::Void => "void",
         }
     }

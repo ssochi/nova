@@ -1,6 +1,7 @@
 use std::fmt;
 
-use crate::bytecode::instruction::{Builtin, Instruction, Program};
+use crate::builtin::BuiltinFunction;
+use crate::bytecode::instruction::{Instruction, Program};
 use crate::runtime::value::Value;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,16 +27,12 @@ impl std::error::Error for RuntimeError {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExecutionResult {
-    pub output: Vec<String>,
+    pub output: String,
 }
 
 impl ExecutionResult {
     pub fn render_output(&self) -> String {
-        if self.output.is_empty() {
-            String::new()
-        } else {
-            format!("{}\n", self.output.join("\n"))
-        }
+        self.output.clone()
     }
 }
 
@@ -43,7 +40,7 @@ impl ExecutionResult {
 pub struct VirtualMachine {
     stack: Vec<Value>,
     frames: Vec<CallFrame>,
-    output: Vec<String>,
+    output: String,
 }
 
 impl VirtualMachine {
@@ -51,7 +48,7 @@ impl VirtualMachine {
         Self {
             stack: Vec::new(),
             frames: Vec::new(),
-            output: Vec::new(),
+            output: String::new(),
         }
     }
 
@@ -87,6 +84,7 @@ impl VirtualMachine {
             match instruction {
                 Instruction::PushInt(value) => self.stack.push(Value::Integer(value)),
                 Instruction::PushBool(value) => self.stack.push(Value::Boolean(value)),
+                Instruction::PushString(value) => self.stack.push(Value::String(value)),
                 Instruction::LoadLocal(index) => {
                     let value = self
                         .frames[frame_index]
@@ -106,6 +104,7 @@ impl VirtualMachine {
                     *slot = value;
                 }
                 Instruction::Add => self.binary_integer_op(|left, right| left + right)?,
+                Instruction::Concat => self.concat_strings()?,
                 Instruction::Subtract => self.binary_integer_op(|left, right| left - right)?,
                 Instruction::Multiply => self.binary_integer_op(|left, right| left * right)?,
                 Instruction::Divide => self.binary_integer_op_checked(|left, right| {
@@ -136,19 +135,7 @@ impl VirtualMachine {
                 Instruction::Pop => {
                     self.pop_value()?;
                 }
-                Instruction::CallBuiltin(Builtin::Println, arity) => {
-                    let mut arguments = Vec::with_capacity(arity);
-                    for _ in 0..arity {
-                        arguments.push(self.pop_value()?);
-                    }
-                    arguments.reverse();
-                    let rendered = arguments
-                        .iter()
-                        .map(ToString::to_string)
-                        .collect::<Vec<_>>()
-                        .join(" ");
-                    self.output.push(rendered);
-                }
+                Instruction::CallBuiltin(builtin, arity) => self.call_builtin(builtin, arity)?,
                 Instruction::CallFunction(function_index, arity) => {
                     let function = program.functions.get(function_index).ok_or_else(|| {
                         RuntimeError::new(format!("invalid function index {function_index}"))
@@ -238,10 +225,64 @@ impl VirtualMachine {
         Ok(())
     }
 
+    fn concat_strings(&mut self) -> Result<(), RuntimeError> {
+        let right = self.pop_string()?;
+        let left = self.pop_string()?;
+        self.stack.push(Value::String(format!("{left}{right}")));
+        Ok(())
+    }
+
+    fn call_builtin(
+        &mut self,
+        builtin: BuiltinFunction,
+        arity: usize,
+    ) -> Result<(), RuntimeError> {
+        let arguments = self.pop_arguments(arity)?;
+
+        match builtin {
+            BuiltinFunction::Print => {
+                self.output.push_str(&render_builtin_arguments(&arguments));
+            }
+            BuiltinFunction::Println => {
+                self.output.push_str(&render_builtin_arguments(&arguments));
+                self.output.push('\n');
+            }
+            BuiltinFunction::Len => {
+                if arguments.len() != 1 {
+                    return Err(RuntimeError::new(format!(
+                        "builtin `len` expected 1 argument, received {}",
+                        arguments.len()
+                    )));
+                }
+                let value = match arguments.into_iter().next().expect("arity checked above") {
+                    Value::String(value) => value,
+                    _ => {
+                        return Err(RuntimeError::new(
+                            "builtin `len` expected a string argument",
+                        ));
+                    }
+                };
+                self.stack.push(Value::Integer(value.len() as i64));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn pop_arguments(&mut self, arity: usize) -> Result<Vec<Value>, RuntimeError> {
+        let mut arguments = Vec::with_capacity(arity);
+        for _ in 0..arity {
+            arguments.push(self.pop_value()?);
+        }
+        arguments.reverse();
+        Ok(arguments)
+    }
+
     fn pop_integer(&mut self) -> Result<i64, RuntimeError> {
         match self.pop_value()? {
             Value::Integer(value) => Ok(value),
             Value::Boolean(_) => Err(RuntimeError::new("expected integer value on the stack")),
+            Value::String(_) => Err(RuntimeError::new("expected integer value on the stack")),
         }
     }
 
@@ -249,6 +290,16 @@ impl VirtualMachine {
         match self.pop_value()? {
             Value::Boolean(value) => Ok(value),
             Value::Integer(_) => Err(RuntimeError::new("expected boolean value on the stack")),
+            Value::String(_) => Err(RuntimeError::new("expected boolean value on the stack")),
+        }
+    }
+
+    fn pop_string(&mut self) -> Result<String, RuntimeError> {
+        match self.pop_value()? {
+            Value::String(value) => Ok(value),
+            Value::Integer(_) | Value::Boolean(_) => {
+                Err(RuntimeError::new("expected string value on the stack"))
+            }
         }
     }
 
@@ -274,4 +325,12 @@ impl CallFrame {
             locals: vec![Value::default(); local_count],
         }
     }
+}
+
+fn render_builtin_arguments(arguments: &[Value]) -> String {
+    arguments
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(" ")
 }

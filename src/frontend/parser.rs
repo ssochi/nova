@@ -242,6 +242,10 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Ok(Expression::Bool(value))
             }
+            TokenKind::String(value) => {
+                self.advance();
+                Ok(Expression::String(value))
+            }
             TokenKind::Identifier(name) => {
                 self.advance();
                 if self.match_kind(&TokenKind::LeftParen) {
@@ -340,6 +344,7 @@ impl<'a> Parser<'a> {
             (TokenKind::Identifier(_), TokenKind::Identifier(_)) => true,
             (TokenKind::Integer(_), TokenKind::Integer(_)) => true,
             (TokenKind::Bool(_), TokenKind::Bool(_)) => true,
+            (TokenKind::String(_), TokenKind::String(_)) => true,
             _ => self.current_token().kind == *kind,
         }
     }

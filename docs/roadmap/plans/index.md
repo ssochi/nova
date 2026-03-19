@@ -4,11 +4,13 @@
 
 - None
   - Status: `idle`
-  - Topic: waiting for the first plan under `M3-standard-library-and-runtime-model`
+  - Topic: waiting for the next plan under `M3-standard-library-and-runtime-model`
   - Milestone: `M3-standard-library-and-runtime-model`
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-00-09-59-string-runtime-builtins`
+- Opened `2026-03-20-00-09-59-string-runtime-builtins` for the first `M3` runtime and builtin expansion slice
 - Completed and archived `2026-03-19-23-57-06-for-loops-path-analysis`
 - Closed milestone `M2-frontend-expansion`
 - Promoted `M3-standard-library-and-runtime-model` as the current in-progress milestone

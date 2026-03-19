@@ -24,6 +24,7 @@ pub enum TokenKind {
     Identifier(String),
     Integer(i64),
     Bool(bool),
+    String(String),
     LeftParen,
     RightParen,
     LeftBrace,
@@ -51,6 +52,7 @@ impl TokenKind {
             TokenKind::Identifier(_)
                 | TokenKind::Integer(_)
                 | TokenKind::Bool(_)
+                | TokenKind::String(_)
                 | TokenKind::RightParen
                 | TokenKind::RightBrace
                 | TokenKind::Return
@@ -69,6 +71,7 @@ impl TokenKind {
             TokenKind::Identifier(value) => format!("identifier({value})"),
             TokenKind::Integer(value) => format!("integer({value})"),
             TokenKind::Bool(value) => format!("bool({value})"),
+            TokenKind::String(value) => format!("string({})", render_string_literal(value)),
             TokenKind::LeftParen => "(".to_string(),
             TokenKind::RightParen => ")".to_string(),
             TokenKind::LeftBrace => "{".to_string(),
@@ -116,4 +119,20 @@ impl Token {
             self.kind.render()
         )
     }
+}
+
+fn render_string_literal(value: &str) -> String {
+    let mut rendered = String::from("\"");
+    for character in value.chars() {
+        match character {
+            '\\' => rendered.push_str("\\\\"),
+            '"' => rendered.push_str("\\\""),
+            '\n' => rendered.push_str("\\n"),
+            '\t' => rendered.push_str("\\t"),
+            '\r' => rendered.push_str("\\r"),
+            other => rendered.push(other),
+        }
+    }
+    rendered.push('"');
+    rendered
 }

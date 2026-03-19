@@ -38,6 +38,12 @@ fn run_executes_loops() {
 }
 
 #[test]
+fn run_executes_strings_and_builtins() {
+    let output = run_cli(&["run", "examples/strings.go"]).expect("program should run");
+    assert_eq!(output, "hello, nova! 11\ntrue\n");
+}
+
+#[test]
 fn dump_bytecode_shows_stack_machine_instructions() {
     let output = run_cli(&["dump-bytecode", "examples/arithmetic.go"])
         .expect("bytecode should be generated");
@@ -67,6 +73,23 @@ fn dump_ast_renders_loops() {
 }
 
 #[test]
+fn dump_tokens_show_string_literals() {
+    let output = run_cli(&["dump-tokens", "examples/strings.go"])
+        .expect("tokens should be rendered");
+
+    assert!(output.contains("string(\"hello, \")"));
+    assert!(output.contains("string(\"nova\")"));
+}
+
+#[test]
+fn dump_ast_renders_strings_and_builtins() {
+    let output = run_cli(&["dump-ast", "examples/strings.go"]).expect("ast should be rendered");
+
+    assert!(output.contains("return (\"hello, \" + name)"));
+    assert!(output.contains("println(\"!\", len(greeting))"));
+}
+
+#[test]
 fn dump_bytecode_shows_loop_jumps() {
     let output = run_cli(&["dump-bytecode", "examples/loops.go"])
         .expect("bytecode should be generated");
@@ -75,6 +98,17 @@ fn dump_bytecode_shows_loop_jumps() {
     assert!(output.contains("function 1: climbPast"));
     assert!(output.matches("jump-if-false").count() >= 2);
     assert!(output.contains("jump 2"));
+}
+
+#[test]
+fn dump_bytecode_shows_string_instructions_and_builtins() {
+    let output = run_cli(&["dump-bytecode", "examples/strings.go"])
+        .expect("bytecode should be generated");
+
+    assert!(output.contains("push-string \"hello, \""));
+    assert!(output.contains("concat"));
+    assert!(output.contains("call-builtin print 1"));
+    assert!(output.contains("call-builtin len 1"));
 }
 
 #[test]
@@ -130,6 +164,19 @@ fn check_rejects_non_boolean_for_condition() {
 }
 
 #[test]
+fn check_rejects_invalid_len_argument_type() {
+    let path = write_temp_source(
+        "check-bad-len",
+        "package main\n\nfunc main() {\n\tprintln(len(1))\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("argument 1 in call to builtin `len` requires `string`, found `int`"));
+
+    let _ = fs::remove_file(path);
+}
+
+#[test]
 fn run_rejects_missing_return_on_value_function() {
     let path = write_temp_source(
         "check-missing-return",
@@ -138,6 +185,20 @@ fn run_rejects_missing_return_on_value_function() {
 
     let error = run_cli(&["run", path.to_str().unwrap()]).expect_err("run should fail");
     assert!(error.contains("must return a `int` on every path"));
+
+    let _ = fs::remove_file(path);
+}
+
+#[test]
+fn dump_tokens_rejects_unterminated_string_literal() {
+    let path = write_temp_source(
+        "unterminated-string",
+        "package main\n\nfunc main() {\n\tprintln(\"oops)\n}\n",
+    );
+
+    let error =
+        run_cli(&["dump-tokens", path.to_str().unwrap()]).expect_err("lexing should fail");
+    assert!(error.contains("unterminated string literal"));
 
     let _ = fs::remove_file(path);
 }

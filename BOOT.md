@@ -69,7 +69,8 @@ You must maintain the documentation system and ensure friendly indexing:
 1. Every document should be placed at the correct level: `docs/tech/`, `docs/roadmap/`, `docs/reports/`, `docs/sop/`, `docs/(custom doc type)/`
 2. Important directories must have `Agents.md`, explaining directory responsibilities, when to update, the file format convention, and the file index.
 3. After adding an important document, add the necessary index entries to ensure later agents can locate it easily.
-4. Documents are not summary material; they are interfaces for later iteration.
+4. When adding a new stable document under a `docs/` subdirectory, update that directory's `AGENTS.md` file index in the same round.
+5. Documents are not summary material; they are interfaces for later iteration.
 
 You must maintain the SOP system. Under `docs/sop/`, at least the following content must continue to be accumulated:
 1. SOPs for recurring processes: such as CLI playtesting, version iteration, balance adjustment, pre-release checks, data additions/changes, defect regression, and document synchronization
