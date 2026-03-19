@@ -1,6 +1,8 @@
 use std::fmt;
 
-use crate::frontend::ast::{BinaryOperator, Block, Expression, FunctionDecl, SourceFileAst, Statement};
+use crate::frontend::ast::{
+    BinaryOperator, Block, Expression, FunctionDecl, Parameter, SourceFileAst, Statement,
+};
 use crate::frontend::token::{Token, TokenKind};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,9 +61,38 @@ impl<'a> Parser<'a> {
         self.expect_keyword(TokenKind::Func)?;
         let name = self.expect_identifier()?;
         self.expect(TokenKind::LeftParen)?;
+        let parameters = self.parse_parameter_list()?;
         self.expect(TokenKind::RightParen)?;
+        let return_type = if matches!(self.current_token().kind, TokenKind::Identifier(_)) {
+            Some(self.expect_identifier()?)
+        } else {
+            None
+        };
         let body = self.parse_block()?;
-        Ok(FunctionDecl { name, body })
+        Ok(FunctionDecl {
+            name,
+            parameters,
+            return_type,
+            body,
+        })
+    }
+
+    fn parse_parameter_list(&mut self) -> Result<Vec<Parameter>, ParseError> {
+        let mut parameters = Vec::new();
+        if self.check(&TokenKind::RightParen) {
+            return Ok(parameters);
+        }
+
+        loop {
+            let name = self.expect_identifier()?;
+            let type_name = self.expect_identifier()?;
+            parameters.push(Parameter { name, type_name });
+            if !self.match_kind(&TokenKind::Comma) {
+                break;
+            }
+        }
+
+        Ok(parameters)
     }
 
     fn parse_block(&mut self) -> Result<Block, ParseError> {
@@ -105,12 +136,64 @@ impl<'a> Parser<'a> {
             return Ok(Statement::Assign { name, value });
         }
 
+        if self.match_kind(&TokenKind::If) {
+            let condition = self.parse_expression()?;
+            let then_block = self.parse_block()?;
+            let else_block = if self.match_kind(&TokenKind::Else) {
+                Some(self.parse_block()?)
+            } else {
+                None
+            };
+            return Ok(Statement::If {
+                condition,
+                then_block,
+                else_block,
+            });
+        }
+
         let expression = self.parse_expression()?;
         Ok(Statement::Expr(expression))
     }
 
     fn parse_expression(&mut self) -> Result<Expression, ParseError> {
-        self.parse_additive_expression()
+        self.parse_equality_expression()
+    }
+
+    fn parse_equality_expression(&mut self) -> Result<Expression, ParseError> {
+        let mut expression = self.parse_comparison_expression()?;
+
+        while let Some(operator) =
+            self.match_binary_operator(&[TokenKind::EqualEqual, TokenKind::BangEqual])
+        {
+            let right = self.parse_comparison_expression()?;
+            expression = Expression::Binary {
+                left: Box::new(expression),
+                operator,
+                right: Box::new(right),
+            };
+        }
+
+        Ok(expression)
+    }
+
+    fn parse_comparison_expression(&mut self) -> Result<Expression, ParseError> {
+        let mut expression = self.parse_additive_expression()?;
+
+        while let Some(operator) = self.match_binary_operator(&[
+            TokenKind::Less,
+            TokenKind::LessEqual,
+            TokenKind::Greater,
+            TokenKind::GreaterEqual,
+        ]) {
+            let right = self.parse_additive_expression()?;
+            expression = Expression::Binary {
+                left: Box::new(expression),
+                operator,
+                right: Box::new(right),
+            };
+        }
+
+        Ok(expression)
     }
 
     fn parse_additive_expression(&mut self) -> Result<Expression, ParseError> {
@@ -148,6 +231,10 @@ impl<'a> Parser<'a> {
             TokenKind::Integer(value) => {
                 self.advance();
                 Ok(Expression::Integer(value))
+            }
+            TokenKind::Bool(value) => {
+                self.advance();
+                Ok(Expression::Bool(value))
             }
             TokenKind::Identifier(name) => {
                 self.advance();
@@ -188,6 +275,12 @@ impl<'a> Parser<'a> {
                     TokenKind::Minus => BinaryOperator::Subtract,
                     TokenKind::Star => BinaryOperator::Multiply,
                     TokenKind::Slash => BinaryOperator::Divide,
+                    TokenKind::EqualEqual => BinaryOperator::Equal,
+                    TokenKind::BangEqual => BinaryOperator::NotEqual,
+                    TokenKind::Less => BinaryOperator::Less,
+                    TokenKind::LessEqual => BinaryOperator::LessEqual,
+                    TokenKind::Greater => BinaryOperator::Greater,
+                    TokenKind::GreaterEqual => BinaryOperator::GreaterEqual,
                     _ => unreachable!("only operator tokens are provided"),
                 });
             }
@@ -240,6 +333,7 @@ impl<'a> Parser<'a> {
         match (kind, &self.current_token().kind) {
             (TokenKind::Identifier(_), TokenKind::Identifier(_)) => true,
             (TokenKind::Integer(_), TokenKind::Integer(_)) => true,
+            (TokenKind::Bool(_), TokenKind::Bool(_)) => true,
             _ => self.current_token().kind == *kind,
         }
     }

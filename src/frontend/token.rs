@@ -17,9 +17,12 @@ pub enum TokenKind {
     Package,
     Func,
     Var,
+    If,
+    Else,
     Return,
     Identifier(String),
     Integer(i64),
+    Bool(bool),
     LeftParen,
     RightParen,
     LeftBrace,
@@ -27,10 +30,16 @@ pub enum TokenKind {
     Comma,
     Semicolon,
     Assign,
+    EqualEqual,
+    BangEqual,
     Plus,
     Minus,
     Star,
     Slash,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
     Eof,
 }
 
@@ -40,6 +49,7 @@ impl TokenKind {
             self,
             TokenKind::Identifier(_)
                 | TokenKind::Integer(_)
+                | TokenKind::Bool(_)
                 | TokenKind::RightParen
                 | TokenKind::RightBrace
                 | TokenKind::Return
@@ -51,9 +61,12 @@ impl TokenKind {
             TokenKind::Package => "package".to_string(),
             TokenKind::Func => "func".to_string(),
             TokenKind::Var => "var".to_string(),
+            TokenKind::If => "if".to_string(),
+            TokenKind::Else => "else".to_string(),
             TokenKind::Return => "return".to_string(),
             TokenKind::Identifier(value) => format!("identifier({value})"),
             TokenKind::Integer(value) => format!("integer({value})"),
+            TokenKind::Bool(value) => format!("bool({value})"),
             TokenKind::LeftParen => "(".to_string(),
             TokenKind::RightParen => ")".to_string(),
             TokenKind::LeftBrace => "{".to_string(),
@@ -61,10 +74,16 @@ impl TokenKind {
             TokenKind::Comma => ",".to_string(),
             TokenKind::Semicolon => ";".to_string(),
             TokenKind::Assign => "=".to_string(),
+            TokenKind::EqualEqual => "==".to_string(),
+            TokenKind::BangEqual => "!=".to_string(),
             TokenKind::Plus => "+".to_string(),
             TokenKind::Minus => "-".to_string(),
             TokenKind::Star => "*".to_string(),
             TokenKind::Slash => "/".to_string(),
+            TokenKind::Less => "<".to_string(),
+            TokenKind::LessEqual => "<=".to_string(),
+            TokenKind::Greater => ">".to_string(),
+            TokenKind::GreaterEqual => ">=".to_string(),
             TokenKind::Eof => "<eof>".to_string(),
         }
     }

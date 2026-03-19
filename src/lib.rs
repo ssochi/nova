@@ -4,6 +4,7 @@ pub mod config;
 pub mod driver;
 pub mod frontend;
 pub mod runtime;
+pub mod semantic;
 pub mod source;
 
 use std::io::{self, Write};

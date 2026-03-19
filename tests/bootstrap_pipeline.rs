@@ -25,6 +25,13 @@ fn run_executes_entrypoint_program() {
 }
 
 #[test]
+fn run_executes_multi_function_branches() {
+    let output = run_cli(&["run", "examples/functions_and_branches.go"])
+        .expect("program should run");
+    assert_eq!(output, "false 11\n");
+}
+
+#[test]
 fn dump_bytecode_shows_stack_machine_instructions() {
     let output = run_cli(&["dump-bytecode", "examples/arithmetic.go"])
         .expect("bytecode should be generated");
@@ -32,6 +39,17 @@ fn dump_bytecode_shows_stack_machine_instructions() {
     assert!(output.contains("call-builtin println 1"));
     assert!(output.contains("multiply"));
     assert!(output.contains("store-local 2"));
+}
+
+#[test]
+fn dump_bytecode_shows_function_calls_and_branch_jumps() {
+    let output = run_cli(&["dump-bytecode", "examples/functions_and_branches.go"])
+        .expect("bytecode should be generated");
+
+    assert!(output.contains("call-function 0 2"));
+    assert!(output.contains("jump-if-false"));
+    assert!(output.contains("greater"));
+    assert_eq!(output.matches("jump-if-false").count(), 2);
 }
 
 #[test]
@@ -56,6 +74,32 @@ fn check_accepts_a_valid_source_file() {
 
     let output = run_cli(&["check", path.to_str().unwrap()]).expect("check should pass");
     assert!(output.contains("ok:"));
+
+    let _ = fs::remove_file(path);
+}
+
+#[test]
+fn check_rejects_non_boolean_if_condition() {
+    let path = write_temp_source(
+        "check-bad-if",
+        "package main\n\nfunc main() {\n\tif 1 {\n\t\tprintln(1)\n\t}\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("if condition requires `bool`, found `int`"));
+
+    let _ = fs::remove_file(path);
+}
+
+#[test]
+fn run_rejects_missing_return_on_value_function() {
+    let path = write_temp_source(
+        "check-missing-return",
+        "package main\n\nfunc helper() int {\n\tif true {\n\t\treturn 1\n\t}\n}\n\nfunc main() {\n\tprintln(helper())\n}\n",
+    );
+
+    let error = run_cli(&["run", path.to_str().unwrap()]).expect_err("run should fail");
+    assert!(error.contains("must return a `int` on every path"));
 
     let _ = fs::remove_file(path);
 }

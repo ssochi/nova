@@ -17,17 +17,48 @@ impl SourceFileAst {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FunctionDecl {
     pub name: String,
+    pub parameters: Vec<Parameter>,
+    pub return_type: Option<String>,
     pub body: Block,
 }
 
 impl FunctionDecl {
     fn render(&self, indent: usize) -> String {
-        let mut lines = vec![format!("{}func {}() {{", indent_str(indent), self.name)];
+        let parameters = self
+            .parameters
+            .iter()
+            .map(Parameter::render)
+            .collect::<Vec<_>>()
+            .join(", ");
+        let return_type = self
+            .return_type
+            .as_ref()
+            .map(|value| format!(" {value}"))
+            .unwrap_or_default();
+        let mut lines = vec![format!(
+            "{}func {}({}){} {{",
+            indent_str(indent),
+            self.name,
+            parameters,
+            return_type
+        )];
         for statement in &self.body.statements {
             lines.push(statement.render(indent + 1));
         }
         lines.push(format!("{}}}", indent_str(indent)));
         lines.join("\n")
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Parameter {
+    pub name: String,
+    pub type_name: String,
+}
+
+impl Parameter {
+    fn render(&self) -> String {
+        format!("{} {}", self.name, self.type_name)
     }
 }
 
@@ -41,6 +72,11 @@ pub enum Statement {
     VarDecl { name: String, value: Expression },
     Assign { name: String, value: Expression },
     Expr(Expression),
+    If {
+        condition: Expression,
+        then_block: Block,
+        else_block: Option<Block>,
+    },
     Return(Option<Expression>),
 }
 
@@ -56,6 +92,29 @@ impl Statement {
             Statement::Expr(expression) => {
                 format!("{}{}", indent_str(indent), expression.render())
             }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+            } => {
+                let mut lines = vec![format!(
+                    "{}if {} {{",
+                    indent_str(indent),
+                    condition.render()
+                )];
+                for statement in &then_block.statements {
+                    lines.push(statement.render(indent + 1));
+                }
+                lines.push(format!("{}}}", indent_str(indent)));
+                if let Some(else_block) = else_block {
+                    lines.push(format!("{}else {{", indent_str(indent)));
+                    for statement in &else_block.statements {
+                        lines.push(statement.render(indent + 1));
+                    }
+                    lines.push(format!("{}}}", indent_str(indent)));
+                }
+                lines.join("\n")
+            }
             Statement::Return(Some(expression)) => {
                 format!("{}return {}", indent_str(indent), expression.render())
             }
@@ -67,6 +126,7 @@ impl Statement {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Expression {
     Integer(i64),
+    Bool(bool),
     Identifier(String),
     Binary {
         left: Box<Expression>,
@@ -83,6 +143,7 @@ impl Expression {
     pub fn render(&self) -> String {
         match self {
             Expression::Integer(value) => value.to_string(),
+            Expression::Bool(value) => value.to_string(),
             Expression::Identifier(name) => name.clone(),
             Expression::Binary {
                 left,
@@ -108,6 +169,12 @@ pub enum BinaryOperator {
     Subtract,
     Multiply,
     Divide,
+    Equal,
+    NotEqual,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
 }
 
 impl BinaryOperator {
@@ -117,6 +184,12 @@ impl BinaryOperator {
             BinaryOperator::Subtract => "-",
             BinaryOperator::Multiply => "*",
             BinaryOperator::Divide => "/",
+            BinaryOperator::Equal => "==",
+            BinaryOperator::NotEqual => "!=",
+            BinaryOperator::Less => "<",
+            BinaryOperator::LessEqual => "<=",
+            BinaryOperator::Greater => ">",
+            BinaryOperator::GreaterEqual => ">=",
         }
     }
 }

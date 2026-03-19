@@ -33,3 +33,4 @@ This directory stores feature and subsystem designs. It describes intent, scope 
 
 - `AGENTS.md`: this directory convention
 - `bootstrap-vm-execution.md`: design baseline for the bootstrap VM execution loop
+- `semantic-functions-branches.md`: design baseline for semantic analysis, user-defined calls, and branch control flow

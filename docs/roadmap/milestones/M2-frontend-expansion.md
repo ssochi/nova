@@ -25,14 +25,15 @@
 
 ## Related Plans
 
-- No active plan yet
+- `2026-03-19-23-37-05-semantic-functions-branches`
 
 ## Current Risks
 
 - Scope can expand quickly if type-system work is mixed into the first control-flow push.
 - Parser growth without semantic layering would increase coupling.
+- The remaining control-flow gap is now concentrated in loops; delaying it too long would leave return-path analysis incomplete.
 
 ## Next-Round Recommendations
 
-- Open a focused plan for semantic analysis plus user-defined function support first.
-- Keep examples and blackbox playtests growing alongside capability.
+- Open the next `M2` plan around looping control flow and semantic path analysis.
+- Tighten diagnostics and bytecode inspection ergonomics once `for` support exists.

@@ -35,3 +35,4 @@ This directory stores experience validation reports close to the real user path.
 
 - `AGENTS.md`: this directory convention
 - `2026-03-19-bootstrap-cli-playtest.md`: records the bootstrap CLI happy path and error path experience
+- `2026-03-19-semantic-functions-branches-playtest.md`: records the multi-function and semantic-error CLI walkthrough

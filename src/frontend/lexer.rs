@@ -85,10 +85,24 @@ impl<'a> Lexer<'a> {
                 '}' => self.push_simple(TokenKind::RightBrace, &mut tokens),
                 ',' => self.push_simple(TokenKind::Comma, &mut tokens),
                 ';' => self.push_simple(TokenKind::Semicolon, &mut tokens),
+                '=' if self.peek_next() == Some('=') => {
+                    self.push_double(TokenKind::EqualEqual, &mut tokens)
+                }
                 '=' => self.push_simple(TokenKind::Assign, &mut tokens),
+                '!' if self.peek_next() == Some('=') => {
+                    self.push_double(TokenKind::BangEqual, &mut tokens)
+                }
                 '+' => self.push_simple(TokenKind::Plus, &mut tokens),
                 '-' => self.push_simple(TokenKind::Minus, &mut tokens),
                 '*' => self.push_simple(TokenKind::Star, &mut tokens),
+                '<' if self.peek_next() == Some('=') => {
+                    self.push_double(TokenKind::LessEqual, &mut tokens)
+                }
+                '<' => self.push_simple(TokenKind::Less, &mut tokens),
+                '>' if self.peek_next() == Some('=') => {
+                    self.push_double(TokenKind::GreaterEqual, &mut tokens)
+                }
+                '>' => self.push_simple(TokenKind::Greater, &mut tokens),
                 '/' => self.push_simple(TokenKind::Slash, &mut tokens),
                 other => {
                     return Err(LexError::new(format!(
@@ -105,6 +119,14 @@ impl<'a> Lexer<'a> {
 
     fn push_simple(&mut self, kind: TokenKind, tokens: &mut Vec<Token>) {
         let token = Token::new(kind, Span::new(self.line, self.column));
+        self.advance();
+        self.previous_can_end_statement = token.kind.can_end_statement();
+        tokens.push(token);
+    }
+
+    fn push_double(&mut self, kind: TokenKind, tokens: &mut Vec<Token>) {
+        let token = Token::new(kind, Span::new(self.line, self.column));
+        self.advance();
         self.advance();
         self.previous_can_end_statement = token.kind.can_end_statement();
         tokens.push(token);
@@ -143,7 +165,11 @@ impl<'a> Lexer<'a> {
             "package" => TokenKind::Package,
             "func" => TokenKind::Func,
             "var" => TokenKind::Var,
+            "if" => TokenKind::If,
+            "else" => TokenKind::Else,
             "return" => TokenKind::Return,
+            "true" => TokenKind::Bool(true),
+            "false" => TokenKind::Bool(false),
             _ => TokenKind::Identifier(literal),
         };
 

@@ -6,6 +6,7 @@ use crate::cli::{self, Command};
 use crate::frontend::lexer::lex;
 use crate::frontend::parser::parse_source_file;
 use crate::runtime::vm::VirtualMachine;
+use crate::semantic::analyzer::{analyze_package, analyze_program};
 use crate::source::SourceFile;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -14,6 +15,7 @@ pub enum DriverError {
     Io(String),
     Lex(String),
     Parse(String),
+    Semantic(String),
     Compile(String),
     Runtime(String),
 }
@@ -25,6 +27,7 @@ impl fmt::Display for DriverError {
             | DriverError::Io(message)
             | DriverError::Lex(message)
             | DriverError::Parse(message)
+            | DriverError::Semantic(message)
             | DriverError::Compile(message)
             | DriverError::Runtime(message) => f.write_str(message),
         }
@@ -45,8 +48,9 @@ pub fn execute(command: Command) -> Result<String, DriverError> {
     match command {
         Command::Check { path } => {
             let source = load_source(&path)?;
-            let tokens = lex(&source).map_err(|error| DriverError::Lex(error.to_string()))?;
-            parse_source_file(&tokens).map_err(|error| DriverError::Parse(error.to_string()))?;
+            let ast = parse(&source)?;
+            analyze_package(&ast)
+                .map_err(|error| DriverError::Semantic(error.to_string()))?;
             Ok(format!("ok: {}\n", source.path.display()))
         }
         Command::DumpTokens { path } => {
@@ -67,15 +71,19 @@ pub fn execute(command: Command) -> Result<String, DriverError> {
         Command::DumpBytecode { path, config } => {
             let source = load_source(&path)?;
             let ast = parse(&source)?;
+            let checked =
+                analyze_program(&ast, &config).map_err(|error| DriverError::Semantic(error.to_string()))?;
             let program =
-                compile_program(&ast, &config).map_err(|error| DriverError::Compile(error.to_string()))?;
+                compile_program(&checked).map_err(|error| DriverError::Compile(error.to_string()))?;
             Ok(program.render())
         }
         Command::Run { path, config } => {
             let source = load_source(&path)?;
             let ast = parse(&source)?;
+            let checked =
+                analyze_program(&ast, &config).map_err(|error| DriverError::Semantic(error.to_string()))?;
             let program =
-                compile_program(&ast, &config).map_err(|error| DriverError::Compile(error.to_string()))?;
+                compile_program(&checked).map_err(|error| DriverError::Compile(error.to_string()))?;
             run_program(&program)
         }
     }
@@ -93,7 +101,7 @@ fn parse(source: &SourceFile) -> Result<crate::frontend::ast::SourceFileAst, Dri
 }
 
 fn run_program(program: &Program) -> Result<String, DriverError> {
-    let mut vm = VirtualMachine::new(program.local_names.len());
+    let mut vm = VirtualMachine::new();
     vm.execute(program)
         .map(|result| result.render_output())
         .map_err(|error| DriverError::Runtime(error.to_string()))

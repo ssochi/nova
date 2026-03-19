@@ -1,0 +1,6 @@
+- [done] Create and register the new M2 active plan
+- [done] Extend the frontend syntax for signatures, boolean expressions, and `if` statements
+- [done] Add a semantic analysis stage with symbol and type validation
+- [done] Expand bytecode lowering and the VM for function calls and conditional jumps
+- [done] Add examples, tests, reports, and synchronized design or tech documentation
+- [done] Run validation, refresh context, and finalize repository state for handoff

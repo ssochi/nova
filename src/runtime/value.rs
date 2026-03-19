@@ -3,6 +3,7 @@ use std::fmt;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Value {
     Integer(i64),
+    Boolean(bool),
 }
 
 impl Default for Value {
@@ -15,6 +16,7 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Value::Integer(value) => write!(f, "{value}"),
+            Value::Boolean(value) => write!(f, "{value}"),
         }
     }
 }
