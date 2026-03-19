@@ -4,11 +4,23 @@ use crate::config::ExecutionConfig;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Command {
-    Check { path: PathBuf },
-    Run { path: PathBuf, config: ExecutionConfig },
-    DumpTokens { path: PathBuf },
-    DumpAst { path: PathBuf },
-    DumpBytecode { path: PathBuf, config: ExecutionConfig },
+    Check {
+        path: PathBuf,
+    },
+    Run {
+        path: PathBuf,
+        config: ExecutionConfig,
+    },
+    DumpTokens {
+        path: PathBuf,
+    },
+    DumpAst {
+        path: PathBuf,
+    },
+    DumpBytecode {
+        path: PathBuf,
+        config: ExecutionConfig,
+    },
 }
 
 pub fn parse<I>(args: I) -> Result<Command, String>

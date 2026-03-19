@@ -12,3 +12,4 @@
 - `semantic-analysis.md`: checked-program boundary and semantic analysis responsibilities
 - `vm-execution-pipeline.md`: bootstrap execution pipeline reference
 - `runtime-values-and-builtins.md`: current runtime value categories and builtin contract model
+- `imports-and-package-contracts.md`: narrow import support and package-function contract model

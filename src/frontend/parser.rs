@@ -1,7 +1,8 @@
 use std::fmt;
 
 use crate::frontend::ast::{
-    BinaryOperator, Block, Expression, FunctionDecl, Parameter, SourceFileAst, Statement,
+    BinaryOperator, Block, Expression, FunctionDecl, ImportDecl, Parameter, SourceFileAst,
+    Statement,
 };
 use crate::frontend::token::{Token, TokenKind};
 
@@ -45,6 +46,12 @@ impl<'a> Parser<'a> {
         let package_name = self.expect_identifier()?;
         self.skip_semicolons();
 
+        let mut imports = Vec::new();
+        while self.match_kind(&TokenKind::Import) {
+            imports.push(self.parse_import_decl()?);
+            self.skip_semicolons();
+        }
+
         let mut functions = Vec::new();
         while !self.is_at_end() {
             functions.push(self.parse_function_decl()?);
@@ -53,8 +60,14 @@ impl<'a> Parser<'a> {
 
         Ok(SourceFileAst {
             package_name,
+            imports,
             functions,
         })
+    }
+
+    fn parse_import_decl(&mut self) -> Result<ImportDecl, ParseError> {
+        let path = self.expect_string()?;
+        Ok(ImportDecl { path })
     }
 
     fn parse_function_decl(&mut self) -> Result<FunctionDecl, ParseError> {
@@ -205,7 +218,8 @@ impl<'a> Parser<'a> {
     fn parse_additive_expression(&mut self) -> Result<Expression, ParseError> {
         let mut expression = self.parse_multiplicative_expression()?;
 
-        while let Some(operator) = self.match_binary_operator(&[TokenKind::Plus, TokenKind::Minus]) {
+        while let Some(operator) = self.match_binary_operator(&[TokenKind::Plus, TokenKind::Minus])
+        {
             let right = self.parse_multiplicative_expression()?;
             expression = Expression::Binary {
                 left: Box::new(expression),
@@ -218,10 +232,11 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_multiplicative_expression(&mut self) -> Result<Expression, ParseError> {
-        let mut expression = self.parse_primary_expression()?;
+        let mut expression = self.parse_postfix_expression()?;
 
-        while let Some(operator) = self.match_binary_operator(&[TokenKind::Star, TokenKind::Slash]) {
-            let right = self.parse_primary_expression()?;
+        while let Some(operator) = self.match_binary_operator(&[TokenKind::Star, TokenKind::Slash])
+        {
+            let right = self.parse_postfix_expression()?;
             expression = Expression::Binary {
                 left: Box::new(expression),
                 operator,
@@ -230,6 +245,41 @@ impl<'a> Parser<'a> {
         }
 
         Ok(expression)
+    }
+
+    fn parse_postfix_expression(&mut self) -> Result<Expression, ParseError> {
+        let mut expression = self.parse_primary_expression()?;
+
+        loop {
+            if self.match_kind(&TokenKind::Dot) {
+                let member = self.expect_identifier()?;
+                expression = Expression::Selector {
+                    target: Box::new(expression),
+                    member,
+                };
+                continue;
+            }
+
+            if self.match_kind(&TokenKind::LeftParen) {
+                let mut arguments = Vec::new();
+                if !self.check(&TokenKind::RightParen) {
+                    loop {
+                        arguments.push(self.parse_expression()?);
+                        if !self.match_kind(&TokenKind::Comma) {
+                            break;
+                        }
+                    }
+                }
+                self.expect(TokenKind::RightParen)?;
+                expression = Expression::Call {
+                    callee: Box::new(expression),
+                    arguments,
+                };
+                continue;
+            }
+
+            return Ok(expression);
+        }
     }
 
     fn parse_primary_expression(&mut self) -> Result<Expression, ParseError> {
@@ -248,24 +298,7 @@ impl<'a> Parser<'a> {
             }
             TokenKind::Identifier(name) => {
                 self.advance();
-                if self.match_kind(&TokenKind::LeftParen) {
-                    let mut arguments = Vec::new();
-                    if !self.check(&TokenKind::RightParen) {
-                        loop {
-                            arguments.push(self.parse_expression()?);
-                            if !self.match_kind(&TokenKind::Comma) {
-                                break;
-                            }
-                        }
-                    }
-                    self.expect(TokenKind::RightParen)?;
-                    Ok(Expression::Call {
-                        callee: name,
-                        arguments,
-                    })
-                } else {
-                    Ok(Expression::Identifier(name))
-                }
+                Ok(Expression::Identifier(name))
             }
             TokenKind::LeftParen => {
                 self.advance();
@@ -301,7 +334,10 @@ impl<'a> Parser<'a> {
 
     fn check_identifier_assignment(&self) -> bool {
         matches!(
-            (&self.current_token().kind, self.peek().map(|token| &token.kind)),
+            (
+                &self.current_token().kind,
+                self.peek().map(|token| &token.kind)
+            ),
             (TokenKind::Identifier(_), Some(TokenKind::Assign))
         )
     }
@@ -327,6 +363,17 @@ impl<'a> Parser<'a> {
                 Ok(name)
             }
             _ => Err(self.error_at_current("expected identifier")),
+        }
+    }
+
+    fn expect_string(&mut self) -> Result<String, ParseError> {
+        match &self.current_token().kind {
+            TokenKind::String(value) => {
+                let value = value.clone();
+                self.advance();
+                Ok(value)
+            }
+            _ => Err(self.error_at_current("expected string literal")),
         }
     }
 

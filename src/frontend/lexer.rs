@@ -89,6 +89,7 @@ impl<'a> Lexer<'a> {
                 '{' => self.push_simple(TokenKind::LeftBrace, &mut tokens),
                 '}' => self.push_simple(TokenKind::RightBrace, &mut tokens),
                 ',' => self.push_simple(TokenKind::Comma, &mut tokens),
+                '.' => self.push_simple(TokenKind::Dot, &mut tokens),
                 ';' => self.push_simple(TokenKind::Semicolon, &mut tokens),
                 '=' if self.peek_next() == Some('=') => {
                     self.push_double(TokenKind::EqualEqual, &mut tokens)
@@ -118,7 +119,10 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        tokens.push(Token::new(TokenKind::Eof, Span::new(self.line, self.column)));
+        tokens.push(Token::new(
+            TokenKind::Eof,
+            Span::new(self.line, self.column),
+        ));
         Ok(tokens)
     }
 
@@ -222,6 +226,7 @@ impl<'a> Lexer<'a> {
 
         let kind = match literal.as_str() {
             "package" => TokenKind::Package,
+            "import" => TokenKind::Import,
             "func" => TokenKind::Func,
             "var" => TokenKind::Var,
             "if" => TokenKind::If,

@@ -1,4 +1,5 @@
 use crate::builtin::BuiltinFunction;
+use crate::package::PackageFunction;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Program {
@@ -31,7 +32,11 @@ impl Program {
                 function_index,
                 function.name,
                 function.parameter_count,
-                if function.returns_value { "value" } else { "void" },
+                if function.returns_value {
+                    "value"
+                } else {
+                    "void"
+                },
                 function.local_names.join(", ")
             ));
             for (instruction_index, instruction) in function.instructions.iter().enumerate() {
@@ -70,6 +75,7 @@ pub enum Instruction {
     JumpIfFalse(usize),
     Pop,
     CallBuiltin(BuiltinFunction, usize),
+    CallPackage(PackageFunction, usize),
     CallFunction(usize, usize),
     Return,
 }
@@ -79,7 +85,9 @@ impl Instruction {
         match self {
             Instruction::PushInt(value) => format!("push-int {value}"),
             Instruction::PushBool(value) => format!("push-bool {value}"),
-            Instruction::PushString(value) => format!("push-string {}", render_string_literal(value)),
+            Instruction::PushString(value) => {
+                format!("push-string {}", render_string_literal(value))
+            }
             Instruction::LoadLocal(index) => format!("load-local {index}"),
             Instruction::StoreLocal(index) => format!("store-local {index}"),
             Instruction::Add => "add".to_string(),
@@ -98,6 +106,9 @@ impl Instruction {
             Instruction::Pop => "pop".to_string(),
             Instruction::CallBuiltin(builtin, arity) => {
                 format!("call-builtin {} {arity}", builtin.render())
+            }
+            Instruction::CallPackage(function, arity) => {
+                format!("call-package {} {arity}", function.render())
             }
             Instruction::CallFunction(index, arity) => format!("call-function {index} {arity}"),
             Instruction::Return => "return".to_string(),

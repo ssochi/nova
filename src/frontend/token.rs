@@ -15,6 +15,7 @@ impl Span {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TokenKind {
     Package,
+    Import,
     Func,
     Var,
     If,
@@ -30,6 +31,7 @@ pub enum TokenKind {
     LeftBrace,
     RightBrace,
     Comma,
+    Dot,
     Semicolon,
     Assign,
     EqualEqual,
@@ -62,6 +64,7 @@ impl TokenKind {
     pub fn render(&self) -> String {
         match self {
             TokenKind::Package => "package".to_string(),
+            TokenKind::Import => "import".to_string(),
             TokenKind::Func => "func".to_string(),
             TokenKind::Var => "var".to_string(),
             TokenKind::If => "if".to_string(),
@@ -77,6 +80,7 @@ impl TokenKind {
             TokenKind::LeftBrace => "{".to_string(),
             TokenKind::RightBrace => "}".to_string(),
             TokenKind::Comma => ",".to_string(),
+            TokenKind::Dot => ".".to_string(),
             TokenKind::Semicolon => ";".to_string(),
             TokenKind::Assign => "=".to_string(),
             TokenKind::EqualEqual => "==".to_string(),

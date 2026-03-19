@@ -26,8 +26,8 @@ fn run_executes_entrypoint_program() {
 
 #[test]
 fn run_executes_multi_function_branches() {
-    let output = run_cli(&["run", "examples/functions_and_branches.go"])
-        .expect("program should run");
+    let output =
+        run_cli(&["run", "examples/functions_and_branches.go"]).expect("program should run");
     assert_eq!(output, "false 11\n");
 }
 
@@ -41,6 +41,12 @@ fn run_executes_loops() {
 fn run_executes_strings_and_builtins() {
     let output = run_cli(&["run", "examples/strings.go"]).expect("program should run");
     assert_eq!(output, "hello, nova! 11\ntrue\n");
+}
+
+#[test]
+fn run_executes_imported_fmt_package_calls() {
+    let output = run_cli(&["run", "examples/imports_fmt.go"]).expect("program should run");
+    assert_eq!(output, "hello, nova\nbytes=11");
 }
 
 #[test]
@@ -74,11 +80,22 @@ fn dump_ast_renders_loops() {
 
 #[test]
 fn dump_tokens_show_string_literals() {
-    let output = run_cli(&["dump-tokens", "examples/strings.go"])
-        .expect("tokens should be rendered");
+    let output =
+        run_cli(&["dump-tokens", "examples/strings.go"]).expect("tokens should be rendered");
 
     assert!(output.contains("string(\"hello, \")"));
     assert!(output.contains("string(\"nova\")"));
+}
+
+#[test]
+fn dump_tokens_show_imports_and_selector_calls() {
+    let output =
+        run_cli(&["dump-tokens", "examples/imports_fmt.go"]).expect("tokens should be rendered");
+
+    assert!(output.contains("import"));
+    assert!(output.contains("string(\"fmt\")"));
+    assert!(output.contains("identifier(fmt)"));
+    assert!(output.contains("."));
 }
 
 #[test]
@@ -90,9 +107,18 @@ fn dump_ast_renders_strings_and_builtins() {
 }
 
 #[test]
+fn dump_ast_renders_imports_and_package_calls() {
+    let output = run_cli(&["dump-ast", "examples/imports_fmt.go"]).expect("ast should be rendered");
+
+    assert!(output.contains("import \"fmt\""));
+    assert!(output.contains("return fmt.Sprint(\"hello, \", name)"));
+    assert!(output.contains("fmt.Print(fmt.Sprint(\"bytes=\", len(message)))"));
+}
+
+#[test]
 fn dump_bytecode_shows_loop_jumps() {
-    let output = run_cli(&["dump-bytecode", "examples/loops.go"])
-        .expect("bytecode should be generated");
+    let output =
+        run_cli(&["dump-bytecode", "examples/loops.go"]).expect("bytecode should be generated");
 
     assert!(output.contains("function 0: sumDown"));
     assert!(output.contains("function 1: climbPast"));
@@ -102,13 +128,23 @@ fn dump_bytecode_shows_loop_jumps() {
 
 #[test]
 fn dump_bytecode_shows_string_instructions_and_builtins() {
-    let output = run_cli(&["dump-bytecode", "examples/strings.go"])
-        .expect("bytecode should be generated");
+    let output =
+        run_cli(&["dump-bytecode", "examples/strings.go"]).expect("bytecode should be generated");
 
     assert!(output.contains("push-string \"hello, \""));
     assert!(output.contains("concat"));
     assert!(output.contains("call-builtin print 1"));
     assert!(output.contains("call-builtin len 1"));
+}
+
+#[test]
+fn dump_bytecode_shows_package_calls() {
+    let output = run_cli(&["dump-bytecode", "examples/imports_fmt.go"])
+        .expect("bytecode should be generated");
+
+    assert!(output.contains("call-package fmt.Sprint 2"));
+    assert!(output.contains("call-package fmt.Println 1"));
+    assert!(output.contains("call-package fmt.Print 1"));
 }
 
 #[test]
@@ -177,6 +213,32 @@ fn check_rejects_invalid_len_argument_type() {
 }
 
 #[test]
+fn check_rejects_package_call_without_import() {
+    let path = write_temp_source(
+        "check-missing-import",
+        "package main\n\nfunc main() {\n\tfmt.Println(1)\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("package `fmt` is not imported"));
+
+    let _ = fs::remove_file(path);
+}
+
+#[test]
+fn check_rejects_unsupported_import_member() {
+    let path = write_temp_source(
+        "check-bad-import-member",
+        "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Printf(1)\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("does not export supported member `Printf`"));
+
+    let _ = fs::remove_file(path);
+}
+
+#[test]
 fn run_rejects_missing_return_on_value_function() {
     let path = write_temp_source(
         "check-missing-return",
@@ -196,8 +258,7 @@ fn dump_tokens_rejects_unterminated_string_literal() {
         "package main\n\nfunc main() {\n\tprintln(\"oops)\n}\n",
     );
 
-    let error =
-        run_cli(&["dump-tokens", path.to_str().unwrap()]).expect_err("lexing should fail");
+    let error = run_cli(&["dump-tokens", path.to_str().unwrap()]).expect_err("lexing should fail");
     assert!(error.contains("unterminated string literal"));
 
     let _ = fs::remove_file(path);

@@ -49,8 +49,7 @@ pub fn execute(command: Command) -> Result<String, DriverError> {
         Command::Check { path } => {
             let source = load_source(&path)?;
             let ast = parse(&source)?;
-            analyze_package(&ast)
-                .map_err(|error| DriverError::Semantic(error.to_string()))?;
+            analyze_package(&ast).map_err(|error| DriverError::Semantic(error.to_string()))?;
             Ok(format!("ok: {}\n", source.path.display()))
         }
         Command::DumpTokens { path } => {
@@ -71,28 +70,27 @@ pub fn execute(command: Command) -> Result<String, DriverError> {
         Command::DumpBytecode { path, config } => {
             let source = load_source(&path)?;
             let ast = parse(&source)?;
-            let checked =
-                analyze_program(&ast, &config).map_err(|error| DriverError::Semantic(error.to_string()))?;
-            let program =
-                compile_program(&checked).map_err(|error| DriverError::Compile(error.to_string()))?;
+            let checked = analyze_program(&ast, &config)
+                .map_err(|error| DriverError::Semantic(error.to_string()))?;
+            let program = compile_program(&checked)
+                .map_err(|error| DriverError::Compile(error.to_string()))?;
             Ok(program.render())
         }
         Command::Run { path, config } => {
             let source = load_source(&path)?;
             let ast = parse(&source)?;
-            let checked =
-                analyze_program(&ast, &config).map_err(|error| DriverError::Semantic(error.to_string()))?;
-            let program =
-                compile_program(&checked).map_err(|error| DriverError::Compile(error.to_string()))?;
+            let checked = analyze_program(&ast, &config)
+                .map_err(|error| DriverError::Semantic(error.to_string()))?;
+            let program = compile_program(&checked)
+                .map_err(|error| DriverError::Compile(error.to_string()))?;
             run_program(&program)
         }
     }
 }
 
 fn load_source(path: &std::path::Path) -> Result<SourceFile, DriverError> {
-    SourceFile::load(path).map_err(|error| {
-        DriverError::Io(format!("failed to read {}: {error}", path.display()))
-    })
+    SourceFile::load(path)
+        .map_err(|error| DriverError::Io(format!("failed to read {}: {error}", path.display())))
 }
 
 fn parse(source: &SourceFile) -> Result<crate::frontend::ast::SourceFileAst, DriverError> {

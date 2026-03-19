@@ -2,6 +2,7 @@ use std::fmt;
 
 use crate::builtin::BuiltinFunction;
 use crate::bytecode::instruction::{Instruction, Program};
+use crate::package::PackageFunction;
 use crate::runtime::value::Value;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -69,10 +70,9 @@ impl VirtualMachine {
         while let Some(frame_index) = self.frames.len().checked_sub(1) {
             let function_index = self.frames[frame_index].function_index;
             let pc = self.frames[frame_index].pc;
-            let function = program
-                .functions
-                .get(function_index)
-                .ok_or_else(|| RuntimeError::new(format!("invalid function index {function_index}")))?;
+            let function = program.functions.get(function_index).ok_or_else(|| {
+                RuntimeError::new(format!("invalid function index {function_index}"))
+            })?;
             let instruction = function.instructions.get(pc).cloned().ok_or_else(|| {
                 RuntimeError::new(format!(
                     "instruction pointer {pc} is out of bounds in function `{}`",
@@ -86,8 +86,7 @@ impl VirtualMachine {
                 Instruction::PushBool(value) => self.stack.push(Value::Boolean(value)),
                 Instruction::PushString(value) => self.stack.push(Value::String(value)),
                 Instruction::LoadLocal(index) => {
-                    let value = self
-                        .frames[frame_index]
+                    let value = self.frames[frame_index]
                         .locals
                         .get(index)
                         .cloned()
@@ -96,8 +95,7 @@ impl VirtualMachine {
                 }
                 Instruction::StoreLocal(index) => {
                     let value = self.pop_value()?;
-                    let slot = self
-                        .frames[frame_index]
+                    let slot = self.frames[frame_index]
                         .locals
                         .get_mut(index)
                         .ok_or_else(|| RuntimeError::new(format!("invalid local slot {index}")))?;
@@ -117,7 +115,9 @@ impl VirtualMachine {
                 Instruction::Equal => self.binary_compare(|left, right| left == right)?,
                 Instruction::NotEqual => self.binary_compare(|left, right| left != right)?,
                 Instruction::Less => self.binary_integer_compare(|left, right| left < right)?,
-                Instruction::LessEqual => self.binary_integer_compare(|left, right| left <= right)?,
+                Instruction::LessEqual => {
+                    self.binary_integer_compare(|left, right| left <= right)?
+                }
                 Instruction::Greater => self.binary_integer_compare(|left, right| left > right)?,
                 Instruction::GreaterEqual => {
                     self.binary_integer_compare(|left, right| left >= right)?
@@ -136,6 +136,9 @@ impl VirtualMachine {
                     self.pop_value()?;
                 }
                 Instruction::CallBuiltin(builtin, arity) => self.call_builtin(builtin, arity)?,
+                Instruction::CallPackage(function, arity) => {
+                    self.call_package_function(function, arity)?
+                }
                 Instruction::CallFunction(function_index, arity) => {
                     let function = program.functions.get(function_index).ok_or_else(|| {
                         RuntimeError::new(format!("invalid function index {function_index}"))
@@ -191,7 +194,10 @@ impl VirtualMachine {
         })
     }
 
-    fn binary_integer_op(&mut self, operation: impl FnOnce(i64, i64) -> i64) -> Result<(), RuntimeError> {
+    fn binary_integer_op(
+        &mut self,
+        operation: impl FnOnce(i64, i64) -> i64,
+    ) -> Result<(), RuntimeError> {
         self.binary_integer_op_checked(|left, right| Ok(operation(left, right)))
     }
 
@@ -232,11 +238,7 @@ impl VirtualMachine {
         Ok(())
     }
 
-    fn call_builtin(
-        &mut self,
-        builtin: BuiltinFunction,
-        arity: usize,
-    ) -> Result<(), RuntimeError> {
+    fn call_builtin(&mut self, builtin: BuiltinFunction, arity: usize) -> Result<(), RuntimeError> {
         let arguments = self.pop_arguments(arity)?;
 
         match builtin {
@@ -263,6 +265,32 @@ impl VirtualMachine {
                     }
                 };
                 self.stack.push(Value::Integer(value.len() as i64));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn call_package_function(
+        &mut self,
+        function: PackageFunction,
+        arity: usize,
+    ) -> Result<(), RuntimeError> {
+        let arguments = self.pop_arguments(arity)?;
+
+        match function {
+            PackageFunction::FmtPrint => {
+                self.output
+                    .push_str(&render_package_arguments(&arguments, ""));
+            }
+            PackageFunction::FmtPrintln => {
+                self.output
+                    .push_str(&render_package_arguments(&arguments, " "));
+                self.output.push('\n');
+            }
+            PackageFunction::FmtSprint => {
+                self.stack
+                    .push(Value::String(render_package_arguments(&arguments, "")));
             }
         }
 
@@ -333,4 +361,12 @@ fn render_builtin_arguments(arguments: &[Value]) -> String {
         .map(ToString::to_string)
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+fn render_package_arguments(arguments: &[Value], separator: &str) -> String {
+    arguments
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(separator)
 }

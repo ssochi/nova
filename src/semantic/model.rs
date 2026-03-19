@@ -1,4 +1,5 @@
 use crate::builtin::BuiltinFunction;
+use crate::package::PackageFunction;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CheckedProgram {
@@ -75,10 +76,8 @@ pub enum CheckedExpressionKind {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CallTarget {
     Builtin(BuiltinFunction),
-    UserDefined {
-        function_index: usize,
-        name: String,
-    },
+    PackageFunction(PackageFunction),
+    UserDefined { function_index: usize, name: String },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

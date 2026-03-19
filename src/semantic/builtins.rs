@@ -75,7 +75,8 @@ pub fn validate_builtin_call(
             }
         }
         BuiltinArguments::Exact(expected_types) => {
-            for (index, (expected, actual)) in expected_types.iter().zip(argument_types.iter()).enumerate()
+            for (index, (expected, actual)) in
+                expected_types.iter().zip(argument_types.iter()).enumerate()
             {
                 if expected != actual {
                     return Err(format!(

@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-00-35-11-import-fmt-seam`
+- Opened `2026-03-20-00-35-11-import-fmt-seam` for the first narrow import and standard-library package slice
 - Completed and archived `2026-03-20-00-09-59-string-runtime-builtins`
 - Opened `2026-03-20-00-09-59-string-runtime-builtins` for the first `M3` runtime and builtin expansion slice
 - Completed and archived `2026-03-19-23-57-06-for-loops-path-analysis`

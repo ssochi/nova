@@ -1,16 +1,31 @@
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SourceFileAst {
     pub package_name: String,
+    pub imports: Vec<ImportDecl>,
     pub functions: Vec<FunctionDecl>,
 }
 
 impl SourceFileAst {
     pub fn render(&self) -> String {
         let mut lines = vec![format!("package {}", self.package_name)];
+        for import in &self.imports {
+            lines.push(import.render());
+        }
         for function in &self.functions {
             lines.push(function.render(0));
         }
         format!("{}\n", lines.join("\n"))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ImportDecl {
+    pub path: String,
+}
+
+impl ImportDecl {
+    fn render(&self) -> String {
+        format!("import {}", render_string_literal(&self.path))
     }
 }
 
@@ -69,8 +84,14 @@ pub struct Block {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Statement {
-    VarDecl { name: String, value: Expression },
-    Assign { name: String, value: Expression },
+    VarDecl {
+        name: String,
+        value: Expression,
+    },
+    Assign {
+        name: String,
+        value: Expression,
+    },
     Expr(Expression),
     If {
         condition: Expression,
@@ -150,8 +171,12 @@ pub enum Expression {
         operator: BinaryOperator,
         right: Box<Expression>,
     },
+    Selector {
+        target: Box<Expression>,
+        member: String,
+    },
     Call {
-        callee: String,
+        callee: Box<Expression>,
         arguments: Vec<Expression>,
     },
 }
@@ -167,10 +192,18 @@ impl Expression {
                 left,
                 operator,
                 right,
-            } => format!("({} {} {})", left.render(), operator.render(), right.render()),
+            } => format!(
+                "({} {} {})",
+                left.render(),
+                operator.render(),
+                right.render()
+            ),
+            Expression::Selector { target, member } => {
+                format!("{}.{}", target.render(), member)
+            }
             Expression::Call { callee, arguments } => format!(
                 "{}({})",
-                callee,
+                callee.render(),
                 arguments
                     .iter()
                     .map(Expression::render)

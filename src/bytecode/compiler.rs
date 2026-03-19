@@ -184,6 +184,10 @@ impl<'a> FunctionCompiler<'a> {
                         self.instructions
                             .push(Instruction::CallBuiltin(*builtin, arguments.len()));
                     }
+                    CallTarget::PackageFunction(function) => {
+                        self.instructions
+                            .push(Instruction::CallPackage(*function, arguments.len()));
+                    }
                     CallTarget::UserDefined { function_index, .. } => {
                         self.instructions
                             .push(Instruction::CallFunction(*function_index, arguments.len()));

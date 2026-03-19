@@ -36,6 +36,7 @@ Operational clarifications:
 3. Use `docs/sop/startup-context-refresh.md` for the startup checklist and `docs/sop/cli-blackbox-playtest.md` for milestone-closeout CLI experience validation.
 4. Distinguish package-level validation from execution entrypoint validation. Commands like `check` should not silently inherit `run`-specific assumptions such as `main.main`.
 5. When collecting CLI validation traces with `cargo run -- ...`, execute them serially. Parallel cargo invocations add lock-wait noise and can corrupt experience evidence.
+6. If Rust formatting is required and `cargo fmt` is unavailable locally, install `rustfmt` first and record that environment repair in the validation trail.
 
 If no task is explicitly specified, you must proactively choose the most worthwhile piece of work to advance, with the following priorities:
 1. **Obvious gaps in functionality, core experience, or core flow** (search the web more, do research, refer to relevant experience from similar high-quality projects, and established methodologies)

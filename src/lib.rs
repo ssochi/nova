@@ -4,6 +4,7 @@ pub mod cli;
 pub mod config;
 pub mod driver;
 pub mod frontend;
+pub mod package;
 pub mod runtime;
 pub mod semantic;
 pub mod source;

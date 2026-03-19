@@ -26,15 +26,16 @@
 ## Related Plans
 
 - `2026-03-20-00-09-59-string-runtime-builtins`: completed first richer runtime value slice with builtin contract centralization
+- `2026-03-20-00-35-11-import-fmt-seam`: completed the first narrow import and package-backed standard-library seam
 
 ## Current Risks
 
 - Runtime-surface growth can sprawl quickly if types, builtins, and imports are mixed into the same plan.
 - Builtin additions can become hardcoded special cases unless their contracts stay centralized.
 - Supporting more realistic Go programs will require careful staging so the VM remains understandable.
-- The current string / builtin slice still lacks composite values, import seams, and package-backed runtime services.
+- The current runtime still lacks composite values, real import graphs, and broader package-backed runtime services.
 
 ## Next-Round Recommendations
 
-- Open the next `M3` plan around either a composite runtime value or a narrow import / standard-library seam.
-- Preserve the centralized builtin contract pattern and avoid mixing package loading with too many new runtime categories in one step.
+- Open the next `M3` plan around either a composite runtime value such as slices or a second metadata-backed package-service slice.
+- Preserve the centralized builtin and package-contract patterns and avoid mixing filesystem import loading with too many new runtime categories in one step.

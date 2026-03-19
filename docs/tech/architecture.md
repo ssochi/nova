@@ -10,10 +10,12 @@ Define the current top-level architecture of `nova-go` so future rounds can exte
    - `src/main.rs`
    - `src/cli.rs`
    - Responsibility: accept commands, parse options, and expose a stable user entrypoint.
-2. Shared builtin contract layer
+2. Shared callable identity layer
    - `src/builtin.rs`
+   - `src/package.rs`
    - `src/semantic/builtins.rs`
-   - Responsibility: define builtin identities and semantic call contracts in one reusable place.
+   - `src/semantic/packages.rs`
+   - Responsibility: define builtin and package-function identities while keeping semantic call contracts centralized and layered.
 3. Driver layer
    - `src/driver.rs`
    - Responsibility: orchestrate source loading, frontend, lowering, runtime execution, and error normalization.
@@ -44,6 +46,7 @@ Define the current top-level architecture of `nova-go` so future rounds can exte
 
 - The CLI layer may depend on the driver layer, but not on frontend/runtime internals directly.
 - Builtin identity is shared, but builtin argument and return contracts remain semantic-layer owned.
+- Imported package identity is shared, but import validation and package-function contracts remain semantic-layer owned.
 - Frontend modules must not depend on bytecode or runtime modules.
 - The semantic layer may depend on frontend structures, but not on runtime execution details.
 - Bytecode lowering must consume semantic output rather than re-resolving source names from raw AST.
@@ -62,6 +65,7 @@ Define the current top-level architecture of `nova-go` so future rounds can exte
 ## Near-Term Evolution
 
 - Expand the runtime and semantic surface for richer values, builtins, and standard-library-oriented execution.
+- Keep standard-library package growth metadata-backed until a later plan introduces a real import graph.
 - Expand the VM with more value categories and runtime data structures.
 - Keep backend work behind a later stable IR boundary instead of coupling it to the current VM instruction set.
 
@@ -71,6 +75,8 @@ Define the current top-level architecture of `nova-go` so future rounds can exte
 - `docs/design/semantic-functions-branches.md`
 - `docs/design/for-loop-control-flow.md`
 - `docs/design/string-runtime-builtins.md`
+- `docs/design/import-fmt-package-seam.md`
+- `docs/tech/imports-and-package-contracts.md`
 - `docs/tech/semantic-analysis.md`
 - `docs/tech/runtime-values-and-builtins.md`
 - `docs/tech/vm-execution-pipeline.md`

@@ -36,3 +36,4 @@ This directory stores feature and subsystem designs. It describes intent, scope 
 - `semantic-functions-branches.md`: design baseline for semantic analysis, user-defined calls, and branch control flow
 - `for-loop-control-flow.md`: design baseline for condition-only `for` loops and loop-aware path analysis
 - `string-runtime-builtins.md`: design baseline for string values, builtin contract centralization, and the first `M3` runtime slice
+- `import-fmt-package-seam.md`: design baseline for top-level imports and the first package-backed `fmt` seam

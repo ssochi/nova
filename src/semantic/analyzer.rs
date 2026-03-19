@@ -2,11 +2,17 @@ use std::collections::HashMap;
 use std::fmt;
 
 use crate::config::ExecutionConfig;
-use crate::frontend::ast::{BinaryOperator, Block, Expression, FunctionDecl, SourceFileAst, Statement};
+use crate::frontend::ast::{
+    BinaryOperator, Block, Expression, FunctionDecl, SourceFileAst, Statement,
+};
+use crate::package::ImportedPackage;
 use crate::semantic::builtins::{resolve_builtin, validate_builtin_call};
 use crate::semantic::model::{
     CallTarget, CheckedBinaryOperator, CheckedBlock, CheckedExpression, CheckedExpressionKind,
     CheckedFunction, CheckedProgram, CheckedStatement, Type,
+};
+use crate::semantic::packages::{
+    resolve_import_path, resolve_package_function, validate_package_call,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,9 +38,11 @@ impl std::error::Error for SemanticError {}
 
 pub fn analyze_package(ast: &SourceFileAst) -> Result<CheckedProgram, SemanticError> {
     let registry = FunctionRegistry::from_ast(ast)?;
+    let imports = ImportRegistry::from_ast(ast)?;
     let mut checked_functions = Vec::with_capacity(ast.functions.len());
     for (index, function) in ast.functions.iter().enumerate() {
-        checked_functions.push(FunctionAnalyzer::new(index, function, &registry).analyze()?);
+        checked_functions
+            .push(FunctionAnalyzer::new(index, function, &registry, &imports).analyze()?);
     }
 
     Ok(CheckedProgram {
@@ -57,14 +65,12 @@ pub fn analyze_program(
 
     let mut program = analyze_package(ast)?;
     let registry = FunctionRegistry::from_ast(ast)?;
-    let entry_function = registry
-        .lookup(&config.entry_function)
-        .ok_or_else(|| {
-            SemanticError::new(format!(
-                "entry function `{}` was not found in package `{}`",
-                config.entry_function, ast.package_name
-            ))
-        })?;
+    let entry_function = registry.lookup(&config.entry_function).ok_or_else(|| {
+        SemanticError::new(format!(
+            "entry function `{}` was not found in package `{}`",
+            config.entry_function, ast.package_name
+        ))
+    })?;
     let entry_signature = registry.signature(entry_function);
     if !entry_signature.parameters.is_empty() {
         return Err(SemanticError::new(format!(
@@ -164,6 +170,7 @@ struct FunctionAnalyzer<'a> {
     function_index: usize,
     function: &'a FunctionDecl,
     registry: &'a FunctionRegistry,
+    imports: &'a ImportRegistry,
     scopes: Vec<HashMap<String, LocalBinding>>,
     local_names: Vec<String>,
 }
@@ -173,6 +180,7 @@ impl<'a> FunctionAnalyzer<'a> {
         function_index: usize,
         function: &'a FunctionDecl,
         registry: &'a FunctionRegistry,
+        imports: &'a ImportRegistry,
     ) -> Self {
         let mut scopes = vec![HashMap::new()];
         let mut local_names = Vec::new();
@@ -188,6 +196,7 @@ impl<'a> FunctionAnalyzer<'a> {
             function_index,
             function,
             registry,
+            imports,
             scopes,
             local_names,
         }
@@ -249,7 +258,10 @@ impl<'a> FunctionAnalyzer<'a> {
         Ok(CheckedBlock { statements })
     }
 
-    fn analyze_statement(&mut self, statement: &Statement) -> Result<CheckedStatement, SemanticError> {
+    fn analyze_statement(
+        &mut self,
+        statement: &Statement,
+    ) -> Result<CheckedStatement, SemanticError> {
         match statement {
             Statement::VarDecl { name, value } => {
                 if self.current_scope().contains_key(name) {
@@ -282,9 +294,9 @@ impl<'a> FunctionAnalyzer<'a> {
                     value,
                 })
             }
-            Statement::Expr(expression) => Ok(CheckedStatement::Expr(
-                self.analyze_expression(expression)?,
-            )),
+            Statement::Expr(expression) => {
+                Ok(CheckedStatement::Expr(self.analyze_expression(expression)?))
+            }
             Statement::If {
                 condition,
                 then_block,
@@ -359,6 +371,9 @@ impl<'a> FunctionAnalyzer<'a> {
                     },
                 })
             }
+            Expression::Selector { .. } => Err(SemanticError::new(
+                "selector expressions are only supported as imported package call targets",
+            )),
             Expression::Binary {
                 left,
                 operator,
@@ -381,57 +396,122 @@ impl<'a> FunctionAnalyzer<'a> {
                     .iter()
                     .map(|argument| self.analyze_expression(argument))
                     .collect::<Result<Vec<_>, _>>()?;
-
-                if let Some(builtin) = resolve_builtin(callee) {
-                    let argument_types =
-                        checked_arguments.iter().map(|argument| argument.ty).collect::<Vec<_>>();
-                    let return_type =
-                        validate_builtin_call(builtin, &argument_types).map_err(SemanticError::new)?;
-                    return Ok(CheckedExpression {
-                        ty: return_type,
-                        kind: CheckedExpressionKind::Call {
-                            target: CallTarget::Builtin(builtin),
-                            arguments: checked_arguments,
-                        },
-                    });
-                }
-
-                let function_index = self.registry.lookup(callee).ok_or_else(|| {
-                    SemanticError::new(format!("unknown function `{callee}`"))
-                })?;
-                let signature = self.registry.signature(function_index);
-                if checked_arguments.len() != signature.parameters.len() {
-                    return Err(SemanticError::new(format!(
-                        "function `{callee}` expects {} arguments, found {}",
-                        signature.parameters.len(),
-                        checked_arguments.len()
-                    )));
-                }
-
-                for (index, (argument, expected)) in checked_arguments
-                    .iter()
-                    .zip(signature.parameters.iter())
-                    .enumerate()
-                {
-                    expect_type(
-                        *expected,
-                        argument.ty,
-                        &format!("argument {} in call to `{callee}`", index + 1),
-                    )?;
-                }
-
-                Ok(CheckedExpression {
-                    ty: signature.return_type,
-                    kind: CheckedExpressionKind::Call {
-                        target: CallTarget::UserDefined {
-                            function_index,
-                            name: signature.name.clone(),
-                        },
-                        arguments: checked_arguments,
-                    },
-                })
+                self.analyze_call(callee, checked_arguments)
             }
         }
+    }
+
+    fn analyze_call(
+        &self,
+        callee: &Expression,
+        checked_arguments: Vec<CheckedExpression>,
+    ) -> Result<CheckedExpression, SemanticError> {
+        match callee {
+            Expression::Identifier(name) => self.analyze_identifier_call(name, checked_arguments),
+            Expression::Selector { target, member } => {
+                self.analyze_package_call(target, member, checked_arguments)
+            }
+            _ => Err(SemanticError::new(
+                "call target must be a function name or imported package member",
+            )),
+        }
+    }
+
+    fn analyze_identifier_call(
+        &self,
+        callee: &str,
+        checked_arguments: Vec<CheckedExpression>,
+    ) -> Result<CheckedExpression, SemanticError> {
+        if let Some(builtin) = resolve_builtin(callee) {
+            let argument_types = checked_arguments
+                .iter()
+                .map(|argument| argument.ty)
+                .collect::<Vec<_>>();
+            let return_type =
+                validate_builtin_call(builtin, &argument_types).map_err(SemanticError::new)?;
+            return Ok(CheckedExpression {
+                ty: return_type,
+                kind: CheckedExpressionKind::Call {
+                    target: CallTarget::Builtin(builtin),
+                    arguments: checked_arguments,
+                },
+            });
+        }
+
+        let function_index = self
+            .registry
+            .lookup(callee)
+            .ok_or_else(|| SemanticError::new(format!("unknown function `{callee}`")))?;
+        let signature = self.registry.signature(function_index);
+        if checked_arguments.len() != signature.parameters.len() {
+            return Err(SemanticError::new(format!(
+                "function `{callee}` expects {} arguments, found {}",
+                signature.parameters.len(),
+                checked_arguments.len()
+            )));
+        }
+
+        for (index, (argument, expected)) in checked_arguments
+            .iter()
+            .zip(signature.parameters.iter())
+            .enumerate()
+        {
+            expect_type(
+                *expected,
+                argument.ty,
+                &format!("argument {} in call to `{callee}`", index + 1),
+            )?;
+        }
+
+        Ok(CheckedExpression {
+            ty: signature.return_type,
+            kind: CheckedExpressionKind::Call {
+                target: CallTarget::UserDefined {
+                    function_index,
+                    name: signature.name.clone(),
+                },
+                arguments: checked_arguments,
+            },
+        })
+    }
+
+    fn analyze_package_call(
+        &self,
+        target: &Expression,
+        member: &str,
+        checked_arguments: Vec<CheckedExpression>,
+    ) -> Result<CheckedExpression, SemanticError> {
+        let package_name = match target {
+            Expression::Identifier(name) => name.as_str(),
+            _ => {
+                return Err(SemanticError::new(
+                    "selector target must be an imported package name",
+                ));
+            }
+        };
+        let imported_package = self.imports.lookup(package_name).ok_or_else(|| {
+            SemanticError::new(format!("package `{package_name}` is not imported"))
+        })?;
+        let package_function =
+            resolve_package_function(imported_package, member).ok_or_else(|| {
+                SemanticError::new(format!(
+                    "package `{}` does not export supported member `{member}`",
+                    imported_package.binding_name()
+                ))
+            })?;
+        let argument_types = checked_arguments
+            .iter()
+            .map(|argument| argument.ty)
+            .collect::<Vec<_>>();
+        let return_type =
+            validate_package_call(package_function, &argument_types).map_err(SemanticError::new)?;
+        Ok(CheckedExpression {
+            ty: return_type,
+            kind: CheckedExpressionKind::Call {
+                target: CallTarget::PackageFunction(package_function),
+                arguments: checked_arguments,
+            },
+        })
     }
 
     fn current_scope(&self) -> &HashMap<String, LocalBinding> {
@@ -465,6 +545,33 @@ impl<'a> FunctionAnalyzer<'a> {
 struct LocalBinding {
     slot: usize,
     ty: Type,
+}
+
+struct ImportRegistry {
+    bindings: HashMap<String, ImportedPackage>,
+}
+
+impl ImportRegistry {
+    fn from_ast(ast: &SourceFileAst) -> Result<Self, SemanticError> {
+        let mut bindings = HashMap::new();
+        for import in &ast.imports {
+            let package = resolve_import_path(&import.path).ok_or_else(|| {
+                SemanticError::new(format!("unsupported import path `{}`", import.path))
+            })?;
+            let binding = package.binding_name().to_string();
+            if bindings.insert(binding.clone(), package).is_some() {
+                return Err(SemanticError::new(format!(
+                    "import binding `{binding}` is already defined"
+                )));
+            }
+        }
+
+        Ok(Self { bindings })
+    }
+
+    fn lookup(&self, name: &str) -> Option<ImportedPackage> {
+        self.bindings.get(name).copied()
+    }
 }
 
 fn analyze_binary_operator(

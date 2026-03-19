@@ -3,3 +3,4 @@ Note:
 2. After taking a task, if it can be completed in one pass, close the loop directly in the plan; if the task is large, split it into a milestone or an active plan. Remove it from the unfinished list after completion.
 
 Unfinished:
+1. 建立完善的自动化测试和单测系统,确保每次迭代质量.

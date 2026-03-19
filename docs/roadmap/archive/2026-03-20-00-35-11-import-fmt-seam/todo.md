@@ -1,0 +1,5 @@
+- [done] Open the `M3` import seam plan and synchronize the roadmap indexes.
+- [done] Add frontend support for import declarations and selector-call parsing.
+- [done] Introduce centralized `fmt` package contracts across semantic analysis, lowering, and VM execution.
+- [done] Add examples, automated tests, CLI validation traces, and supporting docs for imported package calls.
+- [done] Close the plan loop by updating context, milestone progress, and archive state.

@@ -38,3 +38,4 @@ This directory stores validation evidence that "proves the change holds."
 - `2026-03-19-semantic-functions-branches.md`: validates semantic analysis, user-defined calls, and branch execution
 - `2026-03-19-for-loops-path-analysis.md`: validates loop parsing, semantic analysis, lowering, and VM execution
 - `2026-03-20-string-runtime-builtins.md`: validates string runtime values, builtin contracts, and CLI inspection
+- `2026-03-20-import-fmt-seam.md`: validates import declarations, selector calls, and the first package-backed `fmt` seam
