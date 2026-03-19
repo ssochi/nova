@@ -1,0 +1,37 @@
+# roadmap/archive Directory Conventions
+
+This directory stores complete archives of closed plans. It serves historical continuation, not the current execution surface.
+
+## Directory Responsibilities
+
+- Save directory snapshots of completed or terminated plans
+- Preserve historical `plan.md`, `todo.md`, and `context.md`
+- Provide the minimum necessary context for later retrospective
+
+## When It Must Be Updated
+
+- When an active plan is completed and moved into the archive
+- When archive directory naming rules or retained-file rules change
+- When key information for historical plans needs to be supplemented
+
+## File Format Convention
+
+- Archive directories reuse active plan directory naming: `YYYY-MM-DD-HH-MM-SS-<plan-id>`
+- Each archived plan directory must keep at least `plan.md`, `todo.md`, and `context.md`
+- Do not compress "completed" into a one-sentence conclusion; resumable context must be preserved
+
+## Document Structure
+
+- Each archived plan directory keeps the same trio as an active plan:
+  - `plan.md`: retain the original plan structure; do not rewrite it into a summary version
+  - `todo.md`: retain the task list with final status
+  - `context.md`: retain the context at closeout and reminders for the next round
+- If an archive index document is added in the future, it must include at least:
+  - Archived plan list
+  - Close reason
+  - Related milestone
+
+## File Index
+
+- `AGENTS.md`: this directory convention
+- There are currently no archived plans; when archive directories are added later, this index must be synchronized
