@@ -36,3 +36,4 @@ This directory stores research notes that inform roadmap choices and implementat
 - `2026-03-20-strings-package-contracts.md`: official behavior baseline for the first `strings` package seam
 - `2026-03-20-slice-expressions-and-assignment.md`: official behavior baseline for the current slice and string-window surface, including string indexing, typed zero values, `make`, `cap`, `copy`, and append-capacity semantics
 - `2026-03-20-map-runtime-groundwork.md`: official behavior baseline for staged `map[K]V` support with `make`, `len`, indexing, and assignment
+- `2026-03-20-composite-nil-semantics.md`: official behavior baseline for explicit `nil` usage with the current slice/map surface

@@ -25,14 +25,14 @@ Describe the current runtime value categories and builtin execution model introd
 - `slice`
   - Stored as shared backing storage plus start / length / capacity metadata
   - Built by slice literals, `make([]T, len[, cap])`, and returned by `append`
-  - Also used as the zero value for explicit typed slice declarations via a nil-slice runtime state
+  - Also used as the zero value for explicit typed slice declarations and explicit `nil` expressions via a nil-slice runtime state
   - Currently rendered in a Go-like `[value value]` form for builtin and package output
-  - Supports `len(slice)`, `cap(slice)`, `copy(dst, src)`, index expressions such as `values[0]`, simple slice expressions such as `values[1:3]`, element assignment such as `values[0] = 1`, and explicit `[]byte(string)` conversion by copying string bytes into a new non-nil byte slice
+  - Supports `len(slice)`, `cap(slice)`, `copy(dst, src)`, index expressions such as `values[0]`, simple slice expressions such as `values[1:3]`, element assignment such as `values[0] = 1`, explicit `nil` comparisons such as `values == nil`, and explicit `[]byte(string)` conversion by copying string bytes into a new non-nil byte slice
 - `map`
   - Stored as shared map storage plus explicit nil-vs-allocated state
-  - Built by `make(map[K]V[, hint])`, `map[K]V{...}` literals, and used as the zero value for explicit typed map declarations via a nil-map runtime state
+  - Built by `make(map[K]V[, hint])`, `map[K]V{...}` literals, and used as the zero value for explicit typed map declarations and explicit `nil` expressions via a nil-map runtime state
   - Currently rendered in a deterministic `map[key:value]` debug form backed by sorted storage rather than real Go iteration behavior
-  - Supports `len(map)`, single-result index expressions such as `counts["nova"]`, index assignment such as `counts["nova"] = 3`, and builtin `delete(counts, "nova")`
+  - Supports `len(map)`, single-result index expressions such as `counts["nova"]`, index assignment such as `counts["nova"] = 3`, explicit `nil` comparisons such as `counts == nil`, and builtin `delete(counts, "nova")`
   - Nil-map reads return the element zero value, nil-map deletes are no-ops, and nil-map writes raise a runtime error
   - Duplicate literal keys currently keep deterministic last-write-wins behavior; real Go's duplicate-constant-key diagnostic remains deferred
 
@@ -50,7 +50,7 @@ Describe the current runtime value categories and builtin execution model introd
   - `cap(slice) -> int`
   - `copy(slice, slice|string) -> int`
   - `append(slice, ...element) -> slice`
-- Variadic output builtins accept any value-producing expression in the current type system
+- Variadic output builtins accept any typed value-producing expression in the current type system; bare untyped `nil` still remains invalid without a concrete composite context
 - `len` validates one string, slice, or map target before lowering
 - `make` validates either slice allocation arity (`len[, cap]`) or map allocation arity (`[hint]`) before lowering
 - `delete` validates a map first argument and a key matching the map key type before lowering
@@ -75,13 +75,15 @@ Describe the current runtime value categories and builtin execution model introd
   - `strings.Repeat(string, int) -> string`
 - Selector calls require the package binding to be imported before semantic analysis will lower them
 - Unsupported import paths and unsupported package members fail during semantic analysis
+- Fixed-arity typed package functions can now coerce explicit `nil` into slice/map zero values when the signature provides enough type context, such as `strings.Join(nil, ":")`
 
 ## Runtime Execution Notes
 
 - Bytecode uses `push-string` for literals, `push-byte` for byte zero values, and `concat` for string addition
 - Bytecode now also uses `push-nil-slice` / `push-nil-map` for typed zero-value declarations, `build-slice <count>` for slice literals, `build-map <type> <count>` for map literals, `make-slice <type>` and `make-map <type>` for allocation, `index <slice|string>` and `index-map <type>` for element reads, `slice <slice|string>` for window creation, and `set-index` / `set-map-index` for indexed writes
 - Bytecode now also uses `convert string->[]byte` and `convert []byte->string` for the narrow explicit conversion surface
-- Equality still reuses the generic value comparison path because runtime values are tagged
+- Explicit source-level `nil` is resolved in semantic analysis into typed nil-slice or nil-map zero values before lowering
+- Equality still reuses the generic value comparison path because runtime values are tagged, but slice/map equality is only exposed through the explicit `nil` coercion path
 - VM output is an accumulated string buffer instead of newline-separated records
 - `print` appends rendered arguments without an automatic trailing newline
 - `println` appends rendered arguments plus a newline
@@ -101,6 +103,7 @@ Describe the current runtime value categories and builtin execution model introd
 - `[]byte(string)` currently returns a non-nil byte slice with exact-length capacity; real Go leaves the capacity implementation-specific
 - `string([]byte)` copies the visible byte slice elements into a new runtime string value
 - Explicit typed local declarations are lowered into concrete zero-producing instructions, so `var total int`, `var marker byte`, `var ready bool`, `var label string`, `var values []int`, and `var counts map[string]int` all produce Go-like zero values without runtime type reflection
+- User-defined calls, returns, assignments, and typed package-call arguments can now reuse the same zero-value lowering path when they receive explicit `nil` in a typed slice/map context
 - Bytecode now also uses `call-package` for metadata-backed package functions
 - `fmt.Sprint` returns a runtime string value without mutating the output buffer
 - `fmt` formatting is intentionally approximate and does not yet support format verbs
@@ -118,4 +121,4 @@ Describe the current runtime value categories and builtin execution model introd
 - Keep package-function validation metadata centralized; do not reintroduce package-specific ad hoc type checks inside `src/semantic/analyzer.rs`
 - If string behavior expands into broader conversions, rune-aware iteration, or invalid-UTF-8-preserving printing, add that on top of the current byte-oriented representation instead of reverting to Rust `String`-only storage
 - If slice behavior expands beyond the current window / builtin subset, consider separating slice-specific lowering and VM helpers from the core scalar path
-- If map behavior expands further into duplicate-key diagnostics, comma-ok lookups, or iteration, keep nil-map semantics and map-key validation centralized instead of scattering them across builtin and VM call sites
+- If map behavior expands further into duplicate-key diagnostics, comma-ok lookups, or iteration, keep nil-map semantics, explicit `nil` coercion, and map-key validation centralized instead of scattering them across builtin and VM call sites

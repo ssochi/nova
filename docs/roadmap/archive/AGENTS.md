@@ -39,3 +39,4 @@ This directory stores complete archives of closed plans. It serves historical co
 - `2026-03-19-23-57-06-for-loops-path-analysis/`: archived M2 closing plan for loop control flow and path analysis
 - `2026-03-20-03-42-30-map-runtime-groundwork/`: archived M3 plan for staged `map[K]V` support with `make`, indexing, and nil-map behavior
 - `2026-03-20-04-07-11-map-literals-delete/`: archived M3 plan for staged map literals, empty-map construction, and builtin `delete`
+- `2026-03-20-04-28-25-explicit-nil-comparisons/`: archived M3 plan for explicit `nil` expressions and `slice/map` nil comparisons

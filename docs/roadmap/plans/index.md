@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-04-28-25-explicit-nil-comparisons`
+- Opened `2026-03-20-04-28-25-explicit-nil-comparisons` for explicit `nil` expressions and composite-nil equality under `M3`
 - Completed and archived `2026-03-20-04-07-11-map-literals-delete`
 - Opened `2026-03-20-04-07-11-map-literals-delete` for staged map literals and builtin `delete` under `M3`
 - Completed and archived `2026-03-20-03-42-30-map-runtime-groundwork`

@@ -23,10 +23,12 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 - Model typed `make` expressions explicitly because their first argument is a type, then lower slices and maps into dedicated checked allocation expressions before bytecode generation.
 - Model staged map literals explicitly in the checked layer instead of hiding them behind synthetic `make` plus index assignment trees.
 - Model explicit conversion syntax separately from ordinary calls because `T(x)` uses a type in callee position rather than a runtime function value.
+- Model explicit `nil` as a dedicated untyped checked expression and coerce it centrally when typed slice/map context is available.
 - Model `byte` explicitly so string indexing and `[]byte` paths do not collapse into ad hoc `int` behavior.
 - Validate the builtin `copy` special case for `[]byte` <- `string` centrally instead of hiding it in the runtime.
 - Validate staged map key comparability centrally so unsupported key types fail during semantic analysis before reaching the VM.
 - Validate builtin `delete(map, key)` centrally so map mutation rules stay aligned with map indexing and assignment typing.
+- Validate `slice/map == nil` and `slice/map != nil` centrally while continuing to reject broader composite equality.
 - Validate loop conditions and model loop bodies as scoped blocks.
 - Ensure non-void functions do not fall through on any reachable path in the supported subset.
 
@@ -54,11 +56,12 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 
 ## Current Limits
 
-- Supported types are limited to `int`, `byte`, `bool`, `string`, `[]T`, `map[K]V`, and `void`, and the current type-valued syntax surface is limited to builtin `make`, staged map literals, plus explicit `[]byte(string)` / `string([]byte)` conversions.
+- Supported concrete runtime types are limited to `int`, `byte`, `bool`, `string`, `[]T`, `map[K]V`, and `void`; semantic analysis also carries a dedicated untyped `nil` marker until typed slice/map context resolves it.
 - Package loading is still single-file and does not model imports.
 - Loop support is limited to `for <condition> { ... }`.
 - Termination analysis only treats the literal `for true { ... }` as definitely non-fallthrough because `break` and `continue` do not exist yet.
 - Builtin coverage is still intentionally small, and conversions are now deliberately modeled outside the builtin table.
 - Slice support is still staged: simple slice expressions on `[]T` and `string` are supported, while full slice expressions remain deferred.
-- Map support is still staged: map literals, single-result indexing, `len`, nil-map zero values, `make`, `delete`, and index assignment are supported, while duplicate-constant-key diagnostics, comma-ok lookups, and `range` remain deferred.
+- Map support is still staged: explicit `nil`, map literals, single-result indexing, `len`, nil-map zero values, `make`, `delete`, index assignment, and `nil` equality are supported, while duplicate-constant-key diagnostics, comma-ok lookups, and `range` remain deferred.
+- Explicit `nil` still needs typed slice/map context; `var value = nil`, `nil == nil`, and broader nilable-type work remain deferred.
 - General conversion syntax beyond the narrow `[]byte(string)` / `string([]byte)` pair is still deferred.

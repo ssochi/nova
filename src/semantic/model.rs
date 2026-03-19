@@ -76,6 +76,7 @@ pub enum CheckedExpressionKind {
     Integer(i64),
     Bool(bool),
     String(String),
+    UntypedNil,
     ZeroValue,
     SliceLiteral {
         elements: Vec<CheckedExpression>,
@@ -148,6 +149,7 @@ pub enum Type {
     Byte,
     Bool,
     String,
+    UntypedNil,
     Slice(Box<Type>),
     Map { key: Box<Type>, value: Box<Type> },
     Void,
@@ -160,6 +162,7 @@ impl Type {
             Type::Byte => "byte".to_string(),
             Type::Bool => "bool".to_string(),
             Type::String => "string".to_string(),
+            Type::UntypedNil => "nil".to_string(),
             Type::Slice(element) => format!("[]{}", element.render()),
             Type::Map { key, value } => format!("map[{}]{}", key.render(), value.render()),
             Type::Void => "void".to_string(),
@@ -167,7 +170,7 @@ impl Type {
     }
 
     pub fn produces_value(&self) -> bool {
-        *self != Type::Void
+        !matches!(self, Type::Void | Type::UntypedNil)
     }
 
     pub fn slice_element_type(&self) -> Option<&Type> {
@@ -186,6 +189,10 @@ impl Type {
 
     pub fn supports_equality(&self) -> bool {
         matches!(self, Type::Int | Type::Byte | Type::Bool | Type::String)
+    }
+
+    pub fn supports_nil(&self) -> bool {
+        matches!(self, Type::Slice(_) | Type::Map { .. })
     }
 
     pub fn is_byte_slice(&self) -> bool {

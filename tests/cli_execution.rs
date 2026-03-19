@@ -95,6 +95,15 @@ fn run_executes_map_literals_and_delete() {
 }
 
 #[test]
+fn run_executes_explicit_nil_values_and_comparisons() {
+    let output = run_cli(&["run", "examples/nil_values.go"]).expect("program should run");
+    assert_eq!(
+        output,
+        "true true\nfalse false\ntrue true\ntrue true true\n"
+    );
+}
+
+#[test]
 fn dump_bytecode_shows_stack_machine_instructions() {
     let output = run_cli(&["dump-bytecode", "examples/arithmetic.go"])
         .expect("bytecode should be generated");
@@ -160,6 +169,15 @@ fn dump_tokens_show_slice_window_syntax() {
 
     assert!(output.contains(":"));
     assert!(output.contains("identifier(reopen)"));
+}
+
+#[test]
+fn dump_tokens_show_nil_keyword() {
+    let output =
+        run_cli(&["dump-tokens", "examples/nil_values.go"]).expect("tokens should be rendered");
+
+    assert!(output.contains("nil"));
+    assert!(output.contains("identifier(acceptNames)"));
 }
 
 #[test]
@@ -238,6 +256,16 @@ fn dump_ast_renders_make_slices() {
 }
 
 #[test]
+fn dump_ast_renders_explicit_nil_values() {
+    let output = run_cli(&["dump-ast", "examples/nil_values.go"]).expect("ast should be rendered");
+
+    assert!(output.contains("var values []int = nil"));
+    assert!(output.contains("var counts map[string]int = nil"));
+    assert!(output.contains("println((values == nil), (counts == nil))"));
+    assert!(output.contains("strings.Join(nil, \":\")"));
+}
+
+#[test]
 fn dump_ast_renders_byte_oriented_strings() {
     let output =
         run_cli(&["dump-ast", "examples/byte_strings.go"]).expect("ast should be rendered");
@@ -256,6 +284,16 @@ fn dump_ast_renders_string_byte_conversions() {
     assert!(output.contains("var bytes = []byte(text)"));
     assert!(output.contains("println(text, string(bytes), string([]byte(\"go\")))"));
     assert!(output.contains("var empty = []byte(\"\")"));
+}
+
+#[test]
+fn dump_bytecode_shows_explicit_nil_lowering() {
+    let output = run_cli(&["dump-bytecode", "examples/nil_values.go"])
+        .expect("bytecode should be generated");
+
+    assert!(output.contains("push-nil-slice"));
+    assert!(output.contains("push-nil-map"));
+    assert!(output.contains("equal"));
 }
 
 #[test]

@@ -226,6 +226,7 @@ pub enum Expression {
     Integer(i64),
     Bool(bool),
     String(String),
+    Nil,
     Identifier(String),
     SliceLiteral {
         element_type: TypeRef,
@@ -285,6 +286,7 @@ impl Expression {
             Expression::Integer(value) => value.to_string(),
             Expression::Bool(value) => value.to_string(),
             Expression::String(value) => render_string_literal(value),
+            Expression::Nil => "nil".to_string(),
             Expression::Identifier(name) => name.clone(),
             Expression::SliceLiteral {
                 element_type,

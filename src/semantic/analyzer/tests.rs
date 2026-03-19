@@ -252,3 +252,54 @@ fn reject_delete_with_wrong_key_type() {
             .contains("argument 2 in call to builtin `delete` requires `string`")
     );
 }
+
+#[test]
+fn analyze_explicit_nil_for_slices_maps_and_typed_calls() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nimport \"strings\"\n\nfunc accept(values []string) bool {\n\treturn values == nil\n}\n\nfunc provide() map[string]int {\n\treturn nil\n}\n\nfunc main() {\n\tvar values []int = nil\n\tvar counts map[string]int = nil\n\tvalues = nil\n\tcounts = nil\n\tprintln(values == nil, counts == nil)\n\tprintln(accept(nil), provide() == nil, strings.Join(nil, \":\") == \"\")\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let program = analyze_package(&ast).expect("analysis should succeed");
+
+    assert_eq!(program.functions.len(), 3);
+}
+
+#[test]
+fn reject_untyped_nil_without_context() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tvar values = nil\n}\n".to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let error = analyze_package(&ast).expect_err("analysis should reject untyped nil vars");
+
+    assert!(
+        error
+            .to_string()
+            .contains("requires an explicit type when initialized with `nil`")
+    );
+}
+
+#[test]
+fn reject_nil_equals_nil() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tprintln(nil == nil)\n}\n".to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let error = analyze_package(&ast).expect_err("analysis should reject nil equality");
+
+    assert!(
+        error
+            .to_string()
+            .contains("does not support untyped `nil` operands")
+    );
+}

@@ -167,6 +167,11 @@ impl<'a> FunctionCompiler<'a> {
                 self.instructions
                     .push(Instruction::PushString(value.clone()));
             }
+            CheckedExpressionKind::UntypedNil => {
+                return Err(CompileError::new(
+                    "untyped `nil` must be resolved before bytecode lowering",
+                ));
+            }
             CheckedExpressionKind::ZeroValue => match &expression.ty {
                 Type::Int => self.instructions.push(Instruction::PushInt(0)),
                 Type::Byte => self.instructions.push(Instruction::PushByte(0)),
@@ -174,6 +179,11 @@ impl<'a> FunctionCompiler<'a> {
                 Type::String => self
                     .instructions
                     .push(Instruction::PushString(String::new())),
+                Type::UntypedNil => {
+                    return Err(CompileError::new(
+                        "zero-value synthesis does not support untyped `nil`",
+                    ));
+                }
                 Type::Slice(_) => self.instructions.push(Instruction::PushNilSlice),
                 Type::Map { .. } => self.instructions.push(Instruction::PushNilMap),
                 Type::Void => {
@@ -342,6 +352,9 @@ fn lower_value_type(ty: &Type) -> Result<ValueType, CompileError> {
         Type::Byte => Ok(ValueType::Byte),
         Type::Bool => Ok(ValueType::Bool),
         Type::String => Ok(ValueType::String),
+        Type::UntypedNil => Err(CompileError::new(
+            "runtime value types do not support untyped `nil`",
+        )),
         Type::Slice(element) => Ok(ValueType::Slice(Box::new(lower_value_type(element)?))),
         Type::Map { key, value } => Ok(ValueType::Map {
             key: Box::new(lower_value_type(key)?),

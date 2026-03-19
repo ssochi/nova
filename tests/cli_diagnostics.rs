@@ -245,6 +245,32 @@ fn check_rejects_invalid_cap_argument_type() {
 }
 
 #[test]
+fn check_rejects_untyped_nil_variable_inference() {
+    let path = write_temp_source(
+        "check-bad-nil-var",
+        "package main\n\nfunc main() {\n\tvar values = nil\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("requires an explicit type when initialized with `nil`"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_nil_equals_nil() {
+    let path = write_temp_source(
+        "check-bad-nil-equality",
+        "package main\n\nfunc main() {\n\tprintln(nil == nil)\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("does not support untyped `nil` operands"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
 fn check_rejects_copy_slice_type_mismatch() {
     let path = write_temp_source(
         "check-bad-copy",

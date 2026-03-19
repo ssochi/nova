@@ -344,6 +344,10 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Ok(Expression::String(value))
             }
+            TokenKind::Nil => {
+                self.advance();
+                Ok(Expression::Nil)
+            }
             TokenKind::Identifier(name) => {
                 self.advance();
                 if is_supported_named_type(&name) && self.check(&TokenKind::LeftParen) {

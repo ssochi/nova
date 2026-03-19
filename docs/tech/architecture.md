@@ -76,6 +76,7 @@ Define the current top-level architecture of `nova-go` so future rounds can exte
 - `docs/design/for-loop-control-flow.md`
 - `docs/design/string-runtime-builtins.md`
 - `docs/design/import-fmt-package-seam.md`
+- `docs/design/explicit-nil-comparisons.md`
 - `docs/tech/imports-and-package-contracts.md`
 - `docs/tech/semantic-analysis.md`
 - `docs/tech/runtime-values-and-builtins.md`

@@ -23,6 +23,7 @@ pub enum TokenKind {
     For,
     Return,
     Map,
+    Nil,
     Identifier(String),
     Integer(i64),
     Bool(bool),
@@ -59,6 +60,7 @@ impl TokenKind {
                 | TokenKind::Integer(_)
                 | TokenKind::Bool(_)
                 | TokenKind::String(_)
+                | TokenKind::Nil
                 | TokenKind::RightParen
                 | TokenKind::RightBracket
                 | TokenKind::RightBrace
@@ -77,6 +79,7 @@ impl TokenKind {
             TokenKind::For => "for".to_string(),
             TokenKind::Return => "return".to_string(),
             TokenKind::Map => "map".to_string(),
+            TokenKind::Nil => "nil".to_string(),
             TokenKind::Identifier(value) => format!("identifier({value})"),
             TokenKind::Integer(value) => format!("integer({value})"),
             TokenKind::Bool(value) => format!("bool({value})"),

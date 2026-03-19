@@ -260,3 +260,39 @@ fn parse_string_and_byte_conversions() {
         _ => panic!("expected variable declaration"),
     }
 }
+
+#[test]
+fn parse_nil_expression_and_nil_comparison() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents:
+            "package main\n\nfunc main() {\n\tvar values []int = nil\n\tprintln(values == nil)\n}\n"
+                .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let function = &ast.functions[0];
+
+    match &function.body.statements[0] {
+        Statement::VarDecl { value, .. } => {
+            assert_eq!(value.as_ref(), Some(&Expression::Nil));
+        }
+        _ => panic!("expected variable declaration"),
+    }
+
+    match &function.body.statements[1] {
+        Statement::Expr(Expression::Call { arguments, .. }) => {
+            assert!(matches!(
+                &arguments[0],
+                Expression::Binary {
+                    left,
+                    operator: _,
+                    right,
+                } if **left == Expression::Identifier("values".into())
+                    && **right == Expression::Nil
+            ));
+        }
+        _ => panic!("expected nil comparison call"),
+    }
+}

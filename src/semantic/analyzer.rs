@@ -16,8 +16,8 @@ use crate::semantic::model::{
 use crate::semantic::packages::{resolve_package_function, validate_package_call};
 use crate::semantic::registry::{FunctionRegistry, ImportRegistry};
 use crate::semantic::support::{
-    block_guarantees_return, expect_same_type, expect_type, resolve_type_ref,
-    validate_make_literal_bounds, validate_runtime_type, zero_value_expression,
+    block_guarantees_return, coerce_expression_to_type, coerce_nil_equality_operands, expect_type,
+    resolve_type_ref, validate_make_literal_bounds, validate_runtime_type, zero_value_expression,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -218,15 +218,25 @@ impl<'a> FunctionAnalyzer<'a> {
                 let value = match value {
                     Some(expression) => {
                         let value = self.analyze_expression(expression)?;
-                        if !value.ty.produces_value() {
+                        if value.ty == Type::UntypedNil && declared_type.is_none() {
+                            return Err(SemanticError::new(format!(
+                                "variable `{name}` requires an explicit type when initialized with `nil`"
+                            )));
+                        }
+                        if !value.ty.produces_value() && value.ty != Type::UntypedNil {
                             return Err(SemanticError::new(format!(
                                 "variable `{name}` requires a value-producing expression"
                             )));
                         }
-                        if let Some(declared_type) = &declared_type {
-                            expect_type(declared_type, &value.ty, &format!("variable `{name}`"))?;
-                        }
-                        Some(value)
+                        Some(if let Some(declared_type) = &declared_type {
+                            coerce_expression_to_type(
+                                declared_type,
+                                value,
+                                &format!("variable `{name}`"),
+                            )?
+                        } else {
+                            value
+                        })
                     }
                     None => None,
                 };
@@ -252,30 +262,47 @@ impl<'a> FunctionAnalyzer<'a> {
             Statement::Assign { target, value } => {
                 let target = self.analyze_assignment_target(target)?;
                 let value = self.analyze_expression(value)?;
-                match &target {
+                let value = match &target {
                     CheckedAssignmentTarget::Local { name, .. } => {
                         let binding = self.lookup_local(name)?;
-                        expect_type(&binding.ty, &value.ty, &format!("assignment to `{name}`"))?;
+                        coerce_expression_to_type(
+                            &binding.ty,
+                            value,
+                            &format!("assignment to `{name}`"),
+                        )?
                     }
-                    CheckedAssignmentTarget::Index { target, .. } => match &target.ty {
-                        Type::Slice(element) => {
-                            expect_type(element.as_ref(), &value.ty, "slice element assignment")?
-                        }
-                        Type::Map { value: element, .. } => {
-                            expect_type(element.as_ref(), &value.ty, "map element assignment")?
-                        }
+                    CheckedAssignmentTarget::Index {
+                        target: target_expression,
+                        ..
+                    } => match &target_expression.ty {
+                        Type::Slice(element) => coerce_expression_to_type(
+                            element.as_ref(),
+                            value,
+                            "slice element assignment",
+                        )?,
+                        Type::Map { value: element, .. } => coerce_expression_to_type(
+                            element.as_ref(),
+                            value,
+                            "map element assignment",
+                        )?,
                         _ => {
                             return Err(SemanticError::new(format!(
                                 "index assignment requires `slice` or `map` target, found `{}`",
-                                target.ty.render()
+                                target_expression.ty.render()
                             )));
                         }
                     },
-                }
+                };
                 Ok(CheckedStatement::Assign { target, value })
             }
             Statement::Expr(expression) => {
-                Ok(CheckedStatement::Expr(self.analyze_expression(expression)?))
+                let expression = self.analyze_expression(expression)?;
+                if expression.ty == Type::UntypedNil {
+                    return Err(SemanticError::new(
+                        "expression statement requires a typed value, found `nil`",
+                    ));
+                }
+                Ok(CheckedStatement::Expr(expression))
             }
             Statement::If {
                 condition,
@@ -314,8 +341,11 @@ impl<'a> FunctionAnalyzer<'a> {
                         self.function.name
                     ))),
                     (_, Some(expression)) => {
-                        let expression = self.analyze_expression(expression)?;
-                        expect_type(&expected, &expression.ty, "return statement")?;
+                        let expression = coerce_expression_to_type(
+                            &expected,
+                            self.analyze_expression(expression)?,
+                            "return statement",
+                        )?;
                         Ok(CheckedStatement::Return(Some(expression)))
                     }
                     (_, None) => Err(SemanticError::new(format!(
@@ -344,6 +374,10 @@ impl<'a> FunctionAnalyzer<'a> {
             Expression::String(value) => Ok(CheckedExpression {
                 ty: Type::String,
                 kind: CheckedExpressionKind::String(value.clone()),
+            }),
+            Expression::Nil => Ok(CheckedExpression {
+                ty: Type::UntypedNil,
+                kind: CheckedExpressionKind::UntypedNil,
             }),
             Expression::SliceLiteral {
                 element_type,
@@ -445,7 +479,7 @@ impl<'a> FunctionAnalyzer<'a> {
             } => {
                 let left = self.analyze_expression(left)?;
                 let right = self.analyze_expression(right)?;
-                let (operator, ty) = analyze_binary_operator(*operator, &left.ty, &right.ty)?;
+                let (operator, ty, left, right) = analyze_binary_operator(*operator, left, right)?;
                 Ok(CheckedExpression {
                     ty,
                     kind: CheckedExpressionKind::Binary {
@@ -515,17 +549,18 @@ impl<'a> FunctionAnalyzer<'a> {
             )));
         }
 
-        for (index, (argument, expected)) in checked_arguments
-            .iter()
+        let checked_arguments = checked_arguments
+            .into_iter()
             .zip(signature.parameters.iter())
             .enumerate()
-        {
-            expect_type(
-                expected,
-                &argument.ty,
-                &format!("argument {} in call to `{callee}`", index + 1),
-            )?;
-        }
+            .map(|(index, (argument, expected))| {
+                coerce_expression_to_type(
+                    expected,
+                    argument,
+                    &format!("argument {} in call to `{callee}`", index + 1),
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(CheckedExpression {
             ty: signature.return_type.clone(),
@@ -614,6 +649,7 @@ impl<'a> FunctionAnalyzer<'a> {
                     imported_package.binding_name()
                 ))
             })?;
+        let checked_arguments = coerce_package_call_arguments(package_function, checked_arguments)?;
         let argument_types = checked_arguments
             .iter()
             .map(|argument| argument.ty.clone())
@@ -697,12 +733,11 @@ impl<'a> FunctionAnalyzer<'a> {
             .enumerate()
             .map(|(index, element)| {
                 let checked = self.analyze_expression(element)?;
-                expect_type(
+                coerce_expression_to_type(
                     &element_type,
-                    &checked.ty,
+                    checked,
                     &format!("slice literal element {}", index + 1),
-                )?;
-                Ok(checked)
+                )
             })
             .collect::<Result<Vec<_>, SemanticError>>()?;
         Ok(CheckedExpression {
@@ -737,10 +772,9 @@ impl<'a> FunctionAnalyzer<'a> {
             .map(|(index, entry)| {
                 let key = self.analyze_expression(&entry.key)?;
                 expect_type(key_type, &key.ty, &format!("map literal key {}", index + 1))?;
-                let value = self.analyze_expression(&entry.value)?;
-                expect_type(
+                let value = coerce_expression_to_type(
                     value_type,
-                    &value.ty,
+                    self.analyze_expression(&entry.value)?,
                     &format!("map literal value {}", index + 1),
                 )?;
                 Ok(CheckedMapLiteralEntry { key, value })
@@ -824,24 +858,32 @@ struct LocalBinding {
 
 fn analyze_binary_operator(
     operator: BinaryOperator,
-    left: &Type,
-    right: &Type,
-) -> Result<(CheckedBinaryOperator, Type), SemanticError> {
+    left: CheckedExpression,
+    right: CheckedExpression,
+) -> Result<
+    (
+        CheckedBinaryOperator,
+        Type,
+        CheckedExpression,
+        CheckedExpression,
+    ),
+    SemanticError,
+> {
     match operator {
-        BinaryOperator::Add if left == &Type::Int && right == &Type::Int => {
-            Ok((CheckedBinaryOperator::Add, Type::Int))
+        BinaryOperator::Add if left.ty == Type::Int && right.ty == Type::Int => {
+            Ok((CheckedBinaryOperator::Add, Type::Int, left, right))
         }
-        BinaryOperator::Add if left == &Type::String && right == &Type::String => {
-            Ok((CheckedBinaryOperator::Concat, Type::String))
+        BinaryOperator::Add if left.ty == Type::String && right.ty == Type::String => {
+            Ok((CheckedBinaryOperator::Concat, Type::String, left, right))
         }
         BinaryOperator::Add => Err(SemanticError::new(format!(
             "addition requires matching `int` or `string` operands, found `{}` and `{}`",
-            left.render(),
-            right.render()
+            left.ty.render(),
+            right.ty.render()
         ))),
         BinaryOperator::Subtract | BinaryOperator::Multiply | BinaryOperator::Divide => {
-            expect_type(&Type::Int, left, "left side of arithmetic expression")?;
-            expect_type(&Type::Int, right, "right side of arithmetic expression")?;
+            expect_type(&Type::Int, &left.ty, "left side of arithmetic expression")?;
+            expect_type(&Type::Int, &right.ty, "right side of arithmetic expression")?;
             Ok((
                 match operator {
                     BinaryOperator::Subtract => CheckedBinaryOperator::Subtract,
@@ -850,16 +892,12 @@ fn analyze_binary_operator(
                     _ => unreachable!("non-add arithmetic operators already matched"),
                 },
                 Type::Int,
+                left,
+                right,
             ))
         }
         BinaryOperator::Equal | BinaryOperator::NotEqual => {
-            expect_same_type(left, right, "equality expression")?;
-            if !left.supports_equality() {
-                return Err(SemanticError::new(format!(
-                    "equality expression does not support `{}` operands",
-                    left.render()
-                )));
-            }
+            let (left, right) = coerce_nil_equality_operands(left, right)?;
             Ok((
                 match operator {
                     BinaryOperator::Equal => CheckedBinaryOperator::Equal,
@@ -867,14 +905,16 @@ fn analyze_binary_operator(
                     _ => unreachable!("equality operators already matched"),
                 },
                 Type::Bool,
+                left,
+                right,
             ))
         }
         BinaryOperator::Less
         | BinaryOperator::LessEqual
         | BinaryOperator::Greater
         | BinaryOperator::GreaterEqual => {
-            expect_type(&Type::Int, left, "left side of comparison expression")?;
-            expect_type(&Type::Int, right, "right side of comparison expression")?;
+            expect_type(&Type::Int, &left.ty, "left side of comparison expression")?;
+            expect_type(&Type::Int, &right.ty, "right side of comparison expression")?;
             Ok((
                 match operator {
                     BinaryOperator::Less => CheckedBinaryOperator::Less,
@@ -884,9 +924,36 @@ fn analyze_binary_operator(
                     _ => unreachable!("comparison operators already matched"),
                 },
                 Type::Bool,
+                left,
+                right,
             ))
         }
     }
+}
+
+fn coerce_package_call_arguments(
+    function: crate::package::PackageFunction,
+    checked_arguments: Vec<CheckedExpression>,
+) -> Result<Vec<CheckedExpression>, SemanticError> {
+    let Some(expected_arguments) = crate::semantic::packages::expected_argument_types(function)
+    else {
+        return Ok(checked_arguments);
+    };
+    if checked_arguments.len() != expected_arguments.len() {
+        return Ok(checked_arguments);
+    }
+    checked_arguments
+        .into_iter()
+        .zip(expected_arguments.iter())
+        .enumerate()
+        .map(|(index, (argument, expected))| {
+            coerce_expression_to_type(
+                expected,
+                argument,
+                &format!("argument {} in call to `{}`", index + 1, function.render()),
+            )
+        })
+        .collect()
 }
 
 #[cfg(test)]

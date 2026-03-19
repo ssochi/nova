@@ -49,6 +49,53 @@ pub fn expect_same_type(left: &Type, right: &Type, context: &str) -> Result<(), 
     }
 }
 
+pub fn coerce_expression_to_type(
+    expected: &Type,
+    actual: CheckedExpression,
+    context: &str,
+) -> Result<CheckedExpression, SemanticError> {
+    if &actual.ty == expected {
+        return Ok(actual);
+    }
+    if actual.ty == Type::UntypedNil && expected.supports_nil() {
+        return Ok(zero_value_expression(expected.clone()));
+    }
+    Err(SemanticError::new(format!(
+        "{context} requires `{}`, found `{}`",
+        expected.render(),
+        actual.ty.render()
+    )))
+}
+
+pub fn coerce_nil_equality_operands(
+    left: CheckedExpression,
+    right: CheckedExpression,
+) -> Result<(CheckedExpression, CheckedExpression), SemanticError> {
+    let left_type = left.ty.clone();
+    let right_type = right.ty.clone();
+    match (&left_type, &right_type) {
+        (Type::UntypedNil, Type::UntypedNil) => Err(SemanticError::new(
+            "equality expression does not support untyped `nil` operands",
+        )),
+        (Type::UntypedNil, right_type) if right_type.supports_nil() => {
+            Ok((zero_value_expression(right_type.clone()), right))
+        }
+        (left_type, Type::UntypedNil) if left_type.supports_nil() => {
+            Ok((left, zero_value_expression(left_type.clone())))
+        }
+        _ => {
+            expect_same_type(&left_type, &right_type, "equality expression")?;
+            if !left_type.supports_equality() {
+                return Err(SemanticError::new(format!(
+                    "equality expression does not support `{}` operands",
+                    left_type.render()
+                )));
+            }
+            Ok((left, right))
+        }
+    }
+}
+
 pub fn validate_runtime_type(ty: &Type, context: &str) -> Result<(), SemanticError> {
     match ty {
         Type::Slice(element) => validate_runtime_type(element, context),
@@ -64,7 +111,9 @@ pub fn validate_runtime_type(ty: &Type, context: &str) -> Result<(), SemanticErr
                 )))
             }
         }
-        Type::Int | Type::Byte | Type::Bool | Type::String | Type::Void => Ok(()),
+        Type::Int | Type::Byte | Type::Bool | Type::String | Type::UntypedNil | Type::Void => {
+            Ok(())
+        }
     }
 }
 

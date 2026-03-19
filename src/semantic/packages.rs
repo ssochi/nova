@@ -75,6 +75,21 @@ pub fn validate_package_call(
     (contract.validator)(argument_types)
 }
 
+pub fn expected_argument_types(function: PackageFunction) -> Option<Vec<Type>> {
+    match function {
+        PackageFunction::FmtPrint | PackageFunction::FmtPrintln | PackageFunction::FmtSprint => {
+            None
+        }
+        PackageFunction::StringsContains | PackageFunction::StringsHasPrefix => {
+            Some(vec![Type::String, Type::String])
+        }
+        PackageFunction::StringsJoin => {
+            Some(vec![Type::Slice(Box::new(Type::String)), Type::String])
+        }
+        PackageFunction::StringsRepeat => Some(vec![Type::String, Type::Int]),
+    }
+}
+
 fn package_functions(package: ImportedPackage) -> &'static [PackageFunctionContract] {
     match package {
         ImportedPackage::Fmt => &FMT_FUNCTIONS,
