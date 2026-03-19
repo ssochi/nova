@@ -205,6 +205,60 @@ fn analyze_switch_statements() {
 }
 
 #[test]
+fn analyze_short_declarations_and_inc_dec_statements() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\ttotal := 0\n\tvalues := []int{1, 2}\n\tfor i := 0; i < len(values); i++ {\n\t\ttotal = total + values[i]\n\t}\n\tcounts := map[string]int{\"go\": 1}\n\tcounts[\"go\"]++\n\tif count := len(values); count > 1 {\n\t\ttotal--\n\t}\n\tprintln(total, counts[\"go\"])\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let program = analyze_package(&ast).expect("analysis should succeed");
+
+    assert_eq!(program.functions.len(), 1);
+}
+
+#[test]
+fn reject_short_declaration_in_same_scope() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents:
+            "package main\n\nfunc main() {\n\tvalue := 1\n\tvalue := 2\n\tprintln(value)\n}\n"
+                .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let error = analyze_package(&ast).expect_err("analysis should reject short redeclaration");
+
+    assert!(
+        error
+            .to_string()
+            .contains("short declaration `:=` requires a new variable name")
+    );
+}
+
+#[test]
+fn reject_inc_dec_on_non_numeric_target() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tvar label string = \"go\"\n\tlabel++\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let error = analyze_package(&ast).expect_err("analysis should reject non-numeric inc/dec");
+
+    assert!(
+        error
+            .to_string()
+            .contains("`++` requires `int` or `byte`, found `string`")
+    );
+}
+
+#[test]
 fn reject_switch_header_scope_leak() {
     let source = SourceFile {
         path: "test.go".into(),

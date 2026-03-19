@@ -5,12 +5,13 @@ use crate::bytecode::instruction::{
     CompiledFunction, Instruction, Program, SequenceKind, ValueType,
 };
 use crate::semantic::model::{
-    CallTarget, CheckedAssignmentTarget, CheckedBinaryOperator, CheckedBinding, CheckedBlock,
-    CheckedElseBranch, CheckedExpression, CheckedExpressionKind, CheckedForPostStatement,
-    CheckedForStatement, CheckedFunction, CheckedHeaderStatement, CheckedIfStatement,
-    CheckedMapLiteralEntry, CheckedProgram, CheckedStatement, CheckedSwitchClause,
-    CheckedSwitchStatement, Type,
+    CallTarget, CheckedBinaryOperator, CheckedBinding, CheckedBlock, CheckedElseBranch,
+    CheckedExpression, CheckedExpressionKind, CheckedForStatement, CheckedFunction,
+    CheckedIfStatement, CheckedMapLiteralEntry, CheckedProgram, CheckedStatement,
+    CheckedSwitchClause, CheckedSwitchStatement, Type,
 };
+
+mod simple_statements;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompileError {
@@ -88,33 +89,17 @@ impl<'a> FunctionCompiler<'a> {
 
     fn compile_statement(&mut self, statement: &CheckedStatement) -> Result<(), CompileError> {
         match statement {
+            CheckedStatement::ShortVarDecl { slot, value, .. } => {
+                self.compile_local_store(*slot, value, "short declaration")?;
+            }
             CheckedStatement::VarDecl { slot, value, .. } => {
                 if let Some(value) = value {
-                    self.compile_expression(value)?;
-                    self.expect_value(&value.ty, "variable declaration")?;
-                    self.instructions.push(Instruction::StoreLocal(*slot));
+                    self.compile_local_store(*slot, value, "variable declaration")?;
                 }
             }
-            CheckedStatement::Assign { target, value } => match target {
-                CheckedAssignmentTarget::Local { slot, .. } => {
-                    self.compile_expression(value)?;
-                    self.expect_value(&value.ty, "assignment")?;
-                    self.instructions.push(Instruction::StoreLocal(*slot));
-                }
-                CheckedAssignmentTarget::Index { target, index } => {
-                    self.compile_expression(target)?;
-                    self.expect_value(&target.ty, "index assignment")?;
-                    self.compile_expression(index)?;
-                    self.expect_value(&index.ty, "index assignment")?;
-                    self.compile_expression(value)?;
-                    self.expect_value(&value.ty, "index assignment")?;
-                    if matches!(target.ty, Type::Map { .. }) {
-                        self.instructions.push(Instruction::SetMapIndex);
-                    } else {
-                        self.instructions.push(Instruction::SetIndex);
-                    }
-                }
-            },
+            CheckedStatement::Assign { target, value } => {
+                self.compile_assignment(target, value, "assignment")?
+            }
             CheckedStatement::Expr(expression) => {
                 self.compile_expression(expression)?;
                 if expression.ty.produces_value() {
@@ -143,6 +128,11 @@ impl<'a> FunctionCompiler<'a> {
                 value_binding,
                 ok_binding,
             } => self.compile_map_lookup_statement(map, key, value_binding, ok_binding)?,
+            CheckedStatement::IncDec {
+                target,
+                operator,
+                operand_type,
+            } => self.compile_inc_dec_statement(target, *operator, operand_type)?,
             CheckedStatement::Break => self.compile_break_statement()?,
             CheckedStatement::Continue => self.compile_continue_statement()?,
             CheckedStatement::Return(value) => {
@@ -300,114 +290,6 @@ impl<'a> FunctionCompiler<'a> {
         }
         self.patch_switch_break_jumps(end)?;
         self.control_flow_stack.pop();
-        Ok(())
-    }
-
-    fn compile_header_statement(
-        &mut self,
-        header: &CheckedHeaderStatement,
-        context: &str,
-    ) -> Result<(), CompileError> {
-        match header {
-            CheckedHeaderStatement::VarDecl { slot, value, .. } => {
-                if let Some(value) = value {
-                    self.compile_expression(value)?;
-                    self.expect_value(&value.ty, &format!("{context} variable declaration"))?;
-                    self.instructions.push(Instruction::StoreLocal(*slot));
-                }
-            }
-            CheckedHeaderStatement::Assign { target, value } => match target {
-                CheckedAssignmentTarget::Local { slot, .. } => {
-                    self.compile_expression(value)?;
-                    self.expect_value(&value.ty, &format!("{context} assignment"))?;
-                    self.instructions.push(Instruction::StoreLocal(*slot));
-                }
-                CheckedAssignmentTarget::Index { target, index } => {
-                    self.compile_expression(target)?;
-                    self.expect_value(&target.ty, &format!("{context} assignment"))?;
-                    self.compile_expression(index)?;
-                    self.expect_value(&index.ty, &format!("{context} assignment"))?;
-                    self.compile_expression(value)?;
-                    self.expect_value(&value.ty, &format!("{context} assignment"))?;
-                    if matches!(target.ty, Type::Map { .. }) {
-                        self.instructions.push(Instruction::SetMapIndex);
-                    } else {
-                        self.instructions.push(Instruction::SetIndex);
-                    }
-                }
-            },
-            CheckedHeaderStatement::Expr(expression) => {
-                self.compile_expression(expression)?;
-                if expression.ty.produces_value() {
-                    self.instructions.push(Instruction::Pop);
-                }
-            }
-            CheckedHeaderStatement::MapLookup {
-                map,
-                key,
-                value_binding,
-                ok_binding,
-            } => self.compile_map_lookup_statement(map, key, value_binding, ok_binding)?,
-        }
-        Ok(())
-    }
-
-    fn compile_map_lookup_statement(
-        &mut self,
-        map: &CheckedExpression,
-        key: &CheckedExpression,
-        value_binding: &CheckedBinding,
-        ok_binding: &CheckedBinding,
-    ) -> Result<(), CompileError> {
-        self.compile_expression(map)?;
-        self.expect_value(&map.ty, "comma-ok lookup")?;
-        self.compile_expression(key)?;
-        self.expect_value(&key.ty, "comma-ok lookup")?;
-        self.instructions
-            .push(Instruction::LookupMap(lower_value_type(&map.ty)?));
-        self.consume_binding_value(ok_binding);
-        self.consume_binding_value(value_binding);
-        Ok(())
-    }
-
-    fn compile_for_post_statement(
-        &mut self,
-        post: &CheckedForPostStatement,
-    ) -> Result<(), CompileError> {
-        match post {
-            CheckedForPostStatement::Assign { target, value } => match target {
-                CheckedAssignmentTarget::Local { slot, .. } => {
-                    self.compile_expression(value)?;
-                    self.expect_value(&value.ty, "for post assignment")?;
-                    self.instructions.push(Instruction::StoreLocal(*slot));
-                }
-                CheckedAssignmentTarget::Index { target, index } => {
-                    self.compile_expression(target)?;
-                    self.expect_value(&target.ty, "for post assignment")?;
-                    self.compile_expression(index)?;
-                    self.expect_value(&index.ty, "for post assignment")?;
-                    self.compile_expression(value)?;
-                    self.expect_value(&value.ty, "for post assignment")?;
-                    if matches!(target.ty, Type::Map { .. }) {
-                        self.instructions.push(Instruction::SetMapIndex);
-                    } else {
-                        self.instructions.push(Instruction::SetIndex);
-                    }
-                }
-            },
-            CheckedForPostStatement::Expr(expression) => {
-                self.compile_expression(expression)?;
-                if expression.ty.produces_value() {
-                    self.instructions.push(Instruction::Pop);
-                }
-            }
-            CheckedForPostStatement::MapLookup {
-                map,
-                key,
-                value_binding,
-                ok_binding,
-            } => self.compile_map_lookup_statement(map, key, value_binding, ok_binding)?,
-        }
         Ok(())
     }
 

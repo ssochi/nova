@@ -576,3 +576,81 @@ fn parse_for_clauses_and_loop_control_statements() {
         _ => panic!("expected infinite for clause statement"),
     }
 }
+
+#[test]
+fn parse_short_declarations_and_inc_dec_statements() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\ttotal := 0\n\ttotal++\n\tif count := 2; count > 1 {\n\t\tprintln(count)\n\t}\n\tswitch probe := total; {\n\tcase probe > 0:\n\t\tprintln(probe)\n\t}\n\tfor i := 0; i < 3; i++ {\n\t\tvalues[i]--\n\t}\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let function = &ast.functions[0];
+
+    assert!(matches!(
+        &function.body.statements[0],
+        Statement::ShortVarDecl { name, value: Expression::Integer(0) } if name == "total"
+    ));
+    assert!(matches!(
+        &function.body.statements[1],
+        Statement::IncDec {
+            target: AssignmentTarget::Identifier(name),
+            operator: crate::frontend::ast::IncDecOperator::Increment,
+        } if name == "total"
+    ));
+
+    match &function.body.statements[2] {
+        Statement::If(if_statement) => {
+            assert!(matches!(
+                &if_statement.header,
+                Some(HeaderStatement::ShortVarDecl {
+                    name,
+                    value: Expression::Integer(2),
+                }) if name == "count"
+            ));
+        }
+        _ => panic!("expected if statement"),
+    }
+
+    match &function.body.statements[3] {
+        Statement::Switch(switch_statement) => {
+            assert!(matches!(
+                &switch_statement.header,
+                Some(HeaderStatement::ShortVarDecl {
+                    name,
+                    value: Expression::Identifier(value),
+                }) if name == "probe" && value == "total"
+            ));
+        }
+        _ => panic!("expected switch statement"),
+    }
+
+    match &function.body.statements[4] {
+        Statement::For(for_statement) => {
+            assert!(matches!(
+                &for_statement.init,
+                Some(HeaderStatement::ShortVarDecl {
+                    name,
+                    value: Expression::Integer(0),
+                }) if name == "i"
+            ));
+            assert!(matches!(
+                &for_statement.post,
+                Some(ForPostStatement::IncDec {
+                    target: AssignmentTarget::Identifier(name),
+                    operator: crate::frontend::ast::IncDecOperator::Increment,
+                }) if name == "i"
+            ));
+            assert!(matches!(
+                &for_statement.body.statements[0],
+                Statement::IncDec {
+                    target: AssignmentTarget::Index { .. },
+                    operator: crate::frontend::ast::IncDecOperator::Decrement,
+                }
+            ));
+        }
+        _ => panic!("expected for statement"),
+    }
+}

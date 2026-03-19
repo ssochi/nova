@@ -55,6 +55,8 @@ Operational clarifications:
 20. When extending `switch`, keep the optional header and omitted-tag form explicit in the AST / checked model, and ensure expression-switch tags are evaluated exactly once during lowering instead of being recomputed per case.
 21. When extending classic `for`, keep init / condition / post explicit in the AST and checked model and preserve one dedicated init scope shared by the condition, post, and body instead of lowering init into a leaked synthetic statement.
 22. When extending `break` / `continue`, keep nearest-target resolution explicit in semantic analysis and lowering; `continue` must patch to the loop post-step for classic `for` and to the increment path for staged `range`.
+23. When extending short variable declarations, keep them explicit in the AST and checked model instead of collapsing them into plain assignment; do not imply a broader multi-binding model until tuple / multi-result support exists.
+24. When extending `++` / `--`, keep them statement-only across parsing, semantic analysis, and lowering; do not treat them as expressions just to reuse arithmetic code paths.
 
 If no task is explicitly specified, you must proactively choose the most worthwhile piece of work to advance, with the following priorities:
 1. **Obvious gaps in functionality, core experience, or core flow** (search the web more, do research, refer to relevant experience from similar high-quality projects, and established methodologies)

@@ -104,7 +104,13 @@ impl<'a> Lexer<'a> {
                 '!' if self.peek_next() == Some('=') => {
                     self.push_double(TokenKind::BangEqual, &mut tokens)
                 }
+                '+' if self.peek_next() == Some('+') => {
+                    self.push_double(TokenKind::PlusPlus, &mut tokens)
+                }
                 '+' => self.push_simple(TokenKind::Plus, &mut tokens),
+                '-' if self.peek_next() == Some('-') => {
+                    self.push_double(TokenKind::MinusMinus, &mut tokens)
+                }
                 '-' => self.push_simple(TokenKind::Minus, &mut tokens),
                 '*' => self.push_simple(TokenKind::Star, &mut tokens),
                 '<' if self.peek_next() == Some('=') => {

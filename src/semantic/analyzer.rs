@@ -3,11 +3,11 @@ use std::fmt;
 
 use crate::config::ExecutionConfig;
 use crate::frontend::ast::{
-    AssignmentTarget, Block, FunctionDecl, SourceFileAst, Statement, TypeRef,
+    AssignmentTarget, Block, FunctionDecl, IncDecOperator, SourceFileAst, Statement, TypeRef,
 };
 use crate::semantic::model::{
-    CheckedAssignmentTarget, CheckedBlock, CheckedExpression, CheckedFunction, CheckedProgram,
-    CheckedStatement, Type,
+    CheckedAssignmentTarget, CheckedBlock, CheckedExpression, CheckedFunction,
+    CheckedIncDecOperator, CheckedProgram, CheckedStatement, Type,
 };
 use crate::semantic::registry::{FunctionRegistry, ImportRegistry};
 use crate::semantic::support::{
@@ -195,6 +195,9 @@ impl<'a> FunctionAnalyzer<'a> {
         statement: &Statement,
     ) -> Result<CheckedStatement, SemanticError> {
         match statement {
+            Statement::ShortVarDecl { name, value } => {
+                self.analyze_short_var_decl_statement(name, value)
+            }
             Statement::VarDecl {
                 name,
                 type_ref,
@@ -217,6 +220,9 @@ impl<'a> FunctionAnalyzer<'a> {
                 target,
                 key,
             } => self.analyze_map_lookup_statement(bindings, *binding_mode, target, key),
+            Statement::IncDec { target, operator } => {
+                self.analyze_inc_dec_statement(target, *operator)
+            }
             Statement::Break => self.analyze_break_statement(),
             Statement::Continue => self.analyze_continue_statement(),
             Statement::Return(value) => {
@@ -294,6 +300,42 @@ impl<'a> FunctionAnalyzer<'a> {
         })
     }
 
+    pub(super) fn analyze_short_var_decl_statement(
+        &mut self,
+        name: &str,
+        value: &crate::frontend::ast::Expression,
+    ) -> Result<CheckedStatement, SemanticError> {
+        if name == "_" {
+            return Err(SemanticError::new(
+                "short declaration `:=` requires at least one named variable",
+            ));
+        }
+        if self.current_scope().contains_key(name) {
+            return Err(SemanticError::new(format!(
+                "short declaration `:=` requires a new variable name, but `{name}` already exists in the current scope"
+            )));
+        }
+
+        let value = self.analyze_expression(value)?;
+        if value.ty == Type::UntypedNil {
+            return Err(SemanticError::new(format!(
+                "short declaration `{name}` requires a typed value, found `nil`"
+            )));
+        }
+        if !value.ty.produces_value() {
+            return Err(SemanticError::new(format!(
+                "short declaration `{name}` requires a value-producing expression"
+            )));
+        }
+
+        let slot = self.allocate_local(name.to_string(), value.ty.clone());
+        Ok(CheckedStatement::ShortVarDecl {
+            slot,
+            name: name.to_string(),
+            value,
+        })
+    }
+
     pub(super) fn analyze_assignment_statement(
         &mut self,
         target: &AssignmentTarget,
@@ -315,6 +357,28 @@ impl<'a> FunctionAnalyzer<'a> {
             ));
         }
         Ok(CheckedStatement::Expr(expression))
+    }
+
+    pub(super) fn analyze_inc_dec_statement(
+        &mut self,
+        target: &AssignmentTarget,
+        operator: IncDecOperator,
+    ) -> Result<CheckedStatement, SemanticError> {
+        let target = self.analyze_assignment_target(target)?;
+        let operand_type = self.checked_assignment_target_type(&target)?;
+        if !operand_type.supports_inc_dec() {
+            return Err(SemanticError::new(format!(
+                "`{}` requires `int` or `byte`, found `{}`",
+                render_inc_dec_operator(operator),
+                operand_type.render()
+            )));
+        }
+
+        Ok(CheckedStatement::IncDec {
+            target,
+            operator: checked_inc_dec_operator(operator),
+            operand_type,
+        })
     }
 
     fn analyze_var_initializer(
@@ -367,6 +431,26 @@ impl<'a> FunctionAnalyzer<'a> {
                 Type::Map { value: element, .. } => {
                     coerce_expression_to_type(element.as_ref(), value, "map element assignment")
                 }
+                _ => Err(SemanticError::new(format!(
+                    "index assignment requires `slice` or `map` target, found `{}`",
+                    target_expression.ty.render()
+                ))),
+            },
+        }
+    }
+
+    fn checked_assignment_target_type(
+        &self,
+        target: &CheckedAssignmentTarget,
+    ) -> Result<Type, SemanticError> {
+        match target {
+            CheckedAssignmentTarget::Local { name, .. } => Ok(self.lookup_local(name)?.ty.clone()),
+            CheckedAssignmentTarget::Index {
+                target: target_expression,
+                ..
+            } => match &target_expression.ty {
+                Type::Slice(element) => Ok(element.as_ref().clone()),
+                Type::Map { value, .. } => Ok(value.as_ref().clone()),
                 _ => Err(SemanticError::new(format!(
                     "index assignment requires `slice` or `map` target, found `{}`",
                     target_expression.ty.render()
@@ -434,6 +518,20 @@ impl<'a> FunctionAnalyzer<'a> {
                 })
             }
         }
+    }
+}
+
+fn checked_inc_dec_operator(operator: IncDecOperator) -> CheckedIncDecOperator {
+    match operator {
+        IncDecOperator::Increment => CheckedIncDecOperator::Increment,
+        IncDecOperator::Decrement => CheckedIncDecOperator::Decrement,
+    }
+}
+
+fn render_inc_dec_operator(operator: IncDecOperator) -> &'static str {
+    match operator {
+        IncDecOperator::Increment => "++",
+        IncDecOperator::Decrement => "--",
     }
 }
 

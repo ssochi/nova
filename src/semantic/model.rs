@@ -25,6 +25,11 @@ pub struct CheckedBlock {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CheckedStatement {
+    ShortVarDecl {
+        slot: usize,
+        name: String,
+        value: CheckedExpression,
+    },
     VarDecl {
         slot: usize,
         name: String,
@@ -50,6 +55,11 @@ pub enum CheckedStatement {
         value_binding: CheckedBinding,
         ok_binding: CheckedBinding,
     },
+    IncDec {
+        target: CheckedAssignmentTarget,
+        operator: CheckedIncDecOperator,
+        operand_type: Type,
+    },
     Break,
     Continue,
     Return(Option<CheckedExpression>),
@@ -65,6 +75,11 @@ pub struct CheckedIfStatement {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CheckedHeaderStatement {
+    ShortVarDecl {
+        slot: usize,
+        name: String,
+        value: CheckedExpression,
+    },
     VarDecl {
         slot: usize,
         name: String,
@@ -80,6 +95,11 @@ pub enum CheckedHeaderStatement {
         key: CheckedExpression,
         value_binding: CheckedBinding,
         ok_binding: CheckedBinding,
+    },
+    IncDec {
+        target: CheckedAssignmentTarget,
+        operator: CheckedIncDecOperator,
+        operand_type: Type,
     },
 }
 
@@ -126,6 +146,17 @@ pub enum CheckedForPostStatement {
         value_binding: CheckedBinding,
         ok_binding: CheckedBinding,
     },
+    IncDec {
+        target: CheckedAssignmentTarget,
+        operator: CheckedIncDecOperator,
+        operand_type: Type,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CheckedIncDecOperator {
+    Increment,
+    Decrement,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -288,5 +319,9 @@ impl Type {
 
     pub fn supports_map_key(&self) -> bool {
         matches!(self, Type::Int | Type::Byte | Type::Bool | Type::String)
+    }
+
+    pub fn supports_inc_dec(&self) -> bool {
+        matches!(self, Type::Int | Type::Byte)
     }
 }

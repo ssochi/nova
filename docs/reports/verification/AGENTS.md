@@ -55,3 +55,4 @@ This directory stores validation evidence that "proves the change holds."
 - `2026-03-20-map-runtime-groundwork.md`: validates staged `map[K]V` support across parsing, semantic analysis, bytecode lowering, VM execution, and CLI inspection
 - `2026-03-20-map-literals-delete.md`: validates staged `map[K]V{...}` literals and builtin `delete(map, key)` across the full CLI and VM stack
 - `2026-03-20-explicit-nil-comparisons.md`: validates explicit `nil` expressions, typed nil coercion, and `slice/map` nil comparisons across the full CLI and VM stack
+- `2026-03-20-simple-statements-incdec.md`: validates staged short declarations and explicit `++` / `--` across the full CLI and VM stack

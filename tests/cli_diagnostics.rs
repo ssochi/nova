@@ -323,6 +323,45 @@ fn check_rejects_invalid_cap_argument_type() {
 }
 
 #[test]
+fn check_rejects_short_declaration_without_new_variable() {
+    let path = write_temp_source(
+        "check-bad-short-decl",
+        "package main\n\nfunc main() {\n\tvalue := 1\n\tvalue := 2\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("short declaration `:=` requires a new variable name"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_inc_dec_on_string_target() {
+    let path = write_temp_source(
+        "check-bad-incdec",
+        "package main\n\nfunc main() {\n\tvar label string = \"go\"\n\tlabel++\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("`++` requires `int` or `byte`, found `string`"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_short_declaration_in_for_post_clause() {
+    let path = write_temp_source(
+        "check-bad-for-post-short",
+        "package main\n\nfunc main() {\n\tfor i := 0; i < 3; i := 1 {\n\t\tprintln(i)\n\t}\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("for post statement does not support `:=`"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
 fn check_rejects_untyped_nil_variable_inference() {
     let path = write_temp_source(
         "check-bad-nil-var",

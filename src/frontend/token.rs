@@ -48,6 +48,8 @@ pub enum TokenKind {
     Assign,
     EqualEqual,
     BangEqual,
+    PlusPlus,
+    MinusMinus,
     Plus,
     Minus,
     Star,
@@ -74,6 +76,8 @@ impl TokenKind {
                 | TokenKind::Break
                 | TokenKind::Continue
                 | TokenKind::Return
+                | TokenKind::PlusPlus
+                | TokenKind::MinusMinus
         )
     }
 
@@ -113,6 +117,8 @@ impl TokenKind {
             TokenKind::Assign => "=".to_string(),
             TokenKind::EqualEqual => "==".to_string(),
             TokenKind::BangEqual => "!=".to_string(),
+            TokenKind::PlusPlus => "++".to_string(),
+            TokenKind::MinusMinus => "--".to_string(),
             TokenKind::Plus => "+".to_string(),
             TokenKind::Minus => "-".to_string(),
             TokenKind::Star => "*".to_string(),

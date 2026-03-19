@@ -1,6 +1,6 @@
 use crate::frontend::ast::{
     Binding, BindingMode, ElseBranch, Expression, ForPostStatement, ForStatement, HeaderStatement,
-    IfStatement, Statement, SwitchClause, SwitchStatement,
+    IfStatement, IncDecOperator, Statement, SwitchClause, SwitchStatement,
 };
 use crate::frontend::token::TokenKind;
 
@@ -60,13 +60,7 @@ impl<'a> Parser<'a> {
             return self.parse_map_lookup_statement();
         }
 
-        let expression = self.parse_expression()?;
-        if self.match_kind(&TokenKind::Assign) {
-            let target = assignment_target_from_expression(expression)?;
-            let value = self.parse_expression()?;
-            return Ok(Statement::Assign { target, value });
-        }
-        Ok(Statement::Expr(expression))
+        self.parse_expression_statement()
     }
 
     fn parse_for_statement(&mut self) -> Result<Statement, ParseError> {
@@ -238,12 +232,31 @@ impl<'a> Parser<'a> {
         }
 
         let expression = self.parse_expression()?;
+        if self.match_kind(&TokenKind::Define) {
+            let name = short_var_name_from_expression(expression)?;
+            let value = self.parse_expression()?;
+            self.expect(TokenKind::Semicolon)?;
+            let condition = self.parse_expression()?;
+            return Ok((
+                Some(HeaderStatement::ShortVarDecl { name, value }),
+                condition,
+            ));
+        }
         if self.match_kind(&TokenKind::Assign) {
             let target = assignment_target_from_expression(expression)?;
             let value = self.parse_expression()?;
             self.expect(TokenKind::Semicolon)?;
             let condition = self.parse_expression()?;
             return Ok((Some(HeaderStatement::Assign { target, value }), condition));
+        }
+        if let Some(operator) = self.match_inc_dec_operator() {
+            let target = assignment_target_from_expression(expression)?;
+            self.expect(TokenKind::Semicolon)?;
+            let condition = self.parse_expression()?;
+            return Ok((
+                Some(HeaderStatement::IncDec { target, operator }),
+                condition,
+            ));
         }
 
         if self.match_kind(&TokenKind::Semicolon) {
@@ -284,6 +297,20 @@ impl<'a> Parser<'a> {
         }
 
         let expression = self.parse_expression()?;
+        if self.match_kind(&TokenKind::Define) {
+            let name = short_var_name_from_expression(expression)?;
+            let value = self.parse_expression()?;
+            self.expect(TokenKind::Semicolon)?;
+            let switch_expression = if self.check(&TokenKind::LeftBrace) {
+                None
+            } else {
+                Some(self.parse_expression()?)
+            };
+            return Ok((
+                Some(HeaderStatement::ShortVarDecl { name, value }),
+                switch_expression,
+            ));
+        }
         if self.match_kind(&TokenKind::Assign) {
             let target = assignment_target_from_expression(expression)?;
             let value = self.parse_expression()?;
@@ -295,6 +322,19 @@ impl<'a> Parser<'a> {
             };
             return Ok((
                 Some(HeaderStatement::Assign { target, value }),
+                switch_expression,
+            ));
+        }
+        if let Some(operator) = self.match_inc_dec_operator() {
+            let target = assignment_target_from_expression(expression)?;
+            self.expect(TokenKind::Semicolon)?;
+            let switch_expression = if self.check(&TokenKind::LeftBrace) {
+                None
+            } else {
+                Some(self.parse_expression()?)
+            };
+            return Ok((
+                Some(HeaderStatement::IncDec { target, operator }),
                 switch_expression,
             ));
         }
@@ -398,10 +438,19 @@ impl<'a> Parser<'a> {
         }
 
         let expression = self.parse_expression()?;
+        if self.match_kind(&TokenKind::Define) {
+            let name = short_var_name_from_expression(expression)?;
+            let value = self.parse_expression()?;
+            return Ok(HeaderStatement::ShortVarDecl { name, value });
+        }
         if self.match_kind(&TokenKind::Assign) {
             let target = assignment_target_from_expression(expression)?;
             let value = self.parse_expression()?;
             return Ok(HeaderStatement::Assign { target, value });
+        }
+        if let Some(operator) = self.match_inc_dec_operator() {
+            let target = assignment_target_from_expression(expression)?;
+            return Ok(HeaderStatement::IncDec { target, operator });
         }
 
         Ok(HeaderStatement::Expr(expression))
@@ -432,13 +481,49 @@ impl<'a> Parser<'a> {
         }
 
         let expression = self.parse_expression()?;
+        if self.match_kind(&TokenKind::Define) {
+            return Err(self.error_at_current("for post statement does not support `:=`"));
+        }
         if self.match_kind(&TokenKind::Assign) {
             let target = assignment_target_from_expression(expression)?;
             let value = self.parse_expression()?;
             return Ok(ForPostStatement::Assign { target, value });
         }
+        if let Some(operator) = self.match_inc_dec_operator() {
+            let target = assignment_target_from_expression(expression)?;
+            return Ok(ForPostStatement::IncDec { target, operator });
+        }
 
         Ok(ForPostStatement::Expr(expression))
+    }
+
+    fn parse_expression_statement(&mut self) -> Result<Statement, ParseError> {
+        let expression = self.parse_expression()?;
+        if self.match_kind(&TokenKind::Define) {
+            let name = short_var_name_from_expression(expression)?;
+            let value = self.parse_expression()?;
+            return Ok(Statement::ShortVarDecl { name, value });
+        }
+        if self.match_kind(&TokenKind::Assign) {
+            let target = assignment_target_from_expression(expression)?;
+            let value = self.parse_expression()?;
+            return Ok(Statement::Assign { target, value });
+        }
+        if let Some(operator) = self.match_inc_dec_operator() {
+            let target = assignment_target_from_expression(expression)?;
+            return Ok(Statement::IncDec { target, operator });
+        }
+        Ok(Statement::Expr(expression))
+    }
+
+    fn match_inc_dec_operator(&mut self) -> Option<IncDecOperator> {
+        if self.match_kind(&TokenKind::PlusPlus) {
+            Some(IncDecOperator::Increment)
+        } else if self.match_kind(&TokenKind::MinusMinus) {
+            Some(IncDecOperator::Decrement)
+        } else {
+            None
+        }
     }
 
     fn parse_binding(&mut self) -> Result<Binding, ParseError> {
@@ -512,5 +597,14 @@ impl<'a> Parser<'a> {
             return Ok(());
         }
         Err(self.error_at_current(&format!("labeled `{keyword}` statements are not supported")))
+    }
+}
+
+fn short_var_name_from_expression(expression: Expression) -> Result<String, ParseError> {
+    match expression {
+        Expression::Identifier(name) => Ok(name),
+        _ => Err(ParseError::new(
+            "short variable declaration requires a variable name on the left side",
+        )),
     }
 }

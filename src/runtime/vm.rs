@@ -136,9 +136,15 @@ impl VirtualMachine {
                         .ok_or_else(|| RuntimeError::new(format!("invalid local slot {index}")))?;
                     *slot = value;
                 }
-                Instruction::Add => self.binary_integer_op(|left, right| left + right)?,
+                Instruction::Add => self.binary_numeric_op(
+                    |left, right| left + right,
+                    |left, right| left.wrapping_add(right),
+                )?,
                 Instruction::Concat => self.concat_strings()?,
-                Instruction::Subtract => self.binary_integer_op(|left, right| left - right)?,
+                Instruction::Subtract => self.binary_numeric_op(
+                    |left, right| left - right,
+                    |left, right| left.wrapping_sub(right),
+                )?,
                 Instruction::Multiply => self.binary_integer_op(|left, right| left * right)?,
                 Instruction::Divide => self.binary_integer_op_checked(|left, right| {
                     if right == 0 {
@@ -238,6 +244,30 @@ impl VirtualMachine {
         Ok(ExecutionResult {
             output: self.output.clone(),
         })
+    }
+
+    fn binary_numeric_op(
+        &mut self,
+        integer_operation: impl FnOnce(i64, i64) -> i64,
+        byte_operation: impl FnOnce(u8, u8) -> u8,
+    ) -> Result<(), RuntimeError> {
+        let right = self.pop_value()?;
+        let left = self.pop_value()?;
+        let value = match (left, right) {
+            (Value::Integer(left), Value::Integer(right)) => {
+                Value::Integer(integer_operation(left, right))
+            }
+            (Value::Byte(left), Value::Byte(right)) => Value::Byte(byte_operation(left, right)),
+            (left, right) => {
+                return Err(RuntimeError::new(format!(
+                    "arithmetic expected matching `int` or `byte` operands, found `{}` and `{}`",
+                    support::runtime_type_name(&left),
+                    support::runtime_type_name(&right)
+                )));
+            }
+        };
+        self.stack.push(value);
+        Ok(())
     }
 
     fn binary_integer_op(

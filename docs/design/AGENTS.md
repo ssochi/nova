@@ -45,3 +45,4 @@ This directory stores feature and subsystem designs. It describes intent, scope 
 - `strings-package-contracts.md`: design baseline for typed package contracts and the first `strings` package seam
 - `map-runtime-groundwork.md`: design baseline for staged `map[K]V` support with explicit make/index/assignment execution paths
 - `explicit-nil-comparisons.md`: design baseline for explicit `nil` expressions and `slice/map` nil comparisons
+- `simple-statements.md`: design baseline for staged short declarations plus explicit `++` / `--` as simple statements

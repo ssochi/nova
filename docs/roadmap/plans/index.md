@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-06-34-01-simple-statements-incdec`
+- Opened `2026-03-20-06-34-01-simple-statements-incdec` for staged short declarations plus explicit `++` / `--` under `M3`
 - Completed and archived `2026-03-20-06-12-55-for-clauses-break-continue`
 - Opened `2026-03-20-06-12-55-for-clauses-break-continue` for staged classic `for` clauses plus unlabeled `break` / `continue` under `M3`
 - Completed and archived `2026-03-20-05-46-33-switch-statements`

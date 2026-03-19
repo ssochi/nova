@@ -134,6 +134,12 @@ fn run_executes_explicit_nil_values_and_comparisons() {
 }
 
 #[test]
+fn run_executes_short_declarations_and_inc_dec_statements() {
+    let output = run_cli(&["run", "examples/simple_statements.go"]).expect("program should run");
+    assert_eq!(output, "6 3\n2 1\nready\n");
+}
+
+#[test]
 fn dump_bytecode_shows_stack_machine_instructions() {
     let output = run_cli(&["dump-bytecode", "examples/arithmetic.go"])
         .expect("bytecode should be generated");
@@ -170,6 +176,17 @@ fn dump_ast_renders_classic_for_clauses_and_loop_control() {
     assert!(output.contains("for var i int = 0; (i < 5); i = (i + 1) {"));
     assert!(output.contains("continue"));
     assert!(output.contains("break"));
+}
+
+#[test]
+fn dump_ast_renders_short_declarations_and_inc_dec_statements() {
+    let output =
+        run_cli(&["dump-ast", "examples/simple_statements.go"]).expect("ast should be rendered");
+
+    assert!(output.contains("total := 0"));
+    assert!(output.contains("for i := 0; (i < len(values)); i++ {"));
+    assert!(output.contains("counts[\"go\"]++"));
+    assert!(output.contains("switch probe := current; {"));
 }
 
 #[test]
@@ -255,6 +272,26 @@ fn dump_tokens_show_switch_keywords() {
     assert!(output.contains("switch"));
     assert!(output.contains("case"));
     assert!(output.contains("default"));
+}
+
+#[test]
+fn dump_tokens_show_short_declaration_and_inc_dec_tokens() {
+    let output = run_cli(&["dump-tokens", "examples/simple_statements.go"])
+        .expect("tokens should be rendered");
+
+    assert!(output.contains(":="));
+    assert!(output.contains("++"));
+    assert!(output.contains("--"));
+}
+
+#[test]
+fn dump_bytecode_shows_short_declarations_and_inc_dec_lowering() {
+    let output = run_cli(&["dump-bytecode", "examples/simple_statements.go"])
+        .expect("bytecode should be generated");
+
+    assert!(output.contains("incdec$target"));
+    assert!(output.contains("push-int 1"));
+    assert!(output.contains("set-map-index"));
 }
 
 #[test]

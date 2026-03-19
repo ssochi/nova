@@ -111,6 +111,22 @@ impl<'a> FunctionAnalyzer<'a> {
                     ok_binding,
                 })
             }
+            ForPostStatement::IncDec { target, operator } => {
+                let statement = self.analyze_inc_dec_statement(target, *operator)?;
+                let CheckedStatement::IncDec {
+                    target,
+                    operator,
+                    operand_type,
+                } = statement
+                else {
+                    unreachable!("inc/dec analysis always returns checked inc/dec data");
+                };
+                Ok(CheckedForPostStatement::IncDec {
+                    target,
+                    operator,
+                    operand_type,
+                })
+            }
         }
     }
 }

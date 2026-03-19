@@ -106,6 +106,10 @@ pub struct Block {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Statement {
+    ShortVarDecl {
+        name: String,
+        value: Expression,
+    },
     VarDecl {
         name: String,
         type_ref: Option<TypeRef>,
@@ -131,6 +135,10 @@ pub enum Statement {
         target: Expression,
         key: Expression,
     },
+    IncDec {
+        target: AssignmentTarget,
+        operator: IncDecOperator,
+    },
     Break,
     Continue,
     Return(Option<Expression>),
@@ -146,6 +154,10 @@ pub struct IfStatement {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum HeaderStatement {
+    ShortVarDecl {
+        name: String,
+        value: Expression,
+    },
     VarDecl {
         name: String,
         type_ref: Option<TypeRef>,
@@ -161,6 +173,10 @@ pub enum HeaderStatement {
         binding_mode: BindingMode,
         target: Expression,
         key: Expression,
+    },
+    IncDec {
+        target: AssignmentTarget,
+        operator: IncDecOperator,
     },
 }
 
@@ -206,11 +222,24 @@ pub enum ForPostStatement {
         target: Expression,
         key: Expression,
     },
+    IncDec {
+        target: AssignmentTarget,
+        operator: IncDecOperator,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IncDecOperator {
+    Increment,
+    Decrement,
 }
 
 impl Statement {
     fn render(&self, indent: usize) -> String {
         match self {
+            Statement::ShortVarDecl { name, value } => {
+                format!("{}{} := {}", indent_str(indent), name, value.render())
+            }
             Statement::VarDecl {
                 name,
                 type_ref,
@@ -267,6 +296,12 @@ impl Statement {
                 indent_str(indent),
                 render_map_lookup_statement(bindings, *binding_mode, target, key)
             ),
+            Statement::IncDec { target, operator } => format!(
+                "{}{}{}",
+                indent_str(indent),
+                target.render(),
+                operator.render()
+            ),
             Statement::Break => format!("{}break", indent_str(indent)),
             Statement::Continue => format!("{}continue", indent_str(indent)),
             Statement::Return(Some(expression)) => {
@@ -280,6 +315,9 @@ impl Statement {
 impl HeaderStatement {
     fn render(&self) -> String {
         match self {
+            HeaderStatement::ShortVarDecl { name, value } => {
+                format!("{name} := {}", value.render())
+            }
             HeaderStatement::VarDecl {
                 name,
                 type_ref,
@@ -306,6 +344,9 @@ impl HeaderStatement {
                 target,
                 key,
             } => render_map_lookup_statement(bindings, *binding_mode, target, key),
+            HeaderStatement::IncDec { target, operator } => {
+                format!("{}{}", target.render(), operator.render())
+            }
         }
     }
 }
@@ -322,6 +363,18 @@ impl ForPostStatement {
                 target,
                 key,
             } => render_map_lookup_statement(bindings, BindingMode::Assign, target, key),
+            ForPostStatement::IncDec { target, operator } => {
+                format!("{}{}", target.render(), operator.render())
+            }
+        }
+    }
+}
+
+impl IncDecOperator {
+    fn render(self) -> &'static str {
+        match self {
+            IncDecOperator::Increment => "++",
+            IncDecOperator::Decrement => "--",
         }
     }
 }

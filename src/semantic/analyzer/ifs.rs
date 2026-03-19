@@ -39,6 +39,9 @@ impl<'a> FunctionAnalyzer<'a> {
         header: &HeaderStatement,
     ) -> Result<CheckedHeaderStatement, SemanticError> {
         match header {
+            HeaderStatement::ShortVarDecl { name, value } => checked_statement_to_header_statement(
+                self.analyze_short_var_decl_statement(name, value)?,
+            ),
             HeaderStatement::VarDecl {
                 name,
                 type_ref,
@@ -60,6 +63,9 @@ impl<'a> FunctionAnalyzer<'a> {
                 target,
                 key,
             } => self.analyze_map_lookup_initializer(bindings, *binding_mode, target, key),
+            HeaderStatement::IncDec { target, operator } => checked_statement_to_header_statement(
+                self.analyze_inc_dec_statement(target, *operator)?,
+            ),
         }
     }
 
@@ -86,6 +92,9 @@ fn checked_statement_to_header_statement(
     statement: CheckedStatement,
 ) -> Result<CheckedHeaderStatement, SemanticError> {
     Ok(match statement {
+        CheckedStatement::ShortVarDecl { slot, name, value } => {
+            CheckedHeaderStatement::ShortVarDecl { slot, name, value }
+        }
         CheckedStatement::VarDecl { slot, name, value } => {
             CheckedHeaderStatement::VarDecl { slot, name, value }
         }
@@ -103,6 +112,15 @@ fn checked_statement_to_header_statement(
             key,
             value_binding,
             ok_binding,
+        },
+        CheckedStatement::IncDec {
+            target,
+            operator,
+            operand_type,
+        } => CheckedHeaderStatement::IncDec {
+            target,
+            operator,
+            operand_type,
         },
         CheckedStatement::If(_)
         | CheckedStatement::Switch(_)
