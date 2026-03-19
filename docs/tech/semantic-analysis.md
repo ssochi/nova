@@ -18,9 +18,11 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 - Validate package-level structure independently from runtime entrypoint rules.
 - Track block scopes and map variables to stable local slots.
 - Infer the type of each supported expression and reject incompatible assignments, returns, and branch conditions.
-- Validate slice windows and indexed slice assignment through the checked-program model instead of runtime-only checks.
+- Validate slice and string windows plus indexed slice assignment through the checked-program model instead of runtime-only checks.
 - Resolve builtin calls through a centralized contract table instead of hardcoded name checks spread across the analyzer.
 - Model `make([]T, len[, cap])` explicitly because its first argument is a type, then lower it into checked slice-allocation expressions before bytecode generation.
+- Model `byte` explicitly so string indexing and `[]byte` paths do not collapse into ad hoc `int` behavior.
+- Validate the builtin `copy` special case for `[]byte` <- `string` centrally instead of hiding it in the runtime.
 - Validate loop conditions and model loop bodies as scoped blocks.
 - Ensure non-void functions do not fall through on any reachable path in the supported subset.
 
@@ -48,9 +50,10 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 
 ## Current Limits
 
-- Supported types are limited to `int`, `bool`, `string`, `[]T`, and `void`, and type-valued syntax is currently only accepted through builtin `make`.
+- Supported types are limited to `int`, `byte`, `bool`, `string`, `[]T`, and `void`, and type-valued syntax is currently only accepted through builtin `make`.
 - Package loading is still single-file and does not model imports.
 - Loop support is limited to `for <condition> { ... }`.
 - Termination analysis only treats the literal `for true { ... }` as definitely non-fallthrough because `break` and `continue` do not exist yet.
 - Builtin coverage is still intentionally small and only `make` currently uses a type argument.
-- Slice support is still staged: simple slice expressions on `[]T` are supported, while full slice expressions and string slicing remain deferred.
+- Slice support is still staged: simple slice expressions on `[]T` and `string` are supported, while full slice expressions remain deferred.
+- General conversion syntax such as `[]byte("text")` or `string(bytes)` is still deferred even though `byte` and `copy([]byte, string)` now exist.

@@ -117,6 +117,9 @@ fn validate_copy_builtin(argument_types: &[Type]) -> Result<Type, String> {
         )
     })?;
     let source = &argument_types[1];
+    if destination_element == Type::Byte && source == &Type::String {
+        return Ok(Type::Int);
+    }
     if source.slice_element_type() != Some(&destination_element) {
         return Err(format!(
             "argument 2 in call to builtin `copy` requires `{}`, found `{}`",
@@ -244,6 +247,17 @@ mod tests {
 
         assert!(error.contains("argument 2"));
         assert!(error.contains("requires `[]int`"));
+    }
+
+    #[test]
+    fn copy_accepts_byte_slice_and_string() {
+        let result = validate_builtin_call(
+            BuiltinFunction::Copy,
+            &[Type::Slice(Box::new(Type::Byte)), Type::String],
+        )
+        .expect("copy should accept []byte <- string");
+
+        assert_eq!(result, Type::Int);
     }
 
     #[test]

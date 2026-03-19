@@ -219,6 +219,21 @@ fn check_rejects_bad_slice_upper_bound_type() {
 }
 
 #[test]
+fn check_rejects_copy_string_into_non_byte_slice() {
+    let path = write_temp_source(
+        "check-bad-byte-copy",
+        "package main\n\nfunc main() {\n\tvar values = make([]int, 2)\n\tprintln(copy(values, \"no\"))\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(
+        error.contains("argument 2 in call to builtin `copy` requires `[]int`, found `string`")
+    );
+
+    cleanup_temp_source(path);
+}
+
+#[test]
 fn check_rejects_invalid_cap_argument_type() {
     let path = write_temp_source(
         "check-bad-cap",

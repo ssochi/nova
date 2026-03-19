@@ -1,6 +1,8 @@
 use std::fmt;
 
-use crate::bytecode::instruction::{CompiledFunction, Instruction, Program, ValueType};
+use crate::bytecode::instruction::{
+    CompiledFunction, Instruction, Program, SequenceKind, ValueType,
+};
 use crate::semantic::model::{
     CallTarget, CheckedAssignmentTarget, CheckedBinaryOperator, CheckedBlock, CheckedExpression,
     CheckedExpressionKind, CheckedFunction, CheckedProgram, CheckedStatement, Type,
@@ -162,6 +164,7 @@ impl<'a> FunctionCompiler<'a> {
             }
             CheckedExpressionKind::ZeroValue => match &expression.ty {
                 Type::Int => self.instructions.push(Instruction::PushInt(0)),
+                Type::Byte => self.instructions.push(Instruction::PushByte(0)),
                 Type::Bool => self.instructions.push(Instruction::PushBool(false)),
                 Type::String => self
                     .instructions
@@ -205,7 +208,8 @@ impl<'a> FunctionCompiler<'a> {
                 self.expect_value(&target.ty, "index expression")?;
                 self.compile_expression(index)?;
                 self.expect_value(&index.ty, "index expression")?;
-                self.instructions.push(Instruction::Index);
+                self.instructions
+                    .push(Instruction::Index(lower_sequence_kind(&target.ty)?));
             }
             CheckedExpressionKind::Slice { target, low, high } => {
                 self.compile_expression(target)?;
@@ -219,6 +223,7 @@ impl<'a> FunctionCompiler<'a> {
                     self.expect_value(&high.ty, "slice expression")?;
                 }
                 self.instructions.push(Instruction::Slice {
+                    target_kind: lower_sequence_kind(&target.ty)?,
                     has_low: low.is_some(),
                     has_high: high.is_some(),
                 });
@@ -296,11 +301,23 @@ impl<'a> FunctionCompiler<'a> {
 fn lower_value_type(ty: &Type) -> Result<ValueType, CompileError> {
     match ty {
         Type::Int => Ok(ValueType::Int),
+        Type::Byte => Ok(ValueType::Byte),
         Type::Bool => Ok(ValueType::Bool),
         Type::String => Ok(ValueType::String),
         Type::Slice(element) => Ok(ValueType::Slice(Box::new(lower_value_type(element)?))),
         Type::Void => Err(CompileError::new(
             "runtime value types do not support `void`",
         )),
+    }
+}
+
+fn lower_sequence_kind(ty: &Type) -> Result<SequenceKind, CompileError> {
+    match ty {
+        Type::Slice(_) => Ok(SequenceKind::Slice),
+        Type::String => Ok(SequenceKind::String),
+        _ => Err(CompileError::new(format!(
+            "sequence operations do not support `{}`",
+            ty.render()
+        ))),
     }
 }

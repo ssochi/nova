@@ -70,6 +70,12 @@ fn run_executes_make_allocated_slices() {
 }
 
 #[test]
+fn run_executes_byte_oriented_strings() {
+    let output = run_cli(&["run", "examples/byte_strings.go"]).expect("program should run");
+    assert_eq!(output, "0 103 oph 6 112 3\n195 169 2\n");
+}
+
+#[test]
 fn dump_bytecode_shows_stack_machine_instructions() {
     let output = run_cli(&["dump-bytecode", "examples/arithmetic.go"])
         .expect("bytecode should be generated");
@@ -213,6 +219,17 @@ fn dump_ast_renders_make_slices() {
 }
 
 #[test]
+fn dump_ast_renders_byte_oriented_strings() {
+    let output =
+        run_cli(&["dump-ast", "examples/byte_strings.go"]).expect("ast should be rendered");
+
+    assert!(output.contains("var marker byte"));
+    assert!(output.contains("var first byte = word[0]"));
+    assert!(output.contains("var middle = word[1:4]"));
+    assert!(output.contains("var buf = make([]byte, len(word))"));
+}
+
+#[test]
 fn dump_bytecode_shows_loop_jumps() {
     let output =
         run_cli(&["dump-bytecode", "examples/loops.go"]).expect("bytecode should be generated");
@@ -283,6 +300,18 @@ fn dump_bytecode_shows_make_slice_instructions() {
     assert!(output.contains("make-slice int cap=explicit"));
     assert!(output.contains("make-slice string cap=len"));
     assert!(output.contains("call-builtin append 2"));
+}
+
+#[test]
+fn dump_bytecode_shows_byte_oriented_string_instructions() {
+    let output = run_cli(&["dump-bytecode", "examples/byte_strings.go"])
+        .expect("bytecode should be generated");
+
+    assert!(output.contains("push-byte 0"));
+    assert!(output.contains("index string"));
+    assert!(output.contains("slice string low=true high=true"));
+    assert!(output.contains("make-slice byte cap=len"));
+    assert!(output.contains("call-builtin copy 2"));
 }
 
 #[test]

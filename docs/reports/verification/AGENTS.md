@@ -45,3 +45,4 @@ This directory stores validation evidence that "proves the change holds."
 - `2026-03-20-slice-builtins-capacity.md`: validates `cap`, `copy`, and capacity-aware append reuse across tests and CLI inspection
 - `2026-03-20-typed-var-zero-values.md`: validates explicit typed `var` declarations, synthesized zero values, and nil-slice runtime behavior
 - `2026-03-20-make-slice-allocation.md`: validates `make([]T, len[, cap])`, zero-filled spare capacity, and the explicit allocation bytecode path
+- `2026-03-20-byte-strings-and-slicing.md`: validates byte-oriented strings, `byte`, string indexing/slicing, and `copy([]byte, string)`

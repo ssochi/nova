@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-03-02-10-byte-strings-and-slicing`
+- Opened `2026-03-20-03-02-10-byte-strings-and-slicing` for byte-oriented runtime strings, string slicing/indexing, and `copy([]byte, string)` under `M3`
 - Completed and archived `2026-03-20-02-39-55-make-slice-allocation`
 - Opened `2026-03-20-02-39-55-make-slice-allocation` for slice allocation through builtin `make` under `M3`
 - Completed and archived `2026-03-20-02-18-45-typed-var-zero-values`

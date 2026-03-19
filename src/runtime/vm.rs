@@ -2,9 +2,9 @@ use std::convert::TryFrom;
 use std::fmt;
 
 use crate::builtin::BuiltinFunction;
-use crate::bytecode::instruction::{Instruction, Program, ValueType};
+use crate::bytecode::instruction::{Instruction, Program, SequenceKind, ValueType};
 use crate::package::PackageFunction;
-use crate::runtime::value::{SliceValue, Value};
+use crate::runtime::value::{SliceValue, StringValue, Value};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeError {
@@ -84,8 +84,11 @@ impl VirtualMachine {
             let mut advance_pc = true;
             match instruction {
                 Instruction::PushInt(value) => self.stack.push(Value::Integer(value)),
+                Instruction::PushByte(value) => self.stack.push(Value::Byte(value)),
                 Instruction::PushBool(value) => self.stack.push(Value::Boolean(value)),
-                Instruction::PushString(value) => self.stack.push(Value::String(value)),
+                Instruction::PushString(value) => {
+                    self.stack.push(Value::String(StringValue::from(value)))
+                }
                 Instruction::PushNilSlice => self.stack.push(Value::Slice(SliceValue::nil())),
                 Instruction::BuildSlice(count) => {
                     let mut elements = Vec::with_capacity(count);
@@ -136,8 +139,12 @@ impl VirtualMachine {
                 Instruction::GreaterEqual => {
                     self.binary_integer_compare(|left, right| left >= right)?
                 }
-                Instruction::Index => self.index_slice()?,
-                Instruction::Slice { has_low, has_high } => self.slice_value(has_low, has_high)?,
+                Instruction::Index(target_kind) => self.index_value(target_kind)?,
+                Instruction::Slice {
+                    target_kind,
+                    has_low,
+                    has_high,
+                } => self.slice_value(target_kind, has_low, has_high)?,
                 Instruction::SetIndex => self.set_slice_index()?,
                 Instruction::Jump(target) => {
                     self.frames[frame_index].pc = target;
@@ -251,7 +258,7 @@ impl VirtualMachine {
     fn concat_strings(&mut self) -> Result<(), RuntimeError> {
         let right = self.pop_string()?;
         let left = self.pop_string()?;
-        self.stack.push(Value::String(format!("{left}{right}")));
+        self.stack.push(Value::String(left.concat(&right)));
         Ok(())
     }
 
@@ -267,13 +274,8 @@ impl VirtualMachine {
                 self.output.push('\n');
             }
             BuiltinFunction::Len => {
-                if arguments.len() != 1 {
-                    return Err(RuntimeError::new(format!(
-                        "builtin `len` expected 1 argument, received {}",
-                        arguments.len()
-                    )));
-                }
-                let value = match arguments.into_iter().next().expect("arity checked above") {
+                let [argument] = expect_exact_builtin_arguments(arguments, 1, "len")?;
+                let value = match argument {
                     Value::String(value) => value.len() as i64,
                     Value::Slice(slice) => slice.len() as i64,
                     _ => {
@@ -285,13 +287,8 @@ impl VirtualMachine {
                 self.stack.push(Value::Integer(value));
             }
             BuiltinFunction::Cap => {
-                if arguments.len() != 1 {
-                    return Err(RuntimeError::new(format!(
-                        "builtin `cap` expected 1 argument, received {}",
-                        arguments.len()
-                    )));
-                }
-                let value = match arguments.into_iter().next().expect("arity checked above") {
+                let [argument] = expect_exact_builtin_arguments(arguments, 1, "cap")?;
+                let value = match argument {
                     Value::Slice(slice) => slice.capacity() as i64,
                     _ => {
                         return Err(RuntimeError::new("builtin `cap` expected a slice argument"));
@@ -309,16 +306,16 @@ impl VirtualMachine {
                         ));
                     }
                 };
-                let source = match source {
-                    Value::Slice(slice) => slice,
+                let copied = match source {
+                    Value::Slice(slice) => destination.copy_from(&slice),
+                    Value::String(value) => destination.copy_from_string(&value),
                     _ => {
                         return Err(RuntimeError::new(
-                            "builtin `copy` expected a slice as argument 2",
+                            "builtin `copy` expected a slice or string as argument 2",
                         ));
                     }
                 };
-                self.stack
-                    .push(Value::Integer(destination.copy_from(&source) as i64));
+                self.stack.push(Value::Integer(copied as i64));
             }
             BuiltinFunction::Append => {
                 let Some((first, rest)) = arguments.split_first() else {
@@ -365,28 +362,28 @@ impl VirtualMachine {
             }
             PackageFunction::FmtSprint => {
                 self.stack
-                    .push(Value::String(render_package_arguments(&arguments, "")));
+                    .push(Value::String(StringValue::from(render_package_arguments(
+                        &arguments, "",
+                    ))));
             }
             PackageFunction::StringsContains => {
                 let [haystack, needle] = expect_exact_package_arguments(function, arguments, 2)?;
                 let haystack = expect_string_package_argument(function, 1, haystack)?;
                 let needle = expect_string_package_argument(function, 2, needle)?;
-                self.stack
-                    .push(Value::Boolean(haystack.contains(needle.as_str())));
+                self.stack.push(Value::Boolean(haystack.contains(&needle)));
             }
             PackageFunction::StringsHasPrefix => {
                 let [value, prefix] = expect_exact_package_arguments(function, arguments, 2)?;
                 let value = expect_string_package_argument(function, 1, value)?;
                 let prefix = expect_string_package_argument(function, 2, prefix)?;
-                self.stack
-                    .push(Value::Boolean(value.starts_with(prefix.as_str())));
+                self.stack.push(Value::Boolean(value.has_prefix(&prefix)));
             }
             PackageFunction::StringsJoin => {
                 let [elements, separator] = expect_exact_package_arguments(function, arguments, 2)?;
                 let elements = expect_string_slice_package_argument(function, 1, elements)?;
                 let separator = expect_string_package_argument(function, 2, separator)?;
                 self.stack
-                    .push(Value::String(elements.join(separator.as_str())));
+                    .push(Value::String(StringValue::join(&elements, &separator)));
             }
             PackageFunction::StringsRepeat => {
                 let [value, count] = expect_exact_package_arguments(function, arguments, 2)?;
@@ -426,26 +423,42 @@ impl VirtualMachine {
         Ok(arguments)
     }
 
-    fn index_slice(&mut self) -> Result<(), RuntimeError> {
+    fn index_value(&mut self, target_kind: SequenceKind) -> Result<(), RuntimeError> {
         let index = self.pop_integer()?;
         if index < 0 {
             return Err(RuntimeError::new(format!(
-                "slice index {index} is out of bounds"
+                "{} index {index} is out of bounds",
+                target_kind.render()
             )));
         }
+        let index = index as usize;
         let target = self.pop_value()?;
-        let slice = match target {
-            Value::Slice(slice) => slice,
-            _ => return Err(RuntimeError::new("index target is not a slice")),
+        let value = match (target_kind, target) {
+            (SequenceKind::Slice, Value::Slice(slice)) => slice.get(index).ok_or_else(|| {
+                RuntimeError::new(format!("slice index {} is out of bounds", index))
+            })?,
+            (SequenceKind::String, Value::String(value)) => {
+                value.byte_at(index).map(Value::Byte).ok_or_else(|| {
+                    RuntimeError::new(format!("string index {} is out of bounds", index))
+                })?
+            }
+            (SequenceKind::Slice, _) => {
+                return Err(RuntimeError::new("index target is not a slice"));
+            }
+            (SequenceKind::String, _) => {
+                return Err(RuntimeError::new("index target is not a string"));
+            }
         };
-        let value = slice
-            .get(index as usize)
-            .ok_or_else(|| RuntimeError::new(format!("slice index {index} is out of bounds")))?;
         self.stack.push(value);
         Ok(())
     }
 
-    fn slice_value(&mut self, has_low: bool, has_high: bool) -> Result<(), RuntimeError> {
+    fn slice_value(
+        &mut self,
+        target_kind: SequenceKind,
+        has_low: bool,
+        has_high: bool,
+    ) -> Result<(), RuntimeError> {
         let high = if has_high {
             Some(self.pop_integer()?)
         } else {
@@ -457,18 +470,36 @@ impl VirtualMachine {
             None
         };
         let target = self.pop_value()?;
-        let slice = match target {
-            Value::Slice(slice) => slice,
-            _ => return Err(RuntimeError::new("slice expression target is not a slice")),
-        };
-        let low = normalize_slice_bound(low, 0, "lower")?;
-        let high_default = i64::try_from(slice.len())
-            .map_err(|_| RuntimeError::new("slice length could not convert to integer"))?;
-        let high = normalize_slice_bound(high, high_default, "upper")?;
-        let result = slice
-            .slice(low, high)
-            .map_err(|_| RuntimeError::new(slice_bounds_error_message(low, high)))?;
-        self.stack.push(Value::Slice(result));
+
+        match (target_kind, target) {
+            (SequenceKind::Slice, Value::Slice(slice)) => {
+                let low = normalize_slice_bound(low, 0, "lower")?;
+                let high_default = i64::try_from(slice.len())
+                    .map_err(|_| RuntimeError::new("slice length could not convert to integer"))?;
+                let high = normalize_slice_bound(high, high_default, "upper")?;
+                let result = slice
+                    .slice(low, high)
+                    .map_err(|_| RuntimeError::new(slice_bounds_error_message(low, high)))?;
+                self.stack.push(Value::Slice(result));
+            }
+            (SequenceKind::String, Value::String(value)) => {
+                let low = normalize_slice_bound(low, 0, "lower")?;
+                let high_default = i64::try_from(value.len())
+                    .map_err(|_| RuntimeError::new("string length could not convert to integer"))?;
+                let high = normalize_slice_bound(high, high_default, "upper")?;
+                let result = value
+                    .slice(low, high)
+                    .map_err(|_| RuntimeError::new(slice_bounds_error_message(low, high)))?;
+                self.stack.push(Value::String(result));
+            }
+            (SequenceKind::Slice, _) => {
+                return Err(RuntimeError::new("slice expression target is not a slice"));
+            }
+            (SequenceKind::String, _) => {
+                return Err(RuntimeError::new("slice expression target is not a string"));
+            }
+        }
+
         Ok(())
     }
 
@@ -532,25 +563,25 @@ impl VirtualMachine {
     fn pop_integer(&mut self) -> Result<i64, RuntimeError> {
         match self.pop_value()? {
             Value::Integer(value) => Ok(value),
-            Value::Boolean(_) => Err(RuntimeError::new("expected integer value on the stack")),
-            Value::String(_) => Err(RuntimeError::new("expected integer value on the stack")),
-            Value::Slice(_) => Err(RuntimeError::new("expected integer value on the stack")),
+            Value::Byte(_) | Value::Boolean(_) | Value::String(_) | Value::Slice(_) => {
+                Err(RuntimeError::new("expected integer value on the stack"))
+            }
         }
     }
 
     fn pop_bool(&mut self) -> Result<bool, RuntimeError> {
         match self.pop_value()? {
             Value::Boolean(value) => Ok(value),
-            Value::Integer(_) => Err(RuntimeError::new("expected boolean value on the stack")),
-            Value::String(_) => Err(RuntimeError::new("expected boolean value on the stack")),
-            Value::Slice(_) => Err(RuntimeError::new("expected boolean value on the stack")),
+            Value::Integer(_) | Value::Byte(_) | Value::String(_) | Value::Slice(_) => {
+                Err(RuntimeError::new("expected boolean value on the stack"))
+            }
         }
     }
 
-    fn pop_string(&mut self) -> Result<String, RuntimeError> {
+    fn pop_string(&mut self) -> Result<StringValue, RuntimeError> {
         match self.pop_value()? {
             Value::String(value) => Ok(value),
-            Value::Integer(_) | Value::Boolean(_) | Value::Slice(_) => {
+            Value::Integer(_) | Value::Byte(_) | Value::Boolean(_) | Value::Slice(_) => {
                 Err(RuntimeError::new("expected string value on the stack"))
             }
         }
@@ -596,285 +627,6 @@ fn render_package_arguments(arguments: &[Value], separator: &str) -> String {
         .join(separator)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::VirtualMachine;
-    use crate::builtin::BuiltinFunction;
-    use crate::bytecode::instruction::{CompiledFunction, Instruction, Program, ValueType};
-    use crate::package::PackageFunction;
-
-    #[test]
-    fn execute_builds_and_indexes_slices() {
-        let program = Program {
-            package_name: "main".to_string(),
-            entry_function: "main".to_string(),
-            entry_function_index: 0,
-            functions: vec![CompiledFunction {
-                name: "main".to_string(),
-                parameter_count: 0,
-                returns_value: false,
-                local_names: vec!["values".to_string()],
-                instructions: vec![
-                    Instruction::PushInt(1),
-                    Instruction::PushInt(2),
-                    Instruction::BuildSlice(2),
-                    Instruction::StoreLocal(0),
-                    Instruction::LoadLocal(0),
-                    Instruction::CallBuiltin(BuiltinFunction::Len, 1),
-                    Instruction::LoadLocal(0),
-                    Instruction::PushInt(1),
-                    Instruction::Index,
-                    Instruction::CallBuiltin(BuiltinFunction::Println, 2),
-                    Instruction::Return,
-                ],
-            }],
-        };
-
-        let output = VirtualMachine::new()
-            .execute(&program)
-            .expect("program should execute")
-            .render_output();
-        assert_eq!(output, "2 2\n");
-    }
-
-    #[test]
-    fn execute_strings_package_functions() {
-        let program = Program {
-            package_name: "main".to_string(),
-            entry_function: "main".to_string(),
-            entry_function_index: 0,
-            functions: vec![CompiledFunction {
-                name: "main".to_string(),
-                parameter_count: 0,
-                returns_value: false,
-                local_names: vec![],
-                instructions: vec![
-                    Instruction::PushString("nova".to_string()),
-                    Instruction::PushString("go".to_string()),
-                    Instruction::PushString("go".to_string()),
-                    Instruction::BuildSlice(3),
-                    Instruction::PushString("-".to_string()),
-                    Instruction::CallPackage(PackageFunction::StringsJoin, 2),
-                    Instruction::PushString("gogo".to_string()),
-                    Instruction::CallPackage(PackageFunction::StringsContains, 2),
-                    Instruction::CallBuiltin(BuiltinFunction::Println, 1),
-                    Instruction::PushString("vm".to_string()),
-                    Instruction::PushInt(2),
-                    Instruction::CallPackage(PackageFunction::StringsRepeat, 2),
-                    Instruction::PushString("vmvm".to_string()),
-                    Instruction::CallPackage(PackageFunction::StringsHasPrefix, 2),
-                    Instruction::CallBuiltin(BuiltinFunction::Println, 1),
-                    Instruction::Return,
-                ],
-            }],
-        };
-
-        let output = VirtualMachine::new()
-            .execute(&program)
-            .expect("strings package functions should execute")
-            .render_output();
-
-        assert_eq!(output, "false\ntrue\n");
-    }
-
-    #[test]
-    fn execute_slice_windows_and_index_assignment() {
-        let program = Program {
-            package_name: "main".to_string(),
-            entry_function: "main".to_string(),
-            entry_function_index: 0,
-            functions: vec![CompiledFunction {
-                name: "main".to_string(),
-                parameter_count: 0,
-                returns_value: false,
-                local_names: vec!["values".to_string(), "window".to_string()],
-                instructions: vec![
-                    Instruction::PushInt(1),
-                    Instruction::PushInt(2),
-                    Instruction::PushInt(3),
-                    Instruction::BuildSlice(3),
-                    Instruction::StoreLocal(0),
-                    Instruction::LoadLocal(0),
-                    Instruction::PushInt(1),
-                    Instruction::Slice {
-                        has_low: true,
-                        has_high: false,
-                    },
-                    Instruction::StoreLocal(1),
-                    Instruction::LoadLocal(1),
-                    Instruction::PushInt(0),
-                    Instruction::PushInt(9),
-                    Instruction::SetIndex,
-                    Instruction::LoadLocal(0),
-                    Instruction::PushInt(1),
-                    Instruction::Index,
-                    Instruction::CallBuiltin(BuiltinFunction::Println, 1),
-                    Instruction::Return,
-                ],
-            }],
-        };
-
-        let output = VirtualMachine::new()
-            .execute(&program)
-            .expect("slice window program should execute")
-            .render_output();
-
-        assert_eq!(output, "9\n");
-    }
-
-    #[test]
-    fn execute_slice_builtins_and_capacity_aware_append() {
-        let program = Program {
-            package_name: "main".to_string(),
-            entry_function: "main".to_string(),
-            entry_function_index: 0,
-            functions: vec![CompiledFunction {
-                name: "main".to_string(),
-                parameter_count: 0,
-                returns_value: false,
-                local_names: vec![
-                    "values".to_string(),
-                    "head".to_string(),
-                    "grown".to_string(),
-                ],
-                instructions: vec![
-                    Instruction::PushInt(1),
-                    Instruction::PushInt(2),
-                    Instruction::PushInt(3),
-                    Instruction::PushInt(4),
-                    Instruction::BuildSlice(4),
-                    Instruction::StoreLocal(0),
-                    Instruction::LoadLocal(0),
-                    Instruction::PushInt(2),
-                    Instruction::Slice {
-                        has_low: false,
-                        has_high: true,
-                    },
-                    Instruction::StoreLocal(1),
-                    Instruction::LoadLocal(1),
-                    Instruction::PushInt(9),
-                    Instruction::CallBuiltin(BuiltinFunction::Append, 2),
-                    Instruction::StoreLocal(2),
-                    Instruction::LoadLocal(2),
-                    Instruction::CallBuiltin(BuiltinFunction::Cap, 1),
-                    Instruction::CallBuiltin(BuiltinFunction::Println, 1),
-                    Instruction::LoadLocal(0),
-                    Instruction::LoadLocal(0),
-                    Instruction::PushInt(1),
-                    Instruction::Slice {
-                        has_low: true,
-                        has_high: false,
-                    },
-                    Instruction::CallBuiltin(BuiltinFunction::Copy, 2),
-                    Instruction::LoadLocal(0),
-                    Instruction::PushInt(0),
-                    Instruction::Index,
-                    Instruction::CallBuiltin(BuiltinFunction::Println, 2),
-                    Instruction::Return,
-                ],
-            }],
-        };
-
-        let output = VirtualMachine::new()
-            .execute(&program)
-            .expect("slice builtin program should execute")
-            .render_output();
-
-        assert_eq!(output, "4\n3 2\n");
-    }
-
-    #[test]
-    fn execute_typed_zero_value_slices() {
-        let program = Program {
-            package_name: "main".to_string(),
-            entry_function: "main".to_string(),
-            entry_function_index: 0,
-            functions: vec![CompiledFunction {
-                name: "main".to_string(),
-                parameter_count: 0,
-                returns_value: false,
-                local_names: vec!["values".to_string(), "grown".to_string()],
-                instructions: vec![
-                    Instruction::PushNilSlice,
-                    Instruction::StoreLocal(0),
-                    Instruction::LoadLocal(0),
-                    Instruction::CallBuiltin(BuiltinFunction::Len, 1),
-                    Instruction::LoadLocal(0),
-                    Instruction::CallBuiltin(BuiltinFunction::Cap, 1),
-                    Instruction::CallBuiltin(BuiltinFunction::Println, 2),
-                    Instruction::LoadLocal(0),
-                    Instruction::PushInt(4),
-                    Instruction::PushInt(5),
-                    Instruction::CallBuiltin(BuiltinFunction::Append, 3),
-                    Instruction::StoreLocal(1),
-                    Instruction::LoadLocal(1),
-                    Instruction::PushInt(1),
-                    Instruction::Index,
-                    Instruction::CallBuiltin(BuiltinFunction::Println, 1),
-                    Instruction::Return,
-                ],
-            }],
-        };
-
-        let output = VirtualMachine::new()
-            .execute(&program)
-            .expect("typed zero-value slice program should execute")
-            .render_output();
-
-        assert_eq!(output, "0 0\n5\n");
-    }
-
-    #[test]
-    fn execute_make_slice_allocation() {
-        let program = Program {
-            package_name: "main".to_string(),
-            entry_function: "main".to_string(),
-            entry_function_index: 0,
-            functions: vec![CompiledFunction {
-                name: "main".to_string(),
-                parameter_count: 0,
-                returns_value: false,
-                local_names: vec!["values".to_string(), "grown".to_string()],
-                instructions: vec![
-                    Instruction::PushInt(2),
-                    Instruction::PushInt(4),
-                    Instruction::MakeSlice {
-                        element_type: ValueType::Int,
-                        has_capacity: true,
-                    },
-                    Instruction::StoreLocal(0),
-                    Instruction::LoadLocal(0),
-                    Instruction::PushInt(3),
-                    Instruction::Slice {
-                        has_low: false,
-                        has_high: true,
-                    },
-                    Instruction::PushInt(2),
-                    Instruction::Index,
-                    Instruction::CallBuiltin(BuiltinFunction::Println, 1),
-                    Instruction::LoadLocal(0),
-                    Instruction::PushInt(9),
-                    Instruction::CallBuiltin(BuiltinFunction::Append, 2),
-                    Instruction::StoreLocal(1),
-                    Instruction::LoadLocal(1),
-                    Instruction::CallBuiltin(BuiltinFunction::Len, 1),
-                    Instruction::LoadLocal(1),
-                    Instruction::CallBuiltin(BuiltinFunction::Cap, 1),
-                    Instruction::CallBuiltin(BuiltinFunction::Println, 2),
-                    Instruction::Return,
-                ],
-            }],
-        };
-
-        let output = VirtualMachine::new()
-            .execute(&program)
-            .expect("make-allocated slice program should execute")
-            .render_output();
-
-        assert_eq!(output, "0\n3 4\n");
-    }
-}
-
 fn expect_exact_package_arguments<const N: usize>(
     function: PackageFunction,
     arguments: Vec<Value>,
@@ -903,7 +655,7 @@ fn expect_string_package_argument(
     function: PackageFunction,
     position: usize,
     value: Value,
-) -> Result<String, RuntimeError> {
+) -> Result<StringValue, RuntimeError> {
     match value {
         Value::String(value) => Ok(value),
         other => Err(RuntimeError::new(format!(
@@ -935,7 +687,7 @@ fn expect_string_slice_package_argument(
     function: PackageFunction,
     position: usize,
     value: Value,
-) -> Result<Vec<String>, RuntimeError> {
+) -> Result<Vec<StringValue>, RuntimeError> {
     let elements = match value {
         Value::Slice(slice) => slice.visible_elements(),
         other => {
@@ -989,6 +741,7 @@ fn expect_exact_builtin_arguments<const N: usize>(
 fn runtime_type_name(value: &Value) -> &'static str {
     match value {
         Value::Integer(_) => "int",
+        Value::Byte(_) => "byte",
         Value::Boolean(_) => "bool",
         Value::String(_) => "string",
         Value::Slice(_) => "slice",
@@ -998,8 +751,9 @@ fn runtime_type_name(value: &Value) -> &'static str {
 fn zero_value_for_type(value_type: &ValueType) -> Value {
     match value_type {
         ValueType::Int => Value::Integer(0),
+        ValueType::Byte => Value::Byte(0),
         ValueType::Bool => Value::Boolean(false),
-        ValueType::String => Value::String(String::new()),
+        ValueType::String => Value::String(StringValue::empty()),
         ValueType::Slice(_) => Value::Slice(SliceValue::nil()),
     }
 }
@@ -1022,3 +776,6 @@ fn normalize_slice_bound(
 fn slice_bounds_error_message(low: usize, high: usize) -> String {
     format!("slice bounds [{low}:{high}] are out of range")
 }
+
+#[cfg(test)]
+mod tests;

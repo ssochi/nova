@@ -1,0 +1,4 @@
+- [done] Extend the existing slice research and design baseline for byte-oriented strings, string slicing/indexing, and `copy([]byte, string)`.
+- [done] Implement `byte`, byte-oriented runtime strings, semantic checks, lowering, and VM execution for string slicing/indexing and byte-copy semantics.
+- [done] Add examples plus layered automated and CLI validation coverage for the new string / byte surface.
+- [done] Sync reports, roadmap docs, `BOOT.md`, archive the plan, and commit plus push all current changes.

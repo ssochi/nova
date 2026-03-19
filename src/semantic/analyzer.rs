@@ -463,12 +463,16 @@ impl<'a> FunctionAnalyzer<'a> {
                 let target = self.analyze_expression(target)?;
                 let index = self.analyze_expression(index)?;
                 expect_type(&Type::Int, &index.ty, "index expression")?;
-                let element_type = target.ty.slice_element_type().cloned().ok_or_else(|| {
-                    SemanticError::new(format!(
-                        "index expression requires `slice` target, found `{}`",
-                        target.ty.render()
-                    ))
-                })?;
+                let element_type = match &target.ty {
+                    Type::Slice(element) => element.as_ref().clone(),
+                    Type::String => Type::Byte,
+                    _ => {
+                        return Err(SemanticError::new(format!(
+                            "index expression requires `slice` or `string` target, found `{}`",
+                            target.ty.render()
+                        )));
+                    }
+                };
                 Ok(CheckedExpression {
                     ty: element_type,
                     kind: CheckedExpressionKind::Index {
@@ -479,9 +483,9 @@ impl<'a> FunctionAnalyzer<'a> {
             }
             Expression::Slice { target, low, high } => {
                 let target = self.analyze_expression(target)?;
-                if !matches!(target.ty, Type::Slice(_)) {
+                if !matches!(target.ty, Type::Slice(_) | Type::String) {
                     return Err(SemanticError::new(format!(
-                        "slice expression requires `slice` target, found `{}`",
+                        "slice expression requires `slice` or `string` target, found `{}`",
                         target.ty.render()
                     )));
                 }
@@ -500,7 +504,11 @@ impl<'a> FunctionAnalyzer<'a> {
                     expect_type(&Type::Int, &high.ty, "slice expression upper bound")?;
                 }
                 Ok(CheckedExpression {
-                    ty: target.ty.clone(),
+                    ty: if target.ty == Type::String {
+                        Type::String
+                    } else {
+                        target.ty.clone()
+                    },
                     kind: CheckedExpressionKind::Slice {
                         target: Box::new(target),
                         low: low.map(Box::new),
@@ -856,6 +864,7 @@ fn resolve_type_ref(type_ref: &TypeRef) -> Option<Type> {
     match type_ref {
         TypeRef::Named(name) => match name.as_str() {
             "int" => Some(Type::Int),
+            "byte" => Some(Type::Byte),
             "bool" => Some(Type::Bool),
             "string" => Some(Type::String),
             _ => None,
@@ -915,108 +924,7 @@ fn expression_is_compile_time_true(expression: &CheckedExpression) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::analyze_package;
-    use crate::frontend::{lexer::lex, parser::parse_source_file};
-    use crate::source::SourceFile;
-
-    #[test]
-    fn analyze_slice_index_and_append() {
-        let source = SourceFile {
-            path: "test.go".into(),
-            contents:
-                "package main\n\nfunc main() {\n\tvar values = []int{1, 2}\n\tvalues = append(values, 3)\n\tprintln(values[1])\n}\n"
-                    .to_string(),
-        };
-
-        let tokens = lex(&source).expect("lexing should succeed");
-        let ast = parse_source_file(&tokens).expect("parsing should succeed");
-        let program = analyze_package(&ast).expect("analysis should succeed");
-
-        assert_eq!(program.functions.len(), 1);
-    }
-
-    #[test]
-    fn reject_slice_equality() {
-        let source = SourceFile {
-            path: "test.go".into(),
-            contents:
-                "package main\n\nfunc main() {\n\tvar left = []int{1}\n\tvar right = []int{1}\n\tprintln(left == right)\n}\n"
-                    .to_string(),
-        };
-
-        let tokens = lex(&source).expect("lexing should succeed");
-        let ast = parse_source_file(&tokens).expect("parsing should succeed");
-        let error = analyze_package(&ast).expect_err("slice equality should fail");
-
-        assert!(
-            error
-                .to_string()
-                .contains("does not support `[]int` operands")
-        );
-    }
-
-    #[test]
-    fn analyze_slice_expression_and_index_assignment() {
-        let source = SourceFile {
-            path: "test.go".into(),
-            contents: "package main\n\nfunc main() {\n\tvar values = []int{1, 2, 3}\n\tvar middle = values[1:3]\n\tmiddle[0] = 9\n\tprintln(values[1], middle[0])\n}\n"
-                .to_string(),
-        };
-
-        let tokens = lex(&source).expect("lexing should succeed");
-        let ast = parse_source_file(&tokens).expect("parsing should succeed");
-        let program = analyze_package(&ast).expect("analysis should succeed");
-
-        assert_eq!(program.functions.len(), 1);
-    }
-
-    #[test]
-    fn analyze_typed_var_declarations_without_initializers() {
-        let source = SourceFile {
-            path: "test.go".into(),
-            contents:
-                "package main\n\nfunc main() {\n\tvar total int\n\tvar ready bool\n\tvar label string\n\tvar values []int\n\tprintln(total, ready, len(label), len(values), cap(values))\n}\n"
-                    .to_string(),
-        };
-
-        let tokens = lex(&source).expect("lexing should succeed");
-        let ast = parse_source_file(&tokens).expect("parsing should succeed");
-        let program = analyze_package(&ast).expect("analysis should succeed");
-
-        assert_eq!(program.functions.len(), 1);
-    }
-
-    #[test]
-    fn analyze_make_slice_expression() {
-        let source = SourceFile {
-            path: "test.go".into(),
-            contents: "package main\n\nfunc main() {\n\tvar values = make([]int, 2, 4)\n\tvalues[1] = 9\n\tprintln(len(values), cap(values), values[1])\n}\n"
-                .to_string(),
-        };
-
-        let tokens = lex(&source).expect("lexing should succeed");
-        let ast = parse_source_file(&tokens).expect("parsing should succeed");
-        let program = analyze_package(&ast).expect("analysis should succeed");
-
-        assert_eq!(program.functions.len(), 1);
-    }
-
-    #[test]
-    fn reject_make_with_constant_length_exceeding_capacity() {
-        let source = SourceFile {
-            path: "test.go".into(),
-            contents: "package main\n\nfunc main() {\n\tvar values = make([]int, 3, 2)\n\tprintln(values)\n}\n"
-                .to_string(),
-        };
-
-        let tokens = lex(&source).expect("lexing should succeed");
-        let ast = parse_source_file(&tokens).expect("parsing should succeed");
-        let error = analyze_package(&ast).expect_err("analysis should reject invalid make bounds");
-
-        assert!(error.to_string().contains("length 3 exceeds capacity 2"));
-    }
-}
+mod tests;
 
 fn zero_value_expression(ty: Type) -> CheckedExpression {
     CheckedExpression {

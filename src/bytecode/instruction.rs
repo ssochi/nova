@@ -4,6 +4,7 @@ use crate::package::PackageFunction;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ValueType {
     Int,
+    Byte,
     Bool,
     String,
     Slice(Box<ValueType>),
@@ -13,9 +14,25 @@ impl ValueType {
     pub fn render(&self) -> String {
         match self {
             ValueType::Int => "int".to_string(),
+            ValueType::Byte => "byte".to_string(),
             ValueType::Bool => "bool".to_string(),
             ValueType::String => "string".to_string(),
             ValueType::Slice(element) => format!("[]{}", element.render()),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SequenceKind {
+    Slice,
+    String,
+}
+
+impl SequenceKind {
+    pub fn render(self) -> &'static str {
+        match self {
+            SequenceKind::Slice => "slice",
+            SequenceKind::String => "string",
         }
     }
 }
@@ -75,6 +92,7 @@ impl Program {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Instruction {
     PushInt(i64),
+    PushByte(u8),
     PushBool(bool),
     PushString(String),
     PushNilSlice,
@@ -96,8 +114,9 @@ pub enum Instruction {
     LessEqual,
     Greater,
     GreaterEqual,
-    Index,
+    Index(SequenceKind),
     Slice {
+        target_kind: SequenceKind,
         has_low: bool,
         has_high: bool,
     },
@@ -115,6 +134,7 @@ impl Instruction {
     pub fn render(&self) -> String {
         match self {
             Instruction::PushInt(value) => format!("push-int {value}"),
+            Instruction::PushByte(value) => format!("push-byte {value}"),
             Instruction::PushBool(value) => format!("push-bool {value}"),
             Instruction::PushString(value) => {
                 format!("push-string {}", render_string_literal(value))
@@ -144,9 +164,18 @@ impl Instruction {
             Instruction::LessEqual => "less-equal".to_string(),
             Instruction::Greater => "greater".to_string(),
             Instruction::GreaterEqual => "greater-equal".to_string(),
-            Instruction::Index => "index".to_string(),
-            Instruction::Slice { has_low, has_high } => {
-                format!("slice low={} high={}", has_low, has_high)
+            Instruction::Index(target_kind) => format!("index {}", target_kind.render()),
+            Instruction::Slice {
+                target_kind,
+                has_low,
+                has_high,
+            } => {
+                format!(
+                    "slice {} low={} high={}",
+                    target_kind.render(),
+                    has_low,
+                    has_high
+                )
             }
             Instruction::SetIndex => "set-index".to_string(),
             Instruction::Jump(target) => format!("jump {target}"),

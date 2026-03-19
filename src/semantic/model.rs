@@ -127,6 +127,7 @@ pub enum CheckedBinaryOperator {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Type {
     Int,
+    Byte,
     Bool,
     String,
     Slice(Box<Type>),
@@ -137,6 +138,7 @@ impl Type {
     pub fn render(&self) -> String {
         match self {
             Type::Int => "int".to_string(),
+            Type::Byte => "byte".to_string(),
             Type::Bool => "bool".to_string(),
             Type::String => "string".to_string(),
             Type::Slice(element) => format!("[]{}", element.render()),
@@ -156,6 +158,10 @@ impl Type {
     }
 
     pub fn supports_equality(&self) -> bool {
-        matches!(self, Type::Int | Type::Bool | Type::String)
+        matches!(self, Type::Int | Type::Byte | Type::Bool | Type::String)
+    }
+
+    pub fn is_byte_slice(&self) -> bool {
+        matches!(self, Type::Slice(element) if element.as_ref() == &Type::Byte)
     }
 }
