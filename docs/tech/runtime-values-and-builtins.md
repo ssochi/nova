@@ -28,6 +28,12 @@ Describe the current runtime value categories and builtin execution model introd
   - Also used as the zero value for explicit typed slice declarations via a nil-slice runtime state
   - Currently rendered in a Go-like `[value value]` form for builtin and package output
   - Supports `len(slice)`, `cap(slice)`, `copy(dst, src)`, index expressions such as `values[0]`, simple slice expressions such as `values[1:3]`, element assignment such as `values[0] = 1`, and explicit `[]byte(string)` conversion by copying string bytes into a new non-nil byte slice
+- `map`
+  - Stored as shared map storage plus explicit nil-vs-allocated state
+  - Built by `make(map[K]V[, hint])` and used as the zero value for explicit typed map declarations via a nil-map runtime state
+  - Currently rendered in a deterministic `map[key:value]` debug form backed by sorted storage rather than real Go iteration behavior
+  - Supports `len(map)`, single-result index expressions such as `counts["nova"]`, and index assignment such as `counts["nova"] = 3`
+  - Nil-map reads return the element zero value, while nil-map writes raise a runtime error
 
 ## Builtin Contract Model
 
@@ -36,14 +42,15 @@ Describe the current runtime value categories and builtin execution model introd
 - Current builtin set:
   - `print(...value) -> void`
   - `println(...value) -> void`
-  - `len(string|slice) -> int`
+  - `len(string|slice|map) -> int`
   - `make([]T, len[, cap]) -> []T`
+  - `make(map[K]V[, hint]) -> map[K]V`
   - `cap(slice) -> int`
   - `copy(slice, slice|string) -> int`
   - `append(slice, ...element) -> slice`
 - Variadic output builtins accept any value-producing expression in the current type system
-- `len` validates one string or slice target before lowering
-- `make` validates a slice type argument plus one required and one optional integer size argument before lowering
+- `len` validates one string, slice, or map target before lowering
+- `make` validates either slice allocation arity (`len[, cap]`) or map allocation arity (`[hint]`) before lowering
 - `cap` validates one slice target before lowering
 - `copy` validates destination and source slice types centrally before lowering, including the `[]byte` <- `string` special case
 - `append` validates a slice first argument and matching appended element types before lowering
@@ -69,7 +76,7 @@ Describe the current runtime value categories and builtin execution model introd
 ## Runtime Execution Notes
 
 - Bytecode uses `push-string` for literals, `push-byte` for byte zero values, and `concat` for string addition
-- Bytecode now also uses `push-nil-slice` for typed zero-value slice declarations, `build-slice <count>` for slice literals, `make-slice <type>` for slice allocation, `index <slice|string>` for element reads, `slice <slice|string>` for window creation, and `set-index` for slice element writes
+- Bytecode now also uses `push-nil-slice` / `push-nil-map` for typed zero-value declarations, `build-slice <count>` for slice literals, `make-slice <type>` and `make-map <type>` for allocation, `index <slice|string>` and `index-map <type>` for element reads, `slice <slice|string>` for window creation, and `set-index` / `set-map-index` for indexed writes
 - Bytecode now also uses `convert string->[]byte` and `convert []byte->string` for the narrow explicit conversion surface
 - Equality still reuses the generic value comparison path because runtime values are tagged
 - VM output is an accumulated string buffer instead of newline-separated records
@@ -80,11 +87,15 @@ Describe the current runtime value categories and builtin execution model introd
 - `copy([]byte, string)` copies raw string bytes into the destination slice and returns the copied byte count
 - `append` now reuses existing backing storage when spare capacity is available; otherwise it allocates a fresh slice value
 - `make([]T, len[, cap])` lowers into dedicated allocation bytecode instead of a generic runtime builtin call because its first argument is a type
+- `make(map[K]V[, hint])` also lowers into dedicated allocation bytecode so hint handling and nil-vs-empty map state stay explicit
 - `make` allocation reserves hidden capacity slots filled with the element zero value, so reslicing into spare capacity exposes zero-initialized elements and later `append` can reuse that storage
 - Slice windows share backing storage, so updating one slice view is visible through overlapping slice values
+- Map storage is shared across cloned runtime values, so passing or assigning a map preserves later updates
+- Map lookups return the zero value of the element type when the key is absent or the target map is nil
+- Nil-map writes currently surface as runtime errors because the VM does not model Go panic yet
 - `[]byte(string)` currently returns a non-nil byte slice with exact-length capacity; real Go leaves the capacity implementation-specific
 - `string([]byte)` copies the visible byte slice elements into a new runtime string value
-- Explicit typed local declarations are lowered into concrete zero-producing instructions, so `var total int`, `var marker byte`, `var ready bool`, `var label string`, and `var values []int` all produce Go-like zero values without runtime type reflection
+- Explicit typed local declarations are lowered into concrete zero-producing instructions, so `var total int`, `var marker byte`, `var ready bool`, `var label string`, `var values []int`, and `var counts map[string]int` all produce Go-like zero values without runtime type reflection
 - Bytecode now also uses `call-package` for metadata-backed package functions
 - `fmt.Sprint` returns a runtime string value without mutating the output buffer
 - `fmt` formatting is intentionally approximate and does not yet support format verbs
@@ -102,3 +113,4 @@ Describe the current runtime value categories and builtin execution model introd
 - Keep package-function validation metadata centralized; do not reintroduce package-specific ad hoc type checks inside `src/semantic/analyzer.rs`
 - If string behavior expands into broader conversions, rune-aware iteration, or invalid-UTF-8-preserving printing, add that on top of the current byte-oriented representation instead of reverting to Rust `String`-only storage
 - If slice behavior expands beyond the current window / builtin subset, consider separating slice-specific lowering and VM helpers from the core scalar path
+- If map behavior expands into literals, `delete`, comma-ok lookups, or iteration, keep nil-map semantics and map-key validation centralized instead of scattering them across builtin and VM call sites

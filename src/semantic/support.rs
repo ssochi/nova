@@ -14,6 +14,10 @@ pub fn resolve_type_ref(type_ref: &TypeRef) -> Option<Type> {
             _ => None,
         },
         TypeRef::Slice(element) => Some(Type::Slice(Box::new(resolve_type_ref(element)?))),
+        TypeRef::Map { key, value } => Some(Type::Map {
+            key: Box::new(resolve_type_ref(key)?),
+            value: Box::new(resolve_type_ref(value)?),
+        }),
     }
 }
 
@@ -42,6 +46,25 @@ pub fn expect_same_type(left: &Type, right: &Type, context: &str) -> Result<(), 
             left.render(),
             right.render()
         )))
+    }
+}
+
+pub fn validate_runtime_type(ty: &Type, context: &str) -> Result<(), SemanticError> {
+    match ty {
+        Type::Slice(element) => validate_runtime_type(element, context),
+        Type::Map { key, value } => {
+            validate_runtime_type(key, context)?;
+            validate_runtime_type(value, context)?;
+            if key.supports_map_key() {
+                Ok(())
+            } else {
+                Err(SemanticError::new(format!(
+                    "{context} requires a comparable map key type, found `{}`",
+                    key.render()
+                )))
+            }
+        }
+        Type::Int | Type::Byte | Type::Bool | Type::String | Type::Void => Ok(()),
     }
 }
 

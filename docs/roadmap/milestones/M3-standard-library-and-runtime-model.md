@@ -25,6 +25,7 @@
 
 ## Related Plans
 
+- `2026-03-20-03-42-30-map-runtime-groundwork`: completed staged `map[K]V` support with `make`, `len`, indexing, and assignment
 - `2026-03-20-03-02-10-byte-strings-and-slicing`: completed byte-oriented runtime strings, string indexing/slicing, `byte`, and `copy([]byte, string)`
 - `2026-03-20-03-23-06-string-byte-conversions`: completed first-class `[]byte(string)` and `string([]byte)` conversion syntax
 - `2026-03-20-02-39-55-make-slice-allocation`: completed builtin `make([]T, len[, cap])` and the first type-argument builtin path
@@ -41,9 +42,9 @@
 - Runtime-surface growth can sprawl quickly if types, builtins, and imports are mixed into the same plan.
 - Builtin additions can become hardcoded special cases unless their contracts stay centralized.
 - Supporting more realistic Go programs will require careful staging so the VM remains understandable.
-- The current runtime now has byte-oriented strings, slice allocation, and narrow explicit string/byte conversions, but map/channel groundwork, fuller append growth semantics, real import graphs, and broader package-backed runtime services remain open.
+- The current runtime now has byte-oriented strings, slice allocation, narrow explicit string/byte conversions, and staged map groundwork, but map literals, `delete`, channel support, fuller append growth semantics, real import graphs, and broader package-backed runtime services remain open.
 
 ## Next-Round Recommendations
 
-- Open the next `M3` plan around map runtime groundwork or another equally high-leverage runtime expansion before switching milestones.
+- Open the next `M3` plan either to deepen map usability with literals and `delete`, or to start channel/runtime package groundwork if milestone leverage is higher.
 - Reuse the `docs/research/` flow before locking the next compatibility-sensitive slice.

@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::rc::Rc;
 
@@ -9,6 +10,7 @@ pub enum Value {
     Boolean(bool),
     String(StringValue),
     Slice(SliceValue),
+    Map(MapValue),
 }
 
 impl Default for Value {
@@ -34,6 +36,7 @@ impl fmt::Display for Value {
                     .collect::<Vec<_>>()
                     .join(" ")
             ),
+            Value::Map(map) => write!(f, "{map}"),
         }
     }
 }
@@ -46,6 +49,7 @@ impl PartialEq for Value {
             (Value::Boolean(left), Value::Boolean(right)) => left == right,
             (Value::String(left), Value::String(right)) => left == right,
             (Value::Slice(left), Value::Slice(right)) => left == right,
+            (Value::Map(left), Value::Map(right)) => left == right,
             _ => false,
         }
     }
@@ -53,7 +57,7 @@ impl PartialEq for Value {
 
 impl Eq for Value {}
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct StringValue {
     bytes: Vec<u8>,
 }
@@ -324,9 +328,94 @@ impl PartialEq for SliceValue {
 
 impl Eq for SliceValue {}
 
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum MapKey {
+    Integer(i64),
+    Byte(u8),
+    Boolean(bool),
+    String(StringValue),
+}
+
+impl fmt::Display for MapKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MapKey::Integer(value) => write!(f, "{value}"),
+            MapKey::Byte(value) => write!(f, "{value}"),
+            MapKey::Boolean(value) => write!(f, "{value}"),
+            MapKey::String(value) => write!(f, "{value}"),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct MapValue {
+    entries: Rc<RefCell<BTreeMap<MapKey, Value>>>,
+    is_nil: bool,
+}
+
+impl MapValue {
+    pub fn nil() -> Self {
+        Self {
+            entries: Rc::new(RefCell::new(BTreeMap::new())),
+            is_nil: true,
+        }
+    }
+
+    pub fn with_hint(_hint: usize) -> Self {
+        Self {
+            entries: Rc::new(RefCell::new(BTreeMap::new())),
+            is_nil: false,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.entries.borrow().len()
+    }
+
+    pub fn get(&self, key: &MapKey) -> Option<Value> {
+        self.entries.borrow().get(key).cloned()
+    }
+
+    pub fn insert(&self, key: MapKey, value: Value) -> Result<(), ()> {
+        if self.is_nil {
+            return Err(());
+        }
+        self.entries.borrow_mut().insert(key, value);
+        Ok(())
+    }
+
+    pub fn visible_entries(&self) -> Vec<(MapKey, Value)> {
+        self.entries
+            .borrow()
+            .iter()
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect()
+    }
+}
+
+impl fmt::Display for MapValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let entries = self
+            .visible_entries()
+            .into_iter()
+            .map(|(key, value)| format!("{key}:{value}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        write!(f, "map[{entries}]")
+    }
+}
+
+impl PartialEq for MapValue {
+    fn eq(&self, other: &Self) -> bool {
+        self.is_nil == other.is_nil && self.visible_entries() == other.visible_entries()
+    }
+}
+
+impl Eq for MapValue {}
+
 #[cfg(test)]
 mod tests {
-    use super::{SliceValue, StringValue, Value};
+    use super::{MapKey, MapValue, SliceValue, StringValue, Value};
 
     #[test]
     fn byte_oriented_strings_support_byte_access_and_slicing() {
@@ -465,5 +554,48 @@ mod tests {
             ]
         );
         assert_eq!(string, StringValue::from("nova"));
+    }
+
+    #[test]
+    fn maps_preserve_nil_state_and_support_updates() {
+        let nil_map = MapValue::nil();
+        assert_eq!(nil_map.len(), 0);
+        assert!(
+            nil_map
+                .get(&MapKey::String(StringValue::from("nova")))
+                .is_none()
+        );
+        assert!(
+            nil_map
+                .insert(MapKey::String(StringValue::from("nova")), Value::Integer(1))
+                .is_err()
+        );
+
+        let ready = MapValue::with_hint(2);
+        ready
+            .insert(MapKey::String(StringValue::from("nova")), Value::Integer(3))
+            .expect("map should accept writes");
+        ready
+            .insert(
+                MapKey::Boolean(true),
+                Value::String(StringValue::from("go")),
+            )
+            .expect("map should accept mixed supported keys");
+
+        assert_eq!(ready.len(), 2);
+        assert_eq!(
+            ready.get(&MapKey::String(StringValue::from("nova"))),
+            Some(Value::Integer(3))
+        );
+        assert_eq!(
+            ready.visible_entries(),
+            vec![
+                (
+                    MapKey::Boolean(true),
+                    Value::String(StringValue::from("go"))
+                ),
+                (MapKey::String(StringValue::from("nova")), Value::Integer(3)),
+            ]
+        );
     }
 }

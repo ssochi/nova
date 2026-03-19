@@ -62,11 +62,9 @@ fn check_rejects_invalid_len_argument_type() {
     );
 
     let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
-    assert!(
-        error.contains(
-            "argument 1 in call to builtin `len` requires `string` or `slice`, found `int`"
-        )
-    );
+    assert!(error.contains(
+        "argument 1 in call to builtin `len` requires `string`, `slice`, or `map`, found `int`"
+    ));
 
     cleanup_temp_source(path);
 }
@@ -295,7 +293,11 @@ fn check_rejects_make_with_non_slice_type_argument() {
     );
 
     let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
-    assert!(error.contains("argument 1 in call to builtin `make` requires `slice`, found `int`"));
+    assert!(
+        error.contains(
+            "argument 1 in call to builtin `make` requires `slice` or `map`, found `int`"
+        )
+    );
 
     cleanup_temp_source(path);
 }
@@ -322,6 +324,32 @@ fn check_rejects_string_conversion_from_non_byte_slice() {
 
     let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
     assert!(error.contains("conversion to `string` requires `[]byte`, found `[]int`"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_non_comparable_map_key_type() {
+    let path = write_temp_source(
+        "check-bad-map-key",
+        "package main\n\nfunc main() {\n\tvar counts map[[]int]int\n\tprintln(counts)\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("comparable map key type"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn run_rejects_nil_map_assignment() {
+    let path = write_temp_source(
+        "run-nil-map-assign",
+        "package main\n\nfunc main() {\n\tvar counts map[string]int\n\tcounts[\"nova\"] = 1\n}\n",
+    );
+
+    let error = run_cli(&["run", path.to_str().unwrap()]).expect_err("run should fail");
+    assert!(error.contains("assignment to entry in nil map"));
 
     cleanup_temp_source(path);
 }

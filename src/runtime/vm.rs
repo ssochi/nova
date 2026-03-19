@@ -5,7 +5,7 @@ use crate::builtin::BuiltinFunction;
 use crate::bytecode::instruction::{Instruction, Program, SequenceKind, ValueType};
 use crate::conversion::ConversionKind;
 use crate::package::PackageFunction;
-use crate::runtime::value::{SliceValue, StringValue, Value};
+use crate::runtime::value::{MapKey, MapValue, SliceValue, StringValue, Value};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeError {
@@ -91,6 +91,7 @@ impl VirtualMachine {
                     self.stack.push(Value::String(StringValue::from(value)))
                 }
                 Instruction::PushNilSlice => self.stack.push(Value::Slice(SliceValue::nil())),
+                Instruction::PushNilMap => self.stack.push(Value::Map(MapValue::nil())),
                 Instruction::BuildSlice(count) => {
                     let mut elements = Vec::with_capacity(count);
                     for _ in 0..count {
@@ -103,6 +104,9 @@ impl VirtualMachine {
                     element_type,
                     has_capacity,
                 } => self.make_slice(&element_type, has_capacity)?,
+                Instruction::MakeMap { map_type, has_hint } => {
+                    self.make_map(&map_type, has_hint)?
+                }
                 Instruction::Convert(conversion) => self.convert_value(conversion)?,
                 Instruction::LoadLocal(index) => {
                     let value = self.frames[frame_index]
@@ -147,7 +151,9 @@ impl VirtualMachine {
                     has_low,
                     has_high,
                 } => self.slice_value(target_kind, has_low, has_high)?,
+                Instruction::IndexMap(map_type) => self.index_map(&map_type)?,
                 Instruction::SetIndex => self.set_slice_index()?,
+                Instruction::SetMapIndex => self.set_map_index()?,
                 Instruction::Jump(target) => {
                     self.frames[frame_index].pc = target;
                     advance_pc = false;
@@ -280,9 +286,10 @@ impl VirtualMachine {
                 let value = match argument {
                     Value::String(value) => value.len() as i64,
                     Value::Slice(slice) => slice.len() as i64,
+                    Value::Map(map) => map.len() as i64,
                     _ => {
                         return Err(RuntimeError::new(
-                            "builtin `len` expected a string or slice argument",
+                            "builtin `len` expected a string, slice, or map argument",
                         ));
                     }
                 };
@@ -337,7 +344,7 @@ impl VirtualMachine {
             }
             BuiltinFunction::Make => {
                 return Err(RuntimeError::new(
-                    "builtin `make` is lowered into dedicated slice-allocation bytecode",
+                    "builtin `make` is lowered into dedicated allocation bytecode",
                 ));
             }
         }
@@ -524,6 +531,19 @@ impl VirtualMachine {
         Ok(())
     }
 
+    fn set_map_index(&mut self) -> Result<(), RuntimeError> {
+        let value = self.pop_value()?;
+        let key = self.pop_map_key()?;
+        let target = self.pop_value()?;
+        let map = match target {
+            Value::Map(map) => map,
+            _ => return Err(RuntimeError::new("index assignment target is not a map")),
+        };
+        map.insert(key, value)
+            .map_err(|_| RuntimeError::new("assignment to entry in nil map"))?;
+        Ok(())
+    }
+
     fn make_slice(
         &mut self,
         element_type: &ValueType,
@@ -562,6 +582,31 @@ impl VirtualMachine {
         Ok(())
     }
 
+    fn make_map(&mut self, map_type: &ValueType, has_hint: bool) -> Result<(), RuntimeError> {
+        let hint = if has_hint {
+            let hint = self.pop_integer()?;
+            if hint < 0 {
+                return Err(RuntimeError::new(format!(
+                    "builtin `make` hint must be non-negative, found {hint}"
+                )));
+            }
+            usize::try_from(hint).map_err(|_| {
+                RuntimeError::new("builtin `make` hint could not convert to runtime size")
+            })?
+        } else {
+            0
+        };
+
+        if !matches!(map_type, ValueType::Map { .. }) {
+            return Err(RuntimeError::new(
+                "map allocation expected a map runtime type",
+            ));
+        }
+
+        self.stack.push(Value::Map(MapValue::with_hint(hint)));
+        Ok(())
+    }
+
     fn convert_value(&mut self, conversion: ConversionKind) -> Result<(), RuntimeError> {
         let value = self.pop_value()?;
         let converted = match (conversion, value) {
@@ -588,30 +633,65 @@ impl VirtualMachine {
         Ok(())
     }
 
+    fn index_map(&mut self, map_type: &ValueType) -> Result<(), RuntimeError> {
+        let key = self.pop_map_key()?;
+        let target = self.pop_value()?;
+        let map = match target {
+            Value::Map(map) => map,
+            _ => return Err(RuntimeError::new("index target is not a map")),
+        };
+        let value_type = map_type
+            .map_value_type()
+            .ok_or_else(|| RuntimeError::new("index-map expected a map runtime type"))?;
+        let value = map
+            .get(&key)
+            .unwrap_or_else(|| zero_value_for_type(value_type));
+        self.stack.push(value);
+        Ok(())
+    }
+
     fn pop_integer(&mut self) -> Result<i64, RuntimeError> {
         match self.pop_value()? {
             Value::Integer(value) => Ok(value),
-            Value::Byte(_) | Value::Boolean(_) | Value::String(_) | Value::Slice(_) => {
-                Err(RuntimeError::new("expected integer value on the stack"))
-            }
+            Value::Byte(_)
+            | Value::Boolean(_)
+            | Value::String(_)
+            | Value::Slice(_)
+            | Value::Map(_) => Err(RuntimeError::new("expected integer value on the stack")),
         }
     }
 
     fn pop_bool(&mut self) -> Result<bool, RuntimeError> {
         match self.pop_value()? {
             Value::Boolean(value) => Ok(value),
-            Value::Integer(_) | Value::Byte(_) | Value::String(_) | Value::Slice(_) => {
-                Err(RuntimeError::new("expected boolean value on the stack"))
-            }
+            Value::Integer(_)
+            | Value::Byte(_)
+            | Value::String(_)
+            | Value::Slice(_)
+            | Value::Map(_) => Err(RuntimeError::new("expected boolean value on the stack")),
         }
     }
 
     fn pop_string(&mut self) -> Result<StringValue, RuntimeError> {
         match self.pop_value()? {
             Value::String(value) => Ok(value),
-            Value::Integer(_) | Value::Byte(_) | Value::Boolean(_) | Value::Slice(_) => {
-                Err(RuntimeError::new("expected string value on the stack"))
-            }
+            Value::Integer(_)
+            | Value::Byte(_)
+            | Value::Boolean(_)
+            | Value::Slice(_)
+            | Value::Map(_) => Err(RuntimeError::new("expected string value on the stack")),
+        }
+    }
+
+    fn pop_map_key(&mut self) -> Result<MapKey, RuntimeError> {
+        match self.pop_value()? {
+            Value::Integer(value) => Ok(MapKey::Integer(value)),
+            Value::Byte(value) => Ok(MapKey::Byte(value)),
+            Value::Boolean(value) => Ok(MapKey::Boolean(value)),
+            Value::String(value) => Ok(MapKey::String(value)),
+            Value::Slice(_) | Value::Map(_) => Err(RuntimeError::new(
+                "map index key is not a comparable scalar value",
+            )),
         }
     }
 
@@ -773,6 +853,7 @@ fn runtime_type_name(value: &Value) -> &'static str {
         Value::Boolean(_) => "bool",
         Value::String(_) => "string",
         Value::Slice(_) => "slice",
+        Value::Map(_) => "map",
     }
 }
 
@@ -783,6 +864,7 @@ fn zero_value_for_type(value_type: &ValueType) -> Value {
         ValueType::Bool => Value::Boolean(false),
         ValueType::String => Value::String(StringValue::empty()),
         ValueType::Slice(_) => Value::Slice(SliceValue::nil()),
+        ValueType::Map { .. } => Value::Map(MapValue::nil()),
     }
 }
 

@@ -100,7 +100,11 @@ impl<'a> FunctionCompiler<'a> {
                     self.expect_value(&index.ty, "index assignment")?;
                     self.compile_expression(value)?;
                     self.expect_value(&value.ty, "index assignment")?;
-                    self.instructions.push(Instruction::SetIndex);
+                    if matches!(target.ty, Type::Map { .. }) {
+                        self.instructions.push(Instruction::SetMapIndex);
+                    } else {
+                        self.instructions.push(Instruction::SetIndex);
+                    }
                 }
             },
             CheckedStatement::Expr(expression) => {
@@ -170,6 +174,7 @@ impl<'a> FunctionCompiler<'a> {
                     .instructions
                     .push(Instruction::PushString(String::new())),
                 Type::Slice(_) => self.instructions.push(Instruction::PushNilSlice),
+                Type::Map { .. } => self.instructions.push(Instruction::PushNilMap),
                 Type::Void => {
                     return Err(CompileError::new(
                         "zero-value synthesis does not support `void` locals",
@@ -200,6 +205,16 @@ impl<'a> FunctionCompiler<'a> {
                     has_capacity: capacity.is_some(),
                 });
             }
+            CheckedExpressionKind::MakeMap { map_type, hint } => {
+                if let Some(hint) = hint {
+                    self.compile_expression(hint)?;
+                    self.expect_value(&hint.ty, "make expression")?;
+                }
+                self.instructions.push(Instruction::MakeMap {
+                    map_type: lower_value_type(map_type)?,
+                    has_hint: hint.is_some(),
+                });
+            }
             CheckedExpressionKind::Conversion { conversion, value } => {
                 self.compile_expression(value)?;
                 self.expect_value(&value.ty, "conversion expression")?;
@@ -213,8 +228,13 @@ impl<'a> FunctionCompiler<'a> {
                 self.expect_value(&target.ty, "index expression")?;
                 self.compile_expression(index)?;
                 self.expect_value(&index.ty, "index expression")?;
-                self.instructions
-                    .push(Instruction::Index(lower_sequence_kind(&target.ty)?));
+                if matches!(target.ty, Type::Map { .. }) {
+                    self.instructions
+                        .push(Instruction::IndexMap(lower_value_type(&target.ty)?));
+                } else {
+                    self.instructions
+                        .push(Instruction::Index(lower_sequence_kind(&target.ty)?));
+                }
             }
             CheckedExpressionKind::Slice { target, low, high } => {
                 self.compile_expression(target)?;
@@ -310,6 +330,10 @@ fn lower_value_type(ty: &Type) -> Result<ValueType, CompileError> {
         Type::Bool => Ok(ValueType::Bool),
         Type::String => Ok(ValueType::String),
         Type::Slice(element) => Ok(ValueType::Slice(Box::new(lower_value_type(element)?))),
+        Type::Map { key, value } => Ok(ValueType::Map {
+            key: Box::new(lower_value_type(key)?),
+            value: Box::new(lower_value_type(value)?),
+        }),
         Type::Void => Err(CompileError::new(
             "runtime value types do not support `void`",
         )),

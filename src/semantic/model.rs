@@ -92,6 +92,10 @@ pub enum CheckedExpressionKind {
         length: Box<CheckedExpression>,
         capacity: Option<Box<CheckedExpression>>,
     },
+    MakeMap {
+        map_type: Type,
+        hint: Option<Box<CheckedExpression>>,
+    },
     Conversion {
         conversion: ConversionKind,
         value: Box<CheckedExpression>,
@@ -136,6 +140,7 @@ pub enum Type {
     Bool,
     String,
     Slice(Box<Type>),
+    Map { key: Box<Type>, value: Box<Type> },
     Void,
 }
 
@@ -147,6 +152,7 @@ impl Type {
             Type::Bool => "bool".to_string(),
             Type::String => "string".to_string(),
             Type::Slice(element) => format!("[]{}", element.render()),
+            Type::Map { key, value } => format!("map[{}]{}", key.render(), value.render()),
             Type::Void => "void".to_string(),
         }
     }
@@ -162,11 +168,22 @@ impl Type {
         }
     }
 
+    pub fn map_parts(&self) -> Option<(&Type, &Type)> {
+        match self {
+            Type::Map { key, value } => Some((key.as_ref(), value.as_ref())),
+            _ => None,
+        }
+    }
+
     pub fn supports_equality(&self) -> bool {
         matches!(self, Type::Int | Type::Byte | Type::Bool | Type::String)
     }
 
     pub fn is_byte_slice(&self) -> bool {
         matches!(self, Type::Slice(element) if element.as_ref() == &Type::Byte)
+    }
+
+    pub fn supports_map_key(&self) -> bool {
+        matches!(self, Type::Int | Type::Byte | Type::Bool | Type::String)
     }
 }

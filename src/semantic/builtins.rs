@@ -84,11 +84,11 @@ fn validate_variadic_output_builtin(argument_types: &[Type]) -> Result<Type, Str
 fn validate_len_builtin(argument_types: &[Type]) -> Result<Type, String> {
     validate_exact_arity("len", 1, argument_types.len())?;
     let actual = &argument_types[0];
-    if matches!(actual, Type::String | Type::Slice(_)) {
+    if matches!(actual, Type::String | Type::Slice(_) | Type::Map { .. }) {
         Ok(Type::Int)
     } else {
         Err(format!(
-            "argument 1 in call to builtin `len` requires `string` or `slice`, found `{}`",
+            "argument 1 in call to builtin `len` requires `string`, `slice`, or `map`, found `{}`",
             actual.render()
         ))
     }
@@ -156,25 +156,14 @@ fn validate_append_builtin(argument_types: &[Type]) -> Result<Type, String> {
 }
 
 pub fn validate_make_call(allocated_type: &Type, argument_types: &[Type]) -> Result<Type, String> {
-    validate_make_arity(argument_types.len())?;
-    if !matches!(allocated_type, Type::Slice(_)) {
-        return Err(format!(
-            "argument 1 in call to builtin `make` requires `slice`, found `{}`",
+    match allocated_type {
+        Type::Slice(_) => validate_make_slice_call(allocated_type, argument_types),
+        Type::Map { .. } => validate_make_map_call(allocated_type, argument_types),
+        _ => Err(format!(
+            "argument 1 in call to builtin `make` requires `slice` or `map`, found `{}`",
             allocated_type.render()
-        ));
+        )),
     }
-
-    for (index, argument) in argument_types.iter().enumerate() {
-        if argument != &Type::Int {
-            return Err(format!(
-                "argument {} in call to builtin `make` requires `int`, found `{}`",
-                index + 2,
-                argument.render()
-            ));
-        }
-    }
-
-    Ok(allocated_type.clone())
 }
 
 fn validate_make_value_builtin(_argument_types: &[Type]) -> Result<Type, String> {
@@ -212,6 +201,39 @@ fn validate_make_arity(actual: usize) -> Result<(), String> {
     }
 }
 
+fn validate_make_slice_call(
+    allocated_type: &Type,
+    argument_types: &[Type],
+) -> Result<Type, String> {
+    validate_make_arity(argument_types.len())?;
+    validate_make_integer_arguments(argument_types)?;
+    Ok(allocated_type.clone())
+}
+
+fn validate_make_map_call(allocated_type: &Type, argument_types: &[Type]) -> Result<Type, String> {
+    if argument_types.len() > 1 {
+        return Err(format!(
+            "builtin `make` expects 1 or 2 arguments including the type for maps, found {}",
+            argument_types.len() + 1
+        ));
+    }
+    validate_make_integer_arguments(argument_types)?;
+    Ok(allocated_type.clone())
+}
+
+fn validate_make_integer_arguments(argument_types: &[Type]) -> Result<(), String> {
+    for (index, argument) in argument_types.iter().enumerate() {
+        if argument != &Type::Int {
+            return Err(format!(
+                "argument {} in call to builtin `make` requires `int`, found `{}`",
+                index + 2,
+                argument.render()
+            ));
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::{validate_builtin_call, validate_make_call};
@@ -223,6 +245,20 @@ mod tests {
         let result =
             validate_builtin_call(BuiltinFunction::Len, &[Type::Slice(Box::new(Type::Int))])
                 .expect("len should accept slices");
+        assert_eq!(result, Type::Int);
+    }
+
+    #[test]
+    fn len_accepts_map_arguments() {
+        let result = validate_builtin_call(
+            BuiltinFunction::Len,
+            &[Type::Map {
+                key: Box::new(Type::String),
+                value: Box::new(Type::Int),
+            }],
+        )
+        .expect("len should accept maps");
+
         assert_eq!(result, Type::Int);
     }
 
@@ -278,7 +314,7 @@ mod tests {
             .expect_err("make should reject non-slice type arguments");
 
         assert!(error.contains("argument 1"));
-        assert!(error.contains("requires `slice`"));
+        assert!(error.contains("requires `slice` or `map`"));
     }
 
     #[test]
@@ -288,5 +324,25 @@ mod tests {
 
         assert!(error.contains("argument 2"));
         assert!(error.contains("requires `int`"));
+    }
+
+    #[test]
+    fn make_accepts_map_type_argument() {
+        let result = validate_make_call(
+            &Type::Map {
+                key: Box::new(Type::String),
+                value: Box::new(Type::Int),
+            },
+            &[Type::Int],
+        )
+        .expect("make should accept map types");
+
+        assert_eq!(
+            result,
+            Type::Map {
+                key: Box::new(Type::String),
+                value: Box::new(Type::Int),
+            }
+        );
     }
 }

@@ -1,0 +1,5 @@
+- [done] Write research/design baselines and register the active `M3` plan for map runtime groundwork.
+- [done] Implement frontend, semantic, bytecode, and runtime support for `map[K]V`, `make(map[K]V[, hint])`, map indexing, and map assignment.
+- [done] Add automated tests, CLI examples, and diagnostics for the first map surface.
+- [done] Run formatting, tests, and serial CLI validation, then write verification and experience reports.
+- [done] Sync roadmap and technical documents, archive the finished plan, and update startup guidance if needed.

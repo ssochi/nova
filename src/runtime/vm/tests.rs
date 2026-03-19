@@ -262,3 +262,84 @@ fn execute_string_byte_conversions() {
 
     assert_eq!(output, "Xova\n");
 }
+
+#[test]
+fn execute_maps_with_nil_reads_and_updates() {
+    let map_type = ValueType::Map {
+        key: Box::new(ValueType::String),
+        value: Box::new(ValueType::Int),
+    };
+    let program = Program {
+        package_name: "main".to_string(),
+        entry_function: "main".to_string(),
+        entry_function_index: 0,
+        functions: vec![CompiledFunction {
+            name: "main".to_string(),
+            parameter_count: 0,
+            returns_value: false,
+            local_names: vec!["counts".to_string()],
+            instructions: vec![
+                Instruction::PushNilMap,
+                Instruction::StoreLocal(0),
+                Instruction::LoadLocal(0),
+                Instruction::CallBuiltin(BuiltinFunction::Len, 1),
+                Instruction::LoadLocal(0),
+                Instruction::PushString("nova".to_string()),
+                Instruction::IndexMap(map_type.clone()),
+                Instruction::CallBuiltin(BuiltinFunction::Println, 2),
+                Instruction::PushInt(2),
+                Instruction::MakeMap {
+                    map_type: map_type.clone(),
+                    has_hint: true,
+                },
+                Instruction::StoreLocal(0),
+                Instruction::LoadLocal(0),
+                Instruction::PushString("nova".to_string()),
+                Instruction::PushInt(3),
+                Instruction::SetMapIndex,
+                Instruction::LoadLocal(0),
+                Instruction::PushString("nova".to_string()),
+                Instruction::IndexMap(map_type),
+                Instruction::CallBuiltin(BuiltinFunction::Println, 1),
+                Instruction::Return,
+            ],
+        }],
+    };
+
+    let output = VirtualMachine::new()
+        .execute(&program)
+        .expect("map program should execute")
+        .render_output();
+
+    assert_eq!(output, "0 0\n3\n");
+}
+
+#[test]
+fn execute_nil_map_assignment_fails() {
+    let program = Program {
+        package_name: "main".to_string(),
+        entry_function: "main".to_string(),
+        entry_function_index: 0,
+        functions: vec![CompiledFunction {
+            name: "main".to_string(),
+            parameter_count: 0,
+            returns_value: false,
+            local_names: vec!["counts".to_string()],
+            instructions: vec![
+                Instruction::PushNilMap,
+                Instruction::StoreLocal(0),
+                Instruction::LoadLocal(0),
+                Instruction::PushString("nova".to_string()),
+                Instruction::PushInt(1),
+                Instruction::SetMapIndex,
+                Instruction::Return,
+            ],
+        }],
+    };
+
+    let error = VirtualMachine::new()
+        .execute(&program)
+        .expect_err("nil map assignment should fail");
+
+    assert!(error.to_string().contains("assignment to entry in nil map"));
+}

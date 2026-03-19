@@ -41,3 +41,4 @@ This directory stores feature and subsystem designs. It describes intent, scope 
 - `byte-oriented-strings.md`: design baseline for byte-oriented runtime strings, string indexing/slicing, and the first `byte`-specialized builtin seam
 - `string-byte-conversions.md`: design baseline for first-class `[]byte(string)` and `string([]byte)` conversion expressions
 - `strings-package-contracts.md`: design baseline for typed package contracts and the first `strings` package seam
+- `map-runtime-groundwork.md`: design baseline for staged `map[K]V` support with explicit make/index/assignment execution paths

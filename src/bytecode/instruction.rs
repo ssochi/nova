@@ -9,6 +9,10 @@ pub enum ValueType {
     Bool,
     String,
     Slice(Box<ValueType>),
+    Map {
+        key: Box<ValueType>,
+        value: Box<ValueType>,
+    },
 }
 
 impl ValueType {
@@ -19,6 +23,14 @@ impl ValueType {
             ValueType::Bool => "bool".to_string(),
             ValueType::String => "string".to_string(),
             ValueType::Slice(element) => format!("[]{}", element.render()),
+            ValueType::Map { key, value } => format!("map[{}]{}", key.render(), value.render()),
+        }
+    }
+
+    pub fn map_value_type(&self) -> Option<&ValueType> {
+        match self {
+            ValueType::Map { value, .. } => Some(value.as_ref()),
+            _ => None,
         }
     }
 }
@@ -97,10 +109,15 @@ pub enum Instruction {
     PushBool(bool),
     PushString(String),
     PushNilSlice,
+    PushNilMap,
     BuildSlice(usize),
     MakeSlice {
         element_type: ValueType,
         has_capacity: bool,
+    },
+    MakeMap {
+        map_type: ValueType,
+        has_hint: bool,
     },
     Convert(ConversionKind),
     LoadLocal(usize),
@@ -122,7 +139,9 @@ pub enum Instruction {
         has_low: bool,
         has_high: bool,
     },
+    IndexMap(ValueType),
     SetIndex,
+    SetMapIndex,
     Jump(usize),
     JumpIfFalse(usize),
     Pop,
@@ -142,6 +161,7 @@ impl Instruction {
                 format!("push-string {}", render_string_literal(value))
             }
             Instruction::PushNilSlice => "push-nil-slice".to_string(),
+            Instruction::PushNilMap => "push-nil-map".to_string(),
             Instruction::BuildSlice(count) => format!("build-slice {count}"),
             Instruction::MakeSlice {
                 element_type,
@@ -151,6 +171,13 @@ impl Instruction {
                     "make-slice {} cap={}",
                     element_type.render(),
                     if *has_capacity { "explicit" } else { "len" }
+                )
+            }
+            Instruction::MakeMap { map_type, has_hint } => {
+                format!(
+                    "make-map {} hint={}",
+                    map_type.render(),
+                    if *has_hint { "explicit" } else { "none" }
                 )
             }
             Instruction::Convert(conversion) => format!("convert {}", conversion.render()),
@@ -180,7 +207,9 @@ impl Instruction {
                     has_high
                 )
             }
+            Instruction::IndexMap(map_type) => format!("index-map {}", map_type.render()),
             Instruction::SetIndex => "set-index".to_string(),
+            Instruction::SetMapIndex => "set-map-index".to_string(),
             Instruction::Jump(target) => format!("jump {target}"),
             Instruction::JumpIfFalse(target) => format!("jump-if-false {target}"),
             Instruction::Pop => "pop".to_string(),

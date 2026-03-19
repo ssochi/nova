@@ -420,18 +420,19 @@ impl<'a> Parser<'a> {
         }
 
         let type_ref = self.parse_type_ref()?;
-        self.expect(TokenKind::Comma)?;
-        let length = self.parse_expression()?;
-        let capacity = if self.match_kind(&TokenKind::Comma) {
-            Some(Box::new(self.parse_expression()?))
-        } else {
-            None
-        };
+        let mut arguments = Vec::new();
+        if self.match_kind(&TokenKind::Comma) {
+            loop {
+                arguments.push(self.parse_expression()?);
+                if !self.match_kind(&TokenKind::Comma) {
+                    break;
+                }
+            }
+        }
         self.expect(TokenKind::RightParen)?;
         Ok(Expression::Make {
             type_ref,
-            length: Box::new(length),
-            capacity,
+            arguments,
         })
     }
 
@@ -458,11 +459,23 @@ impl<'a> Parser<'a> {
             return Ok(TypeRef::Slice(Box::new(self.parse_type_ref()?)));
         }
 
+        if self.match_kind(&TokenKind::Map) {
+            self.expect(TokenKind::LeftBracket)?;
+            let key = self.parse_type_ref()?;
+            self.expect(TokenKind::RightBracket)?;
+            let value = self.parse_type_ref()?;
+            return Ok(TypeRef::Map {
+                key: Box::new(key),
+                value: Box::new(value),
+            });
+        }
+
         Ok(TypeRef::Named(self.expect_identifier()?))
     }
 
     fn check_type_start(&self) -> bool {
         self.check(&TokenKind::LeftBracket)
+            || self.check(&TokenKind::Map)
             || matches!(self.current_token().kind, TokenKind::Identifier(_))
     }
 
@@ -720,20 +733,67 @@ mod tests {
             Statement::VarDecl { value, .. } => match value.as_ref() {
                 Some(Expression::Make {
                     type_ref,
-                    length,
-                    capacity,
+                    arguments,
                 }) => {
                     assert_eq!(
                         type_ref,
                         &TypeRef::Slice(Box::new(TypeRef::Named("int".into())))
                     );
-                    assert_eq!(length.as_ref(), &Expression::Integer(2));
-                    assert!(matches!(
-                        capacity,
-                        Some(value) if value.as_ref() == &Expression::Integer(4)
-                    ));
+                    assert_eq!(
+                        arguments,
+                        &vec![Expression::Integer(2), Expression::Integer(4)]
+                    );
                 }
                 _ => panic!("expected make expression"),
+            },
+            _ => panic!("expected variable declaration"),
+        }
+    }
+
+    #[test]
+    fn parse_map_types_and_make_expression() {
+        let source = SourceFile {
+            path: "test.go".into(),
+            contents: "package main\n\nfunc main() {\n\tvar counts map[string]int\n\tvar ready = make(map[bool]string)\n}\n"
+                .to_string(),
+        };
+
+        let tokens = lex(&source).expect("lexing should succeed");
+        let ast = parse_source_file(&tokens).expect("parsing should succeed");
+        let function = &ast.functions[0];
+
+        match &function.body.statements[0] {
+            Statement::VarDecl {
+                type_ref, value, ..
+            } => {
+                assert_eq!(
+                    type_ref,
+                    &Some(TypeRef::Map {
+                        key: Box::new(TypeRef::Named("string".into())),
+                        value: Box::new(TypeRef::Named("int".into())),
+                    })
+                );
+                assert!(value.is_none());
+            }
+            _ => panic!("expected typed map declaration"),
+        }
+
+        match &function.body.statements[1] {
+            Statement::VarDecl { value, .. } => match value.as_ref() {
+                Some(Expression::Make {
+                    type_ref,
+                    arguments,
+                }) => {
+                    assert_eq!(
+                        type_ref,
+                        &TypeRef::Map {
+                            key: Box::new(TypeRef::Named("bool".into())),
+                            value: Box::new(TypeRef::Named("string".into())),
+                        }
+                    );
+                    assert!(arguments.is_empty());
+                }
+                _ => panic!("expected map make expression"),
             },
             _ => panic!("expected variable declaration"),
         }

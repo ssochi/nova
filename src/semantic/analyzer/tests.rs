@@ -115,6 +115,21 @@ fn analyze_string_byte_conversions() {
 }
 
 #[test]
+fn analyze_maps_with_make_len_index_and_assignment() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tvar counts map[string]int\n\tcounts = make(map[string]int, 2)\n\tcounts[\"nova\"] = 3\n\tprintln(len(counts), counts[\"nova\"], counts[\"missing\"])\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let program = analyze_package(&ast).expect("analysis should succeed");
+
+    assert_eq!(program.functions.len(), 1);
+}
+
+#[test]
 fn reject_make_with_constant_length_exceeding_capacity() {
     let source = SourceFile {
         path: "test.go".into(),
@@ -165,4 +180,20 @@ fn reject_string_conversion_from_non_byte_slice() {
             .to_string()
             .contains("conversion to `string` requires `[]byte`, found `[]int`")
     );
+}
+
+#[test]
+fn reject_non_comparable_map_key_type() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents:
+            "package main\n\nfunc main() {\n\tvar counts map[[]int]int\n\tprintln(counts)\n}\n"
+                .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let error = analyze_package(&ast).expect_err("analysis should reject invalid map key types");
+
+    assert!(error.to_string().contains("comparable map key type"));
 }

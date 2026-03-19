@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-03-42-30-map-runtime-groundwork`
+- Opened `2026-03-20-03-42-30-map-runtime-groundwork` for the first map runtime slice under `M3`
 - Completed and archived `2026-03-20-03-23-06-string-byte-conversions`
 - Opened `2026-03-20-03-23-06-string-byte-conversions` for typed string/byte conversion expressions under `M3`
 - Completed and archived `2026-03-20-03-02-10-byte-strings-and-slicing`

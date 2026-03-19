@@ -7,18 +7,16 @@ use crate::frontend::ast::{
     AssignmentTarget, BinaryOperator, Block, Expression, FunctionDecl, SourceFileAst, Statement,
     TypeRef,
 };
-use crate::package::ImportedPackage;
 use crate::semantic::builtins::{resolve_builtin, validate_builtin_call, validate_make_call};
 use crate::semantic::model::{
     CallTarget, CheckedAssignmentTarget, CheckedBinaryOperator, CheckedBlock, CheckedExpression,
     CheckedExpressionKind, CheckedFunction, CheckedProgram, CheckedStatement, Type,
 };
-use crate::semantic::packages::{
-    resolve_import_path, resolve_package_function, validate_package_call,
-};
+use crate::semantic::packages::{resolve_package_function, validate_package_call};
+use crate::semantic::registry::{FunctionRegistry, ImportRegistry};
 use crate::semantic::support::{
-    block_guarantees_return, expect_same_type, expect_type, is_supported_named_type,
-    resolve_type_ref, validate_make_literal_bounds, zero_value_expression,
+    block_guarantees_return, expect_same_type, expect_type, resolve_type_ref,
+    validate_make_literal_bounds, validate_runtime_type, zero_value_expression,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -93,91 +91,6 @@ pub fn analyze_program(
 
     program.entry_function = entry_function;
     Ok(program)
-}
-
-struct FunctionRegistry {
-    name_to_index: HashMap<String, usize>,
-    signatures: Vec<FunctionSignature>,
-}
-
-impl FunctionRegistry {
-    fn from_ast(ast: &SourceFileAst) -> Result<Self, SemanticError> {
-        let mut name_to_index = HashMap::new();
-        let mut signatures = Vec::with_capacity(ast.functions.len());
-
-        for function in &ast.functions {
-            if resolve_builtin(function.name.as_str()).is_some() {
-                return Err(SemanticError::new(format!(
-                    "function `{}` conflicts with a builtin name",
-                    function.name
-                )));
-            }
-            if is_supported_named_type(function.name.as_str()) {
-                return Err(SemanticError::new(format!(
-                    "function `{}` conflicts with a predeclared type name",
-                    function.name
-                )));
-            }
-
-            if name_to_index.contains_key(&function.name) {
-                return Err(SemanticError::new(format!(
-                    "function `{}` is already defined",
-                    function.name
-                )));
-            }
-
-            let parameters = function
-                .parameters
-                .iter()
-                .map(|parameter| {
-                    resolve_type_ref(&parameter.type_ref).ok_or_else(|| {
-                        SemanticError::new(format!(
-                            "unsupported parameter type `{}` in function `{}`",
-                            parameter.type_ref.render(),
-                            function.name
-                        ))
-                    })
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-            let return_type = match &function.return_type {
-                Some(type_ref) => resolve_type_ref(type_ref).ok_or_else(|| {
-                    SemanticError::new(format!(
-                        "unsupported return type `{}` in function `{}`",
-                        type_ref.render(),
-                        function.name
-                    ))
-                })?,
-                None => Type::Void,
-            };
-
-            let index = signatures.len();
-            name_to_index.insert(function.name.clone(), index);
-            signatures.push(FunctionSignature {
-                name: function.name.clone(),
-                parameters,
-                return_type,
-            });
-        }
-
-        Ok(Self {
-            name_to_index,
-            signatures,
-        })
-    }
-
-    fn lookup(&self, name: &str) -> Option<usize> {
-        self.name_to_index.get(name).copied()
-    }
-
-    fn signature(&self, index: usize) -> &FunctionSignature {
-        &self.signatures[index]
-    }
-}
-
-struct FunctionSignature {
-    name: String,
-    parameters: Vec<Type>,
-    return_type: Type,
 }
 
 struct FunctionAnalyzer<'a> {
@@ -291,12 +204,14 @@ impl<'a> FunctionAnalyzer<'a> {
                 let declared_type = type_ref
                     .as_ref()
                     .map(|type_ref| {
-                        resolve_type_ref(type_ref).ok_or_else(|| {
+                        let ty = resolve_type_ref(type_ref).ok_or_else(|| {
                             SemanticError::new(format!(
                                 "unsupported variable type `{}` in declaration of `{name}`",
                                 type_ref.render()
                             ))
-                        })
+                        })?;
+                        validate_runtime_type(&ty, &format!("variable `{name}`"))?;
+                        Ok(ty)
                     })
                     .transpose()?;
                 let value = match value {
@@ -341,15 +256,20 @@ impl<'a> FunctionAnalyzer<'a> {
                         let binding = self.lookup_local(name)?;
                         expect_type(&binding.ty, &value.ty, &format!("assignment to `{name}`"))?;
                     }
-                    CheckedAssignmentTarget::Index { target, .. } => {
-                        let element_type = target.ty.slice_element_type().ok_or_else(|| {
-                            SemanticError::new(format!(
-                                "index assignment requires `slice` target, found `{}`",
+                    CheckedAssignmentTarget::Index { target, .. } => match &target.ty {
+                        Type::Slice(element) => {
+                            expect_type(element.as_ref(), &value.ty, "slice element assignment")?
+                        }
+                        Type::Map { value: element, .. } => {
+                            expect_type(element.as_ref(), &value.ty, "map element assignment")?
+                        }
+                        _ => {
+                            return Err(SemanticError::new(format!(
+                                "index assignment requires `slice` or `map` target, found `{}`",
                                 target.ty.render()
-                            ))
-                        })?;
-                        expect_type(element_type, &value.ty, "slice element assignment")?;
-                    }
+                            )));
+                        }
+                    },
                 }
                 Ok(CheckedStatement::Assign { target, value })
             }
@@ -434,6 +354,7 @@ impl<'a> FunctionAnalyzer<'a> {
                         element_type.render()
                     ))
                 })?;
+                validate_runtime_type(&slice_type, "slice literal type")?;
                 let element_type = slice_type.slice_element_type().cloned().ok_or_else(|| {
                     SemanticError::new(format!(
                         "slice literal requires `[]T` type syntax, found `{}`",
@@ -473,13 +394,22 @@ impl<'a> FunctionAnalyzer<'a> {
             Expression::Index { target, index } => {
                 let target = self.analyze_expression(target)?;
                 let index = self.analyze_expression(index)?;
-                expect_type(&Type::Int, &index.ty, "index expression")?;
                 let element_type = match &target.ty {
-                    Type::Slice(element) => element.as_ref().clone(),
-                    Type::String => Type::Byte,
+                    Type::Slice(element) => {
+                        expect_type(&Type::Int, &index.ty, "index expression")?;
+                        element.as_ref().clone()
+                    }
+                    Type::String => {
+                        expect_type(&Type::Int, &index.ty, "index expression")?;
+                        Type::Byte
+                    }
+                    Type::Map { key, value } => {
+                        expect_type(key.as_ref(), &index.ty, "map index")?;
+                        value.as_ref().clone()
+                    }
                     _ => {
                         return Err(SemanticError::new(format!(
-                            "index expression requires `slice` or `string` target, found `{}`",
+                            "index expression requires `slice`, `string`, or `map` target, found `{}`",
                             target.ty.render()
                         )));
                     }
@@ -532,9 +462,8 @@ impl<'a> FunctionAnalyzer<'a> {
             )),
             Expression::Make {
                 type_ref,
-                length,
-                capacity,
-            } => self.analyze_make_expression(type_ref, length, capacity.as_deref()),
+                arguments,
+            } => self.analyze_make_expression(type_ref, arguments),
             Expression::Conversion { type_ref, value } => {
                 self.analyze_conversion_expression(type_ref, value)
             }
@@ -642,8 +571,7 @@ impl<'a> FunctionAnalyzer<'a> {
     fn analyze_make_expression(
         &mut self,
         type_ref: &TypeRef,
-        length: &Expression,
-        capacity: Option<&Expression>,
+        arguments: &[Expression],
     ) -> Result<CheckedExpression, SemanticError> {
         let allocated_type = resolve_type_ref(type_ref).ok_or_else(|| {
             SemanticError::new(format!(
@@ -651,31 +579,44 @@ impl<'a> FunctionAnalyzer<'a> {
                 type_ref.render()
             ))
         })?;
-        let length = self.analyze_expression(length)?;
-        let capacity = capacity
+        validate_runtime_type(&allocated_type, "builtin `make` type argument")?;
+        let checked_arguments = arguments
+            .iter()
             .map(|expression| self.analyze_expression(expression))
-            .transpose()?;
-        let mut argument_types = vec![length.ty.clone()];
-        if let Some(capacity) = &capacity {
-            argument_types.push(capacity.ty.clone());
-        }
+            .collect::<Result<Vec<_>, _>>()?;
+        let argument_types = checked_arguments
+            .iter()
+            .map(|argument| argument.ty.clone())
+            .collect::<Vec<_>>();
         let result_type =
             validate_make_call(&allocated_type, &argument_types).map_err(SemanticError::new)?;
-        if let Some(capacity) = &capacity {
-            validate_make_literal_bounds(&length, capacity)?;
+        match result_type.clone() {
+            Type::Slice(element_type) => {
+                let length = checked_arguments[0].clone();
+                let capacity = checked_arguments.get(1).cloned();
+                if let Some(capacity) = &capacity {
+                    validate_make_literal_bounds(&length, capacity)?;
+                }
+                Ok(CheckedExpression {
+                    ty: Type::Slice(element_type.clone()),
+                    kind: CheckedExpressionKind::MakeSlice {
+                        element_type: element_type.as_ref().clone(),
+                        length: Box::new(length),
+                        capacity: capacity.map(Box::new),
+                    },
+                })
+            }
+            Type::Map { .. } => Ok(CheckedExpression {
+                ty: result_type.clone(),
+                kind: CheckedExpressionKind::MakeMap {
+                    map_type: result_type,
+                    hint: checked_arguments.into_iter().next().map(Box::new),
+                },
+            }),
+            _ => Err(SemanticError::new(
+                "builtin `make` lowered into an unsupported result kind",
+            )),
         }
-        let element_type = result_type
-            .slice_element_type()
-            .cloned()
-            .expect("slice validation ensures make result has an element type");
-        Ok(CheckedExpression {
-            ty: result_type,
-            kind: CheckedExpressionKind::MakeSlice {
-                element_type,
-                length: Box::new(length),
-                capacity: capacity.map(Box::new),
-            },
-        })
     }
 
     fn analyze_package_call(
@@ -803,12 +744,17 @@ impl<'a> FunctionAnalyzer<'a> {
             AssignmentTarget::Index { target, index } => {
                 let target = self.analyze_expression(target)?;
                 let index = self.analyze_expression(index)?;
-                expect_type(&Type::Int, &index.ty, "index assignment")?;
-                if !matches!(target.ty, Type::Slice(_)) {
-                    return Err(SemanticError::new(format!(
-                        "index assignment requires `slice` target, found `{}`",
-                        target.ty.render()
-                    )));
+                match &target.ty {
+                    Type::Slice(_) => expect_type(&Type::Int, &index.ty, "index assignment")?,
+                    Type::Map { key, .. } => {
+                        expect_type(key.as_ref(), &index.ty, "map index assignment")?
+                    }
+                    _ => {
+                        return Err(SemanticError::new(format!(
+                            "index assignment requires `slice` or `map` target, found `{}`",
+                            target.ty.render()
+                        )));
+                    }
                 }
                 Ok(CheckedAssignmentTarget::Index {
                     target: Box::new(target),
@@ -823,33 +769,6 @@ impl<'a> FunctionAnalyzer<'a> {
 struct LocalBinding {
     slot: usize,
     ty: Type,
-}
-
-struct ImportRegistry {
-    bindings: HashMap<String, ImportedPackage>,
-}
-
-impl ImportRegistry {
-    fn from_ast(ast: &SourceFileAst) -> Result<Self, SemanticError> {
-        let mut bindings = HashMap::new();
-        for import in &ast.imports {
-            let package = resolve_import_path(&import.path).ok_or_else(|| {
-                SemanticError::new(format!("unsupported import path `{}`", import.path))
-            })?;
-            let binding = package.binding_name().to_string();
-            if bindings.insert(binding.clone(), package).is_some() {
-                return Err(SemanticError::new(format!(
-                    "import binding `{binding}` is already defined"
-                )));
-            }
-        }
-
-        Ok(Self { bindings })
-    }
-
-    fn lookup(&self, name: &str) -> Option<ImportedPackage> {
-        self.bindings.get(name).copied()
-    }
 }
 
 fn analyze_binary_operator(

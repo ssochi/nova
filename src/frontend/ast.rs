@@ -81,6 +81,10 @@ impl Parameter {
 pub enum TypeRef {
     Named(String),
     Slice(Box<TypeRef>),
+    Map {
+        key: Box<TypeRef>,
+        value: Box<TypeRef>,
+    },
 }
 
 impl TypeRef {
@@ -88,6 +92,9 @@ impl TypeRef {
         match self {
             TypeRef::Named(name) => name.clone(),
             TypeRef::Slice(element) => format!("[]{}", element.render()),
+            TypeRef::Map { key, value } => {
+                format!("map[{}]{}", key.render(), value.render())
+            }
         }
     }
 }
@@ -244,8 +251,7 @@ pub enum Expression {
     },
     Make {
         type_ref: TypeRef,
-        length: Box<Expression>,
-        capacity: Option<Box<Expression>>,
+        arguments: Vec<Expression>,
     },
     Conversion {
         type_ref: TypeRef,
@@ -302,13 +308,11 @@ impl Expression {
             }
             Expression::Make {
                 type_ref,
-                length,
-                capacity,
+                arguments,
             } => {
-                let mut arguments = vec![type_ref.render(), length.render()];
-                if let Some(capacity) = capacity {
-                    arguments.push(capacity.render());
-                }
+                let arguments = std::iter::once(type_ref.render())
+                    .chain(arguments.iter().map(Expression::render))
+                    .collect::<Vec<_>>();
                 format!("make({})", arguments.join(", "))
             }
             Expression::Conversion { type_ref, value } => {
