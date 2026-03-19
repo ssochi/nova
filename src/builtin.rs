@@ -6,6 +6,7 @@ pub enum BuiltinFunction {
     Cap,
     Copy,
     Append,
+    Make,
 }
 
 impl BuiltinFunction {
@@ -17,6 +18,7 @@ impl BuiltinFunction {
             BuiltinFunction::Cap => "cap",
             BuiltinFunction::Copy => "copy",
             BuiltinFunction::Append => "append",
+            BuiltinFunction::Make => "make",
         }
     }
 }

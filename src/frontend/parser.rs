@@ -317,19 +317,11 @@ impl<'a> Parser<'a> {
             }
 
             if self.match_kind(&TokenKind::LeftParen) {
-                let mut arguments = Vec::new();
-                if !self.check(&TokenKind::RightParen) {
-                    loop {
-                        arguments.push(self.parse_expression()?);
-                        if !self.match_kind(&TokenKind::Comma) {
-                            break;
-                        }
-                    }
-                }
-                self.expect(TokenKind::RightParen)?;
-                expression = Expression::Call {
-                    callee: Box::new(expression),
-                    arguments,
+                expression = if matches!(&expression, Expression::Identifier(name) if name == "make")
+                {
+                    self.parse_make_expression()?
+                } else {
+                    self.parse_call_expression(expression)?
                 };
                 continue;
             }
@@ -385,6 +377,44 @@ impl<'a> Parser<'a> {
         Ok(Expression::SliceLiteral {
             element_type,
             elements,
+        })
+    }
+
+    fn parse_make_expression(&mut self) -> Result<Expression, ParseError> {
+        if !self.check_type_start() {
+            return Err(self.error_at_current("builtin `make` requires a type argument"));
+        }
+
+        let type_ref = self.parse_type_ref()?;
+        self.expect(TokenKind::Comma)?;
+        let length = self.parse_expression()?;
+        let capacity = if self.match_kind(&TokenKind::Comma) {
+            Some(Box::new(self.parse_expression()?))
+        } else {
+            None
+        };
+        self.expect(TokenKind::RightParen)?;
+        Ok(Expression::Make {
+            type_ref,
+            length: Box::new(length),
+            capacity,
+        })
+    }
+
+    fn parse_call_expression(&mut self, callee: Expression) -> Result<Expression, ParseError> {
+        let mut arguments = Vec::new();
+        if !self.check(&TokenKind::RightParen) {
+            loop {
+                arguments.push(self.parse_expression()?);
+                if !self.match_kind(&TokenKind::Comma) {
+                    break;
+                }
+            }
+        }
+        self.expect(TokenKind::RightParen)?;
+        Ok(Expression::Call {
+            callee: Box::new(callee),
+            arguments,
         })
     }
 
@@ -633,6 +663,41 @@ mod tests {
                 assert!(matches!(value, Some(Expression::SliceLiteral { .. })));
             }
             _ => panic!("expected typed variable declaration with initializer"),
+        }
+    }
+
+    #[test]
+    fn parse_make_slice_expression() {
+        let source = SourceFile {
+            path: "test.go".into(),
+            contents: "package main\n\nfunc main() {\n\tvar values = make([]int, 2, 4)\n}\n"
+                .to_string(),
+        };
+
+        let tokens = lex(&source).expect("lexing should succeed");
+        let ast = parse_source_file(&tokens).expect("parsing should succeed");
+        let function = &ast.functions[0];
+
+        match &function.body.statements[0] {
+            Statement::VarDecl { value, .. } => match value.as_ref() {
+                Some(Expression::Make {
+                    type_ref,
+                    length,
+                    capacity,
+                }) => {
+                    assert_eq!(
+                        type_ref,
+                        &TypeRef::Slice(Box::new(TypeRef::Named("int".into())))
+                    );
+                    assert_eq!(length.as_ref(), &Expression::Integer(2));
+                    assert!(matches!(
+                        capacity,
+                        Some(value) if value.as_ref() == &Expression::Integer(4)
+                    ));
+                }
+                _ => panic!("expected make expression"),
+            },
+            _ => panic!("expected variable declaration"),
         }
     }
 }

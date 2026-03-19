@@ -2,6 +2,25 @@ use crate::builtin::BuiltinFunction;
 use crate::package::PackageFunction;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ValueType {
+    Int,
+    Bool,
+    String,
+    Slice(Box<ValueType>),
+}
+
+impl ValueType {
+    pub fn render(&self) -> String {
+        match self {
+            ValueType::Int => "int".to_string(),
+            ValueType::Bool => "bool".to_string(),
+            ValueType::String => "string".to_string(),
+            ValueType::Slice(element) => format!("[]{}", element.render()),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Program {
     pub package_name: String,
     pub entry_function: String,
@@ -60,6 +79,10 @@ pub enum Instruction {
     PushString(String),
     PushNilSlice,
     BuildSlice(usize),
+    MakeSlice {
+        element_type: ValueType,
+        has_capacity: bool,
+    },
     LoadLocal(usize),
     StoreLocal(usize),
     Add,
@@ -74,7 +97,10 @@ pub enum Instruction {
     Greater,
     GreaterEqual,
     Index,
-    Slice { has_low: bool, has_high: bool },
+    Slice {
+        has_low: bool,
+        has_high: bool,
+    },
     SetIndex,
     Jump(usize),
     JumpIfFalse(usize),
@@ -95,6 +121,16 @@ impl Instruction {
             }
             Instruction::PushNilSlice => "push-nil-slice".to_string(),
             Instruction::BuildSlice(count) => format!("build-slice {count}"),
+            Instruction::MakeSlice {
+                element_type,
+                has_capacity,
+            } => {
+                format!(
+                    "make-slice {} cap={}",
+                    element_type.render(),
+                    if *has_capacity { "explicit" } else { "len" }
+                )
+            }
             Instruction::LoadLocal(index) => format!("load-local {index}"),
             Instruction::StoreLocal(index) => format!("store-local {index}"),
             Instruction::Add => "add".to_string(),

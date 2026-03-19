@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-02-39-55-make-slice-allocation`
+- Opened `2026-03-20-02-39-55-make-slice-allocation` for slice allocation through builtin `make` under `M3`
 - Completed and archived `2026-03-20-02-18-45-typed-var-zero-values`
 - Opened `2026-03-20-02-18-45-typed-var-zero-values` for explicit typed `var` declarations and nil-slice zero-value runtime work under `M3`
 - Completed and archived `2026-03-20-01-54-16-slice-builtins-capacity`

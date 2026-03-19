@@ -44,3 +44,4 @@ This directory stores experience validation reports close to the real user path.
 - `2026-03-20-slice-expressions-and-assignment-playtest.md`: records the CLI walkthrough for slice windows and indexed slice updates
 - `2026-03-20-slice-builtins-capacity-playtest.md`: records the CLI walkthrough for `cap`, `copy`, and capacity-aware append reuse
 - `2026-03-20-typed-zero-values-playtest.md`: records the CLI walkthrough for explicit typed `var` declarations and nil-slice zero values
+- `2026-03-20-make-slice-allocation-playtest.md`: records the CLI walkthrough for slice allocation through builtin `make`

@@ -25,6 +25,7 @@
 
 ## Related Plans
 
+- `2026-03-20-02-39-55-make-slice-allocation`: completed builtin `make([]T, len[, cap])` and the first type-argument builtin path
 - `2026-03-20-00-09-59-string-runtime-builtins`: completed first richer runtime value slice with builtin contract centralization
 - `2026-03-20-00-35-11-import-fmt-seam`: completed the first narrow import and package-backed standard-library seam
 - `2026-03-20-00-55-55-slice-runtime-testing`: completed the first composite runtime value and layered test coverage
@@ -38,9 +39,9 @@
 - Runtime-surface growth can sprawl quickly if types, builtins, and imports are mixed into the same plan.
 - Builtin additions can become hardcoded special cases unless their contracts stay centralized.
 - Supporting more realistic Go programs will require careful staging so the VM remains understandable.
-- The current runtime now has richer slice operations, but still lacks string slicing, `make`, full append growth semantics, real import graphs, and broader package-backed runtime services.
+- The current runtime now has richer slice operations including `make`, but string slicing, fuller append growth semantics, real import graphs, and broader package-backed runtime services remain open.
 
 ## Next-Round Recommendations
 
-- Open the next `M3` plan around `make`-based slice allocation on top of the new typed declaration / zero-value path, or switch to byte-oriented string work if string slicing becomes the higher-priority compatibility gap.
+- Open the next `M3` plan around byte-oriented string work and string slicing, or broaden allocation/runtime coverage beyond slices once the next compatibility gap is chosen.
 - Reuse the `docs/research/` flow before locking the next compatibility-sensitive slice.

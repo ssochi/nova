@@ -16,7 +16,7 @@ Describe the current runtime value categories and builtin execution model introd
   - `len(string)` returns the UTF-8 byte length
 - `slice`
   - Stored as shared backing storage plus start / length / capacity metadata
-  - Built by slice literals and returned by `append`
+  - Built by slice literals, `make([]T, len[, cap])`, and returned by `append`
   - Also used as the zero value for explicit typed slice declarations via a nil-slice runtime state
   - Currently rendered in a Go-like `[value value]` form for builtin and package output
   - Supports `len(slice)`, `cap(slice)`, `copy(dst, src)`, index expressions such as `values[0]`, simple slice expressions such as `values[1:3]`, and element assignment such as `values[0] = 1`
@@ -29,11 +29,13 @@ Describe the current runtime value categories and builtin execution model introd
   - `print(...value) -> void`
   - `println(...value) -> void`
   - `len(string|slice) -> int`
+  - `make([]T, len[, cap]) -> []T`
   - `cap(slice) -> int`
   - `copy(slice, slice) -> int`
   - `append(slice, ...element) -> slice`
 - Variadic output builtins accept any value-producing expression in the current type system
 - `len` validates one string or slice target before lowering
+- `make` validates a slice type argument plus one required and one optional integer size argument before lowering
 - `cap` validates one slice target before lowering
 - `copy` validates destination and source slice types centrally before lowering
 - `append` validates a slice first argument and matching appended element types before lowering
@@ -59,7 +61,7 @@ Describe the current runtime value categories and builtin execution model introd
 ## Runtime Execution Notes
 
 - Bytecode uses `push-string` for literals and `concat` for string addition
-- Bytecode now also uses `push-nil-slice` for typed zero-value slice declarations, `build-slice <count>` for slice literals, `index` for slice element reads, `slice` for slice-window creation, and `set-index` for slice element writes
+- Bytecode now also uses `push-nil-slice` for typed zero-value slice declarations, `build-slice <count>` for slice literals, `make-slice <type>` for slice allocation, `index` for slice element reads, `slice` for slice-window creation, and `set-index` for slice element writes
 - Equality still reuses the generic value comparison path because runtime values are tagged
 - VM output is an accumulated string buffer instead of newline-separated records
 - `print` appends rendered arguments without an automatic trailing newline
@@ -67,6 +69,8 @@ Describe the current runtime value categories and builtin execution model introd
 - `cap` returns the current slice capacity metadata tracked by the runtime
 - `copy` snapshots source elements before writing, so overlapping slice windows behave predictably
 - `append` now reuses existing backing storage when spare capacity is available; otherwise it allocates a fresh slice value
+- `make([]T, len[, cap])` lowers into dedicated allocation bytecode instead of a generic runtime builtin call because its first argument is a type
+- `make` allocation reserves hidden capacity slots filled with the element zero value, so reslicing into spare capacity exposes zero-initialized elements and later `append` can reuse that storage
 - Slice windows share backing storage, so updating one slice view is visible through overlapping slice values
 - Explicit typed local declarations are lowered into concrete zero-producing instructions, so `var total int`, `var ready bool`, `var label string`, and `var values []int` all produce Go-like zero values without runtime type reflection
 - Bytecode now also uses `call-package` for metadata-backed package functions
@@ -79,6 +83,7 @@ Describe the current runtime value categories and builtin execution model introd
 ## Extension Hooks
 
 - Add new builtin IDs in `src/builtin.rs`, then extend `src/semantic/builtins.rs` before touching lowering or runtime
+- If a builtin needs type arguments, keep that path explicit in the AST and checked model instead of pretending type syntax is an ordinary runtime value
 - Add new package IDs and package-function IDs in `src/package.rs`, then extend `src/semantic/packages.rs`
 - Keep new runtime value categories reflected in both `src/runtime/value.rs` and semantic `Type`
 - If output behavior becomes more realistic or package-backed, extract builtin execution helpers from `src/runtime/vm.rs`

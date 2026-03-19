@@ -81,6 +81,20 @@ impl SliceValue {
         }
     }
 
+    pub fn with_len_and_capacity(fill: Value, len: usize, capacity: usize) -> Self {
+        let mut storage = Vec::with_capacity(capacity);
+        for _ in 0..capacity {
+            storage.push(fill.clone());
+        }
+        Self {
+            storage: Rc::new(RefCell::new(storage)),
+            start: 0,
+            len,
+            capacity,
+            is_nil: false,
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.len
     }
@@ -240,5 +254,20 @@ mod tests {
             vec![Value::Integer(7), Value::Integer(8)]
         );
         assert_eq!(grown.capacity(), 2);
+    }
+
+    #[test]
+    fn make_allocates_hidden_capacity_with_zero_values() {
+        let values = SliceValue::with_len_and_capacity(Value::Integer(0), 2, 4);
+        let grown = values
+            .slice(0, 3)
+            .expect("reslicing into spare capacity should succeed");
+
+        assert_eq!(values.len(), 2);
+        assert_eq!(values.capacity(), 4);
+        assert_eq!(
+            grown.visible_elements(),
+            vec![Value::Integer(0), Value::Integer(0), Value::Integer(0)]
+        );
     }
 }

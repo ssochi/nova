@@ -271,3 +271,29 @@ fn check_rejects_full_slice_expression() {
 
     cleanup_temp_source(path);
 }
+
+#[test]
+fn check_rejects_make_with_non_slice_type_argument() {
+    let path = write_temp_source(
+        "check-bad-make-type",
+        "package main\n\nfunc main() {\n\tvar values = make(int, 2)\n\tprintln(values)\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("argument 1 in call to builtin `make` requires `slice`, found `int`"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_make_when_length_exceeds_capacity() {
+    let path = write_temp_source(
+        "check-bad-make-bounds",
+        "package main\n\nfunc main() {\n\tvar values = make([]int, 3, 2)\n\tprintln(values)\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("builtin `make` length 3 exceeds capacity 2"));
+
+    cleanup_temp_source(path);
+}

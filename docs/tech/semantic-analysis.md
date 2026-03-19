@@ -20,6 +20,7 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 - Infer the type of each supported expression and reject incompatible assignments, returns, and branch conditions.
 - Validate slice windows and indexed slice assignment through the checked-program model instead of runtime-only checks.
 - Resolve builtin calls through a centralized contract table instead of hardcoded name checks spread across the analyzer.
+- Model `make([]T, len[, cap])` explicitly because its first argument is a type, then lower it into checked slice-allocation expressions before bytecode generation.
 - Validate loop conditions and model loop bodies as scoped blocks.
 - Ensure non-void functions do not fall through on any reachable path in the supported subset.
 
@@ -47,9 +48,9 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 
 ## Current Limits
 
-- Supported types are limited to `int`, `bool`, `string`, `[]T`, and `void`.
+- Supported types are limited to `int`, `bool`, `string`, `[]T`, and `void`, and type-valued syntax is currently only accepted through builtin `make`.
 - Package loading is still single-file and does not model imports.
 - Loop support is limited to `for <condition> { ... }`.
 - Termination analysis only treats the literal `for true { ... }` as definitely non-fallthrough because `break` and `continue` do not exist yet.
-- Builtin coverage is still intentionally small and does not yet model package-backed standard library APIs.
+- Builtin coverage is still intentionally small and only `make` currently uses a type argument.
 - Slice support is still staged: simple slice expressions on `[]T` are supported, while full slice expressions and string slicing remain deferred.

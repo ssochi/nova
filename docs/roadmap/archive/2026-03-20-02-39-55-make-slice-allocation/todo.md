@@ -1,0 +1,4 @@
+- [done] Open the active `M3` plan and extend the slice research / design baseline for `make`-based allocation.
+- [done] Implement parser, semantic, bytecode, and runtime support for `make([]T, len[, cap])`.
+- [done] Add examples, layered automated coverage, and serial CLI validation for `make` allocation paths.
+- [done] Sync reports, roadmap docs, `BOOT.md`, archive the plan, and commit plus push all current changes.

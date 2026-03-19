@@ -242,6 +242,11 @@ pub enum Expression {
         target: Box<Expression>,
         member: String,
     },
+    Make {
+        type_ref: TypeRef,
+        length: Box<Expression>,
+        capacity: Option<Box<Expression>>,
+    },
     Call {
         callee: Box<Expression>,
         arguments: Vec<Expression>,
@@ -290,6 +295,17 @@ impl Expression {
             ),
             Expression::Selector { target, member } => {
                 format!("{}.{}", target.render(), member)
+            }
+            Expression::Make {
+                type_ref,
+                length,
+                capacity,
+            } => {
+                let mut arguments = vec![type_ref.render(), length.render()];
+                if let Some(capacity) = capacity {
+                    arguments.push(capacity.render());
+                }
+                format!("make({})", arguments.join(", "))
             }
             Expression::Call { callee, arguments } => format!(
                 "{}({})",

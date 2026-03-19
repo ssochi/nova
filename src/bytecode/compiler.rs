@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::bytecode::instruction::{CompiledFunction, Instruction, Program};
+use crate::bytecode::instruction::{CompiledFunction, Instruction, Program, ValueType};
 use crate::semantic::model::{
     CallTarget, CheckedAssignmentTarget, CheckedBinaryOperator, CheckedBlock, CheckedExpression,
     CheckedExpressionKind, CheckedFunction, CheckedProgram, CheckedStatement, Type,
@@ -181,6 +181,22 @@ impl<'a> FunctionCompiler<'a> {
                 self.instructions
                     .push(Instruction::BuildSlice(elements.len()));
             }
+            CheckedExpressionKind::MakeSlice {
+                element_type,
+                length,
+                capacity,
+            } => {
+                self.compile_expression(length)?;
+                self.expect_value(&length.ty, "make expression")?;
+                if let Some(capacity) = capacity {
+                    self.compile_expression(capacity)?;
+                    self.expect_value(&capacity.ty, "make expression")?;
+                }
+                self.instructions.push(Instruction::MakeSlice {
+                    element_type: lower_value_type(element_type)?,
+                    has_capacity: capacity.is_some(),
+                });
+            }
             CheckedExpressionKind::Local { slot, .. } => {
                 self.instructions.push(Instruction::LoadLocal(*slot));
             }
@@ -274,5 +290,17 @@ impl<'a> FunctionCompiler<'a> {
 
     fn patch_jump(&mut self, index: usize, instruction: Instruction) {
         self.instructions[index] = instruction;
+    }
+}
+
+fn lower_value_type(ty: &Type) -> Result<ValueType, CompileError> {
+    match ty {
+        Type::Int => Ok(ValueType::Int),
+        Type::Bool => Ok(ValueType::Bool),
+        Type::String => Ok(ValueType::String),
+        Type::Slice(element) => Ok(ValueType::Slice(Box::new(lower_value_type(element)?))),
+        Type::Void => Err(CompileError::new(
+            "runtime value types do not support `void`",
+        )),
     }
 }

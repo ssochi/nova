@@ -86,6 +86,11 @@ pub enum CheckedExpressionKind {
         low: Option<Box<CheckedExpression>>,
         high: Option<Box<CheckedExpression>>,
     },
+    MakeSlice {
+        element_type: Type,
+        length: Box<CheckedExpression>,
+        capacity: Option<Box<CheckedExpression>>,
+    },
     Binary {
         left: Box<CheckedExpression>,
         operator: CheckedBinaryOperator,

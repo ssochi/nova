@@ -7,7 +7,7 @@ use crate::frontend::ast::{
     TypeRef,
 };
 use crate::package::ImportedPackage;
-use crate::semantic::builtins::{resolve_builtin, validate_builtin_call};
+use crate::semantic::builtins::{resolve_builtin, validate_builtin_call, validate_make_call};
 use crate::semantic::model::{
     CallTarget, CheckedAssignmentTarget, CheckedBinaryOperator, CheckedBlock, CheckedExpression,
     CheckedExpressionKind, CheckedFunction, CheckedProgram, CheckedStatement, Type,
@@ -511,6 +511,11 @@ impl<'a> FunctionAnalyzer<'a> {
             Expression::Selector { .. } => Err(SemanticError::new(
                 "selector expressions are only supported as imported package call targets",
             )),
+            Expression::Make {
+                type_ref,
+                length,
+                capacity,
+            } => self.analyze_make_expression(type_ref, length, capacity.as_deref()),
             Expression::Binary {
                 left,
                 operator,
@@ -608,6 +613,45 @@ impl<'a> FunctionAnalyzer<'a> {
                     name: signature.name.clone(),
                 },
                 arguments: checked_arguments,
+            },
+        })
+    }
+
+    fn analyze_make_expression(
+        &mut self,
+        type_ref: &TypeRef,
+        length: &Expression,
+        capacity: Option<&Expression>,
+    ) -> Result<CheckedExpression, SemanticError> {
+        let allocated_type = resolve_type_ref(type_ref).ok_or_else(|| {
+            SemanticError::new(format!(
+                "builtin `make` does not support type `{}`",
+                type_ref.render()
+            ))
+        })?;
+        let length = self.analyze_expression(length)?;
+        let capacity = capacity
+            .map(|expression| self.analyze_expression(expression))
+            .transpose()?;
+        let mut argument_types = vec![length.ty.clone()];
+        if let Some(capacity) = &capacity {
+            argument_types.push(capacity.ty.clone());
+        }
+        let result_type =
+            validate_make_call(&allocated_type, &argument_types).map_err(SemanticError::new)?;
+        if let Some(capacity) = &capacity {
+            validate_make_literal_bounds(&length, capacity)?;
+        }
+        let element_type = result_type
+            .slice_element_type()
+            .cloned()
+            .expect("slice validation ensures make result has an element type");
+        Ok(CheckedExpression {
+            ty: result_type,
+            kind: CheckedExpressionKind::MakeSlice {
+                element_type,
+                length: Box::new(length),
+                capacity: capacity.map(Box::new),
             },
         })
     }
@@ -942,6 +986,36 @@ mod tests {
 
         assert_eq!(program.functions.len(), 1);
     }
+
+    #[test]
+    fn analyze_make_slice_expression() {
+        let source = SourceFile {
+            path: "test.go".into(),
+            contents: "package main\n\nfunc main() {\n\tvar values = make([]int, 2, 4)\n\tvalues[1] = 9\n\tprintln(len(values), cap(values), values[1])\n}\n"
+                .to_string(),
+        };
+
+        let tokens = lex(&source).expect("lexing should succeed");
+        let ast = parse_source_file(&tokens).expect("parsing should succeed");
+        let program = analyze_package(&ast).expect("analysis should succeed");
+
+        assert_eq!(program.functions.len(), 1);
+    }
+
+    #[test]
+    fn reject_make_with_constant_length_exceeding_capacity() {
+        let source = SourceFile {
+            path: "test.go".into(),
+            contents: "package main\n\nfunc main() {\n\tvar values = make([]int, 3, 2)\n\tprintln(values)\n}\n"
+                .to_string(),
+        };
+
+        let tokens = lex(&source).expect("lexing should succeed");
+        let ast = parse_source_file(&tokens).expect("parsing should succeed");
+        let error = analyze_package(&ast).expect_err("analysis should reject invalid make bounds");
+
+        assert!(error.to_string().contains("length 3 exceeds capacity 2"));
+    }
 }
 
 fn zero_value_expression(ty: Type) -> CheckedExpression {
@@ -949,4 +1023,23 @@ fn zero_value_expression(ty: Type) -> CheckedExpression {
         ty,
         kind: CheckedExpressionKind::ZeroValue,
     }
+}
+
+fn validate_make_literal_bounds(
+    length: &CheckedExpression,
+    capacity: &CheckedExpression,
+) -> Result<(), SemanticError> {
+    let CheckedExpressionKind::Integer(length_value) = &length.kind else {
+        return Ok(());
+    };
+    let CheckedExpressionKind::Integer(capacity_value) = &capacity.kind else {
+        return Ok(());
+    };
+    if length_value > capacity_value {
+        return Err(SemanticError::new(format!(
+            "builtin `make` length {} exceeds capacity {}",
+            length_value, capacity_value
+        )));
+    }
+    Ok(())
 }

@@ -8,7 +8,7 @@ pub struct BuiltinContract {
     pub validator: fn(&[Type]) -> Result<Type, String>,
 }
 
-const BUILTIN_CONTRACTS: [BuiltinContract; 6] = [
+const BUILTIN_CONTRACTS: [BuiltinContract; 7] = [
     BuiltinContract {
         builtin: BuiltinFunction::Print,
         name: "print",
@@ -38,6 +38,11 @@ const BUILTIN_CONTRACTS: [BuiltinContract; 6] = [
         builtin: BuiltinFunction::Append,
         name: "append",
         validator: validate_append_builtin,
+    },
+    BuiltinContract {
+        builtin: BuiltinFunction::Make,
+        name: "make",
+        validator: validate_make_value_builtin,
     },
 ];
 
@@ -147,6 +152,32 @@ fn validate_append_builtin(argument_types: &[Type]) -> Result<Type, String> {
     Ok(slice_type)
 }
 
+pub fn validate_make_call(allocated_type: &Type, argument_types: &[Type]) -> Result<Type, String> {
+    validate_make_arity(argument_types.len())?;
+    if !matches!(allocated_type, Type::Slice(_)) {
+        return Err(format!(
+            "argument 1 in call to builtin `make` requires `slice`, found `{}`",
+            allocated_type.render()
+        ));
+    }
+
+    for (index, argument) in argument_types.iter().enumerate() {
+        if argument != &Type::Int {
+            return Err(format!(
+                "argument {} in call to builtin `make` requires `int`, found `{}`",
+                index + 2,
+                argument.render()
+            ));
+        }
+    }
+
+    Ok(allocated_type.clone())
+}
+
+fn validate_make_value_builtin(_argument_types: &[Type]) -> Result<Type, String> {
+    Err("builtin `make` requires a type argument".to_string())
+}
+
 fn validate_exact_arity(name: &str, expected: usize, actual: usize) -> Result<(), String> {
     if expected == actual {
         Ok(())
@@ -167,9 +198,20 @@ fn validate_min_arity(name: &str, minimum: usize, actual: usize) -> Result<(), S
     }
 }
 
+fn validate_make_arity(actual: usize) -> Result<(), String> {
+    if matches!(actual, 1 | 2) {
+        Ok(())
+    } else {
+        Err(format!(
+            "builtin `make` expects 2 or 3 arguments including the type, found {}",
+            actual + 1
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::validate_builtin_call;
+    use super::{validate_builtin_call, validate_make_call};
     use crate::builtin::BuiltinFunction;
     use crate::semantic::model::Type;
 
@@ -213,6 +255,24 @@ mod tests {
         .expect_err("append should reject mixed element types");
 
         assert!(error.contains("argument 3"));
+        assert!(error.contains("requires `int`"));
+    }
+
+    #[test]
+    fn make_requires_slice_type_argument() {
+        let error = validate_make_call(&Type::Int, &[Type::Int])
+            .expect_err("make should reject non-slice type arguments");
+
+        assert!(error.contains("argument 1"));
+        assert!(error.contains("requires `slice`"));
+    }
+
+    #[test]
+    fn make_requires_integer_size_arguments() {
+        let error = validate_make_call(&Type::Slice(Box::new(Type::Int)), &[Type::Bool])
+            .expect_err("make should reject non-integer sizes");
+
+        assert!(error.contains("argument 2"));
         assert!(error.contains("requires `int`"));
     }
 }

@@ -2,7 +2,7 @@ use std::convert::TryFrom;
 use std::fmt;
 
 use crate::builtin::BuiltinFunction;
-use crate::bytecode::instruction::{Instruction, Program};
+use crate::bytecode::instruction::{Instruction, Program, ValueType};
 use crate::package::PackageFunction;
 use crate::runtime::value::{SliceValue, Value};
 
@@ -95,6 +95,10 @@ impl VirtualMachine {
                     elements.reverse();
                     self.stack.push(Value::Slice(SliceValue::new(elements)));
                 }
+                Instruction::MakeSlice {
+                    element_type,
+                    has_capacity,
+                } => self.make_slice(&element_type, has_capacity)?,
                 Instruction::LoadLocal(index) => {
                     let value = self.frames[frame_index]
                         .locals
@@ -332,6 +336,11 @@ impl VirtualMachine {
                 };
                 self.stack.push(Value::Slice(slice.append(rest)));
             }
+            BuiltinFunction::Make => {
+                return Err(RuntimeError::new(
+                    "builtin `make` is lowered into dedicated slice-allocation bytecode",
+                ));
+            }
         }
 
         Ok(())
@@ -482,6 +491,44 @@ impl VirtualMachine {
         Ok(())
     }
 
+    fn make_slice(
+        &mut self,
+        element_type: &ValueType,
+        has_capacity: bool,
+    ) -> Result<(), RuntimeError> {
+        let capacity = if has_capacity { self.pop_integer()? } else { 0 };
+        let length = self.pop_integer()?;
+        if length < 0 {
+            return Err(RuntimeError::new(format!(
+                "builtin `make` length must be non-negative, found {length}"
+            )));
+        }
+        let capacity = if has_capacity { capacity } else { length };
+        if capacity < 0 {
+            return Err(RuntimeError::new(format!(
+                "builtin `make` capacity must be non-negative, found {capacity}"
+            )));
+        }
+        if length > capacity {
+            return Err(RuntimeError::new(format!(
+                "builtin `make` length {length} exceeds capacity {capacity}"
+            )));
+        }
+        let length = usize::try_from(length).map_err(|_| {
+            RuntimeError::new("builtin `make` length could not convert to runtime size")
+        })?;
+        let capacity = usize::try_from(capacity).map_err(|_| {
+            RuntimeError::new("builtin `make` capacity could not convert to runtime size")
+        })?;
+        self.stack
+            .push(Value::Slice(SliceValue::with_len_and_capacity(
+                zero_value_for_type(element_type),
+                length,
+                capacity,
+            )));
+        Ok(())
+    }
+
     fn pop_integer(&mut self) -> Result<i64, RuntimeError> {
         match self.pop_value()? {
             Value::Integer(value) => Ok(value),
@@ -553,7 +600,7 @@ fn render_package_arguments(arguments: &[Value], separator: &str) -> String {
 mod tests {
     use super::VirtualMachine;
     use crate::builtin::BuiltinFunction;
-    use crate::bytecode::instruction::{CompiledFunction, Instruction, Program};
+    use crate::bytecode::instruction::{CompiledFunction, Instruction, Program, ValueType};
     use crate::package::PackageFunction;
 
     #[test]
@@ -776,6 +823,56 @@ mod tests {
 
         assert_eq!(output, "0 0\n5\n");
     }
+
+    #[test]
+    fn execute_make_slice_allocation() {
+        let program = Program {
+            package_name: "main".to_string(),
+            entry_function: "main".to_string(),
+            entry_function_index: 0,
+            functions: vec![CompiledFunction {
+                name: "main".to_string(),
+                parameter_count: 0,
+                returns_value: false,
+                local_names: vec!["values".to_string(), "grown".to_string()],
+                instructions: vec![
+                    Instruction::PushInt(2),
+                    Instruction::PushInt(4),
+                    Instruction::MakeSlice {
+                        element_type: ValueType::Int,
+                        has_capacity: true,
+                    },
+                    Instruction::StoreLocal(0),
+                    Instruction::LoadLocal(0),
+                    Instruction::PushInt(3),
+                    Instruction::Slice {
+                        has_low: false,
+                        has_high: true,
+                    },
+                    Instruction::PushInt(2),
+                    Instruction::Index,
+                    Instruction::CallBuiltin(BuiltinFunction::Println, 1),
+                    Instruction::LoadLocal(0),
+                    Instruction::PushInt(9),
+                    Instruction::CallBuiltin(BuiltinFunction::Append, 2),
+                    Instruction::StoreLocal(1),
+                    Instruction::LoadLocal(1),
+                    Instruction::CallBuiltin(BuiltinFunction::Len, 1),
+                    Instruction::LoadLocal(1),
+                    Instruction::CallBuiltin(BuiltinFunction::Cap, 1),
+                    Instruction::CallBuiltin(BuiltinFunction::Println, 2),
+                    Instruction::Return,
+                ],
+            }],
+        };
+
+        let output = VirtualMachine::new()
+            .execute(&program)
+            .expect("make-allocated slice program should execute")
+            .render_output();
+
+        assert_eq!(output, "0\n3 4\n");
+    }
 }
 
 fn expect_exact_package_arguments<const N: usize>(
@@ -895,6 +992,15 @@ fn runtime_type_name(value: &Value) -> &'static str {
         Value::Boolean(_) => "bool",
         Value::String(_) => "string",
         Value::Slice(_) => "slice",
+    }
+}
+
+fn zero_value_for_type(value_type: &ValueType) -> Value {
+    match value_type {
+        ValueType::Int => Value::Integer(0),
+        ValueType::Bool => Value::Boolean(false),
+        ValueType::String => Value::String(String::new()),
+        ValueType::Slice(_) => Value::Slice(SliceValue::nil()),
     }
 }
 

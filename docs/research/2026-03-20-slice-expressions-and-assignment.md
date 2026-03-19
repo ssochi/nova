@@ -1,8 +1,8 @@
-# Slice Expressions, Assignment, Typed Zero Values, and Builtin Semantics Research
+# Slice Expressions, Assignment, Typed Zero Values, and Slice Allocation Research
 
 ## Goal
 
-Capture the official Go behavior baseline for the currently targeted slice surface: simple slice expressions, indexed assignment, typed `var` zero values, nil-slice behavior, `cap`, `copy`, and slice-backed `append` reuse.
+Capture the official Go behavior baseline for the currently targeted slice surface: simple slice expressions, indexed assignment, typed `var` zero values, nil-slice behavior, `cap`, `copy`, slice-backed `append` reuse, and `make([]T, len[, cap])`.
 
 ## Sources Reviewed
 
@@ -11,6 +11,8 @@ Capture the official Go behavior baseline for the currently targeted slice surfa
 - Official Go language specification section `Variable declarations`
 - Official Go language specification section `Appending to and copying slices`
 - Official Go language specification section `Length and capacity`
+- Official Go language specification section `Making slices, maps and channels`
+- Official Go builtin package documentation for `make`
 
 ## Confirmed Findings
 
@@ -29,6 +31,11 @@ Capture the official Go behavior baseline for the currently targeted slice surfa
 - `append` returns a slice of the same type. If the destination slice has enough spare capacity, the existing underlying array is reused; otherwise a new sufficiently large underlying array is allocated.
 - `copy(dst, src)` returns the minimum of `len(dst)` and `len(src)` and requires matching slice element types, except for the special `[]byte` <- `string` case.
 - `cap(slice)` returns the current slice capacity. For slices, `0 <= len(s) <= cap(s)` always holds.
+- `make([]T, len)` allocates a new, non-nil slice with length and capacity both equal to `len`.
+- `make([]T, len, cap)` allocates a new, non-nil slice with length `len` and capacity `cap`.
+- Slice elements created by `make` are initialized to the zero value of the element type.
+- `make` requires a slice, map, or channel type as its first argument in real Go; for slices, the length must not exceed the capacity.
+- Negative slice lengths or capacities and length-greater-than-capacity failures are rejected; some cases are compile-time failures when the values are constant, and otherwise they fail at runtime.
 - Real Go also accepts arrays, pointers to arrays, channels, and some generic type-parameter cases for `cap`, but those surfaces are outside the current compiler subset.
 
 ## Implementation Implications
@@ -38,6 +45,8 @@ Capture the official Go behavior baseline for the currently targeted slice surfa
 - Indexed assignment should reuse the same shared-slice representation so overlapping slice windows observe mutations.
 - String slice execution should stay deferred for now because the current runtime stores strings as Rust `String`, which does not model Go's byte-addressed string slicing cleanly.
 - The existing slice runtime already tracks capacity metadata, so `cap(slice)` and capacity-aware `append` should extend that path instead of adding a second storage model.
+- `make([]T, len[, cap])` can reuse the current slice storage model if allocation reserves hidden capacity slots and fills the visible prefix with element zero values.
+- The first argument to `make` is a type, not a value, so the compiler should model that path explicitly instead of forcing it through ordinary expression arguments.
 - Explicit typed `var` declarations are a good entry point for nil slices because they provide type context without forcing untyped `nil` expression support yet.
 - Zero-value synthesis can stay compile-time-driven for the current subset by lowering explicit typed declarations into concrete zero-producing instructions.
 - `copy` should snapshot the visible source elements before writing so overlapping slice windows behave independently of aliasing order, matching the spec.
@@ -45,6 +54,6 @@ Capture the official Go behavior baseline for the currently targeted slice surfa
 
 ## Deferred Questions
 
-- Whether a later allocation-oriented plan should add `make` and type-valued builtin arguments on top of the typed zero-value declaration path
 - Whether string runtime values should move to a byte-oriented representation before broader `strings` or slicing support expands
-- Whether a future allocation model should introduce `make` plus spare-capacity growth heuristics beyond the minimal "reuse if capacity allows" rule
+- Whether later slice work should add compile-time constant folding strong enough to reject more invalid `make` sizes before runtime
+- Whether a future allocation model should grow beyond slice-only `make` into maps, channels, or more Go-like append growth heuristics
