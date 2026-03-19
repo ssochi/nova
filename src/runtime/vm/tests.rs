@@ -445,3 +445,49 @@ fn execute_nil_map_assignment_fails() {
 
     assert!(error.to_string().contains("assignment to entry in nil map"));
 }
+
+#[test]
+fn execute_map_keys_returns_deterministic_key_slice() {
+    let map_type = ValueType::Map {
+        key: Box::new(ValueType::String),
+        value: Box::new(ValueType::Int),
+    };
+    let program = Program {
+        package_name: "main".to_string(),
+        entry_function: "main".to_string(),
+        entry_function_index: 0,
+        functions: vec![CompiledFunction {
+            name: "main".to_string(),
+            parameter_count: 0,
+            returns_value: false,
+            local_names: vec!["keys".to_string()],
+            instructions: vec![
+                Instruction::PushString("nova".to_string()),
+                Instruction::PushInt(3),
+                Instruction::PushString("go".to_string()),
+                Instruction::PushInt(2),
+                Instruction::BuildMap {
+                    map_type: map_type.clone(),
+                    entry_count: 2,
+                },
+                Instruction::MapKeys(ValueType::String),
+                Instruction::StoreLocal(0),
+                Instruction::LoadLocal(0),
+                Instruction::PushInt(0),
+                Instruction::Index(SequenceKind::Slice),
+                Instruction::LoadLocal(0),
+                Instruction::PushInt(1),
+                Instruction::Index(SequenceKind::Slice),
+                Instruction::CallBuiltin(BuiltinFunction::Println, 2),
+                Instruction::Return,
+            ],
+        }],
+    };
+
+    let output = VirtualMachine::new()
+        .execute(&program)
+        .expect("map-keys program should execute")
+        .render_output();
+
+    assert_eq!(output, "go nova\n");
+}

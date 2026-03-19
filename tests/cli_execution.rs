@@ -22,6 +22,12 @@ fn run_executes_loops() {
 }
 
 #[test]
+fn run_executes_range_loops() {
+    let output = run_cli(&["run", "examples/range_loops.go"]).expect("program should run");
+    assert_eq!(output, "go 2\nnova 3\n8 1 2\n5 gonova\n0 0\n");
+}
+
+#[test]
 fn run_executes_strings_and_builtins() {
     let output = run_cli(&["run", "examples/strings.go"]).expect("program should run");
     assert_eq!(output, "hello, nova! 11\ntrue\n");
@@ -133,6 +139,15 @@ fn dump_ast_renders_loops() {
 }
 
 #[test]
+fn dump_ast_renders_range_loops() {
+    let output = run_cli(&["dump-ast", "examples/range_loops.go"]).expect("ast should be rendered");
+
+    assert!(output.contains("for _, value := range values {"));
+    assert!(output.contains("for index := range values {"));
+    assert!(output.contains("for range nilCounts {"));
+}
+
+#[test]
 fn dump_tokens_show_string_literals() {
     let output =
         run_cli(&["dump-tokens", "examples/strings.go"]).expect("tokens should be rendered");
@@ -178,6 +193,15 @@ fn dump_tokens_show_nil_keyword() {
 
     assert!(output.contains("nil"));
     assert!(output.contains("identifier(acceptNames)"));
+}
+
+#[test]
+fn dump_tokens_show_range_loop_tokens() {
+    let output =
+        run_cli(&["dump-tokens", "examples/range_loops.go"]).expect("tokens should be rendered");
+
+    assert!(output.contains("range"));
+    assert!(output.contains(":="));
 }
 
 #[test]
@@ -324,6 +348,16 @@ fn dump_bytecode_shows_loop_jumps() {
     assert!(output.contains("function 1: climbPast"));
     assert!(output.matches("jump-if-false").count() >= 2);
     assert!(output.contains("jump 2"));
+}
+
+#[test]
+fn dump_bytecode_shows_range_loop_lowering() {
+    let output = run_cli(&["dump-bytecode", "examples/range_loops.go"])
+        .expect("bytecode should be generated");
+
+    assert!(output.contains("range$source"));
+    assert!(output.contains("range$index"));
+    assert!(output.contains("map-keys string"));
 }
 
 #[test]

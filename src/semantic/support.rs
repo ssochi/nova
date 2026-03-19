@@ -161,6 +161,7 @@ fn statement_guarantees_termination(statement: &CheckedStatement) -> bool {
             ..
         } => block_guarantees_return(then_block) && block_guarantees_return(else_block),
         CheckedStatement::For { condition, .. } => expression_is_compile_time_true(condition),
+        CheckedStatement::RangeFor { .. } => false,
         _ => false,
     }
 }

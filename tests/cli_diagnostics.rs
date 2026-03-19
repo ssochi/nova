@@ -55,6 +55,45 @@ fn check_rejects_non_boolean_for_condition() {
 }
 
 #[test]
+fn check_rejects_range_with_non_iterable_source() {
+    let path = write_temp_source(
+        "check-bad-range-source",
+        "package main\n\nfunc main() {\n\tfor range 1 {\n\t\tprintln(1)\n\t}\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("range loop requires `slice` or `map` source, found `int`"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_range_assignment_type_mismatch() {
+    let path = write_temp_source(
+        "check-bad-range-assign",
+        "package main\n\nfunc main() {\n\tvar label string\n\tfor label = range []int{1} {\n\t\tprintln(label)\n\t}\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("range loop assignment to `label` requires `string`, found `int`"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_range_define_without_named_variable() {
+    let path = write_temp_source(
+        "check-bad-range-define",
+        "package main\n\nfunc main() {\n\tfor _, _ := range []int{1} {\n\t\tprintln(1)\n\t}\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("range loop `:=` requires at least one named iteration variable"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
 fn check_rejects_invalid_len_argument_type() {
     let path = write_temp_source(
         "check-bad-len",

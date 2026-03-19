@@ -347,6 +347,17 @@ impl fmt::Display for MapKey {
     }
 }
 
+impl From<MapKey> for Value {
+    fn from(value: MapKey) -> Self {
+        match value {
+            MapKey::Integer(value) => Value::Integer(value),
+            MapKey::Byte(value) => Value::Byte(value),
+            MapKey::Boolean(value) => Value::Boolean(value),
+            MapKey::String(value) => Value::String(value),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct MapValue {
     entries: Rc<RefCell<BTreeMap<MapKey, Value>>>,
@@ -396,6 +407,15 @@ impl MapValue {
             .borrow()
             .iter()
             .map(|(key, value)| (key.clone(), value.clone()))
+            .collect()
+    }
+
+    pub fn keys_as_values(&self) -> Vec<Value> {
+        self.entries
+            .borrow()
+            .keys()
+            .cloned()
+            .map(Value::from)
             .collect()
     }
 }

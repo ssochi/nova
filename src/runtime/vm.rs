@@ -156,6 +156,7 @@ impl VirtualMachine {
                     has_high,
                 } => self.slice_value(target_kind, has_low, has_high)?,
                 Instruction::IndexMap(map_type) => self.index_map(&map_type)?,
+                Instruction::MapKeys(key_type) => self.map_keys(&key_type)?,
                 Instruction::SetIndex => self.set_slice_index()?,
                 Instruction::SetMapIndex => self.set_map_index()?,
                 Instruction::Jump(target) => {
@@ -696,6 +697,25 @@ impl VirtualMachine {
             .get(&key)
             .unwrap_or_else(|| zero_value_for_type(value_type));
         self.stack.push(value);
+        Ok(())
+    }
+
+    fn map_keys(&mut self, key_type: &ValueType) -> Result<(), RuntimeError> {
+        let target = self.pop_value()?;
+        if !matches!(
+            key_type,
+            ValueType::Int | ValueType::Byte | ValueType::Bool | ValueType::String
+        ) {
+            return Err(RuntimeError::new(
+                "map-keys expected a comparable scalar runtime key type",
+            ));
+        }
+        let map = match target {
+            Value::Map(map) => map,
+            _ => return Err(RuntimeError::new("map-keys target is not a map")),
+        };
+        self.stack
+            .push(Value::Slice(SliceValue::new(map.keys_as_values())));
         Ok(())
     }
 

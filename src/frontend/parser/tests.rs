@@ -1,5 +1,7 @@
 use super::parse_source_file;
-use crate::frontend::ast::{AssignmentTarget, Expression, Statement, TypeRef};
+use crate::frontend::ast::{
+    AssignmentTarget, Expression, RangeBinding, RangeBindingMode, Statement, TypeRef,
+};
 use crate::frontend::lexer::lex;
 use crate::source::SourceFile;
 
@@ -220,6 +222,63 @@ fn parse_map_literal_with_entries_and_trailing_comma() {
             _ => panic!("expected map literal"),
         },
         _ => panic!("expected variable declaration"),
+    }
+}
+
+#[test]
+fn parse_range_loop_forms() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tvar values = []int{1, 2}\n\tfor range values {\n\t\tprintln(1)\n\t}\n\tfor index := range values {\n\t\tprintln(index)\n\t}\n\tfor _, value = range values {\n\t\tprintln(value)\n\t}\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let function = &ast.functions[0];
+
+    match &function.body.statements[1] {
+        Statement::RangeFor {
+            bindings,
+            binding_mode,
+            target,
+            ..
+        } => {
+            assert!(bindings.is_empty());
+            assert_eq!(binding_mode, &None);
+            assert_eq!(target, &Expression::Identifier("values".into()));
+        }
+        _ => panic!("expected range loop without bindings"),
+    }
+
+    match &function.body.statements[2] {
+        Statement::RangeFor {
+            bindings,
+            binding_mode,
+            ..
+        } => {
+            assert_eq!(bindings, &vec![RangeBinding::Identifier("index".into())]);
+            assert_eq!(binding_mode, &Some(RangeBindingMode::Define));
+        }
+        _ => panic!("expected define-style range loop"),
+    }
+
+    match &function.body.statements[3] {
+        Statement::RangeFor {
+            bindings,
+            binding_mode,
+            ..
+        } => {
+            assert_eq!(
+                bindings,
+                &vec![
+                    RangeBinding::Blank,
+                    RangeBinding::Identifier("value".into())
+                ]
+            );
+            assert_eq!(binding_mode, &Some(RangeBindingMode::Assign));
+        }
+        _ => panic!("expected assign-style range loop"),
     }
 }
 

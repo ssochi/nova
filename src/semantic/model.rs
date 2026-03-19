@@ -44,7 +44,19 @@ pub enum CheckedStatement {
         condition: CheckedExpression,
         body: CheckedBlock,
     },
+    RangeFor {
+        source: CheckedExpression,
+        key_binding: Option<CheckedRangeBinding>,
+        value_binding: Option<CheckedRangeBinding>,
+        body: CheckedBlock,
+    },
     Return(Option<CheckedExpression>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CheckedRangeBinding {
+    Local { slot: usize, name: String },
+    Discard,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

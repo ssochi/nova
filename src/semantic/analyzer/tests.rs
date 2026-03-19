@@ -145,6 +145,40 @@ fn analyze_map_literals_and_delete() {
 }
 
 #[test]
+fn analyze_range_loops_for_slices_and_maps() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tvar values = []int{1, 2}\n\tvar total int\n\tfor _, value := range values {\n\t\ttotal = total + value\n\t}\n\tvar counts = map[string]int{\"nova\": 3}\n\tvar seen string\n\tfor key := range counts {\n\t\tseen = seen + key\n\t}\n\tprintln(total, seen)\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let program = analyze_package(&ast).expect("analysis should succeed");
+
+    assert_eq!(program.functions.len(), 1);
+}
+
+#[test]
+fn reject_range_loop_with_non_iterable_source() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tfor range 1 {\n\t\tprintln(1)\n\t}\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let error = analyze_package(&ast).expect_err("analysis should reject invalid range source");
+
+    assert!(
+        error
+            .to_string()
+            .contains("range loop requires `slice` or `map` source, found `int`")
+    );
+}
+
+#[test]
 fn reject_make_with_constant_length_exceeding_capacity() {
     let source = SourceFile {
         path: "test.go".into(),

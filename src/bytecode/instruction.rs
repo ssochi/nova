@@ -144,6 +144,7 @@ pub enum Instruction {
         has_high: bool,
     },
     IndexMap(ValueType),
+    MapKeys(ValueType),
     SetIndex,
     SetMapIndex,
     Jump(usize),
@@ -216,6 +217,7 @@ impl Instruction {
                 )
             }
             Instruction::IndexMap(map_type) => format!("index-map {}", map_type.render()),
+            Instruction::MapKeys(key_type) => format!("map-keys {}", key_type.render()),
             Instruction::SetIndex => "set-index".to_string(),
             Instruction::SetMapIndex => "set-map-index".to_string(),
             Instruction::Jump(target) => format!("jump {target}"),

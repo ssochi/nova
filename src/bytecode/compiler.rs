@@ -1,12 +1,13 @@
 use std::fmt;
 
+use crate::builtin::BuiltinFunction;
 use crate::bytecode::instruction::{
     CompiledFunction, Instruction, Program, SequenceKind, ValueType,
 };
 use crate::semantic::model::{
     CallTarget, CheckedAssignmentTarget, CheckedBinaryOperator, CheckedBlock, CheckedExpression,
     CheckedExpressionKind, CheckedFunction, CheckedMapLiteralEntry, CheckedProgram,
-    CheckedStatement, Type,
+    CheckedRangeBinding, CheckedStatement, Type,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,6 +47,7 @@ pub fn compile_program(program: &CheckedProgram) -> Result<Program, CompileError
 
 struct FunctionCompiler<'a> {
     function: &'a CheckedFunction,
+    local_names: Vec<String>,
     instructions: Vec<Instruction>,
 }
 
@@ -53,6 +55,7 @@ impl<'a> FunctionCompiler<'a> {
     fn new(function: &'a CheckedFunction) -> Self {
         Self {
             function,
+            local_names: function.local_names.clone(),
             instructions: Vec::new(),
         }
     }
@@ -67,7 +70,7 @@ impl<'a> FunctionCompiler<'a> {
             name: self.function.name.clone(),
             parameter_count: self.function.parameter_count,
             returns_value: self.function.return_type.produces_value(),
-            local_names: self.function.local_names.clone(),
+            local_names: self.local_names,
             instructions: self.instructions,
         })
     }
@@ -143,6 +146,17 @@ impl<'a> FunctionCompiler<'a> {
                 let loop_end = self.instructions.len();
                 self.patch_jump(jump_to_end, Instruction::JumpIfFalse(loop_end));
             }
+            CheckedStatement::RangeFor {
+                source,
+                key_binding,
+                value_binding,
+                body,
+            } => self.compile_range_statement(
+                source,
+                key_binding.as_ref(),
+                value_binding.as_ref(),
+                body,
+            )?,
             CheckedStatement::Return(value) => {
                 if let Some(expression) = value {
                     self.compile_expression(expression)?;
@@ -343,6 +357,153 @@ impl<'a> FunctionCompiler<'a> {
 
     fn patch_jump(&mut self, index: usize, instruction: Instruction) {
         self.instructions[index] = instruction;
+    }
+
+    fn allocate_hidden_local(&mut self, label: &str) -> usize {
+        let slot = self.local_names.len();
+        self.local_names.push(format!("range${label}{slot}"));
+        slot
+    }
+
+    fn compile_range_statement(
+        &mut self,
+        source: &CheckedExpression,
+        key_binding: Option<&CheckedRangeBinding>,
+        value_binding: Option<&CheckedRangeBinding>,
+        body: &CheckedBlock,
+    ) -> Result<(), CompileError> {
+        self.compile_expression(source)?;
+        self.expect_value(&source.ty, "range loop")?;
+        let source_slot = self.allocate_hidden_local("source");
+        self.instructions.push(Instruction::StoreLocal(source_slot));
+
+        match &source.ty {
+            Type::Slice(_) => {
+                let index_slot = self.allocate_hidden_local("index");
+                self.instructions.push(Instruction::PushInt(0));
+                self.instructions.push(Instruction::StoreLocal(index_slot));
+
+                let loop_start = self.instructions.len();
+                self.instructions.push(Instruction::LoadLocal(index_slot));
+                self.instructions.push(Instruction::LoadLocal(source_slot));
+                self.instructions
+                    .push(Instruction::CallBuiltin(BuiltinFunction::Len, 1));
+                self.instructions.push(Instruction::Less);
+                let jump_to_end = self.push_instruction(Instruction::JumpIfFalse(usize::MAX));
+
+                self.compile_range_binding_value(key_binding, |compiler| {
+                    compiler
+                        .instructions
+                        .push(Instruction::LoadLocal(index_slot));
+                    Ok(())
+                })?;
+                self.compile_range_binding_value(value_binding, |compiler| {
+                    compiler
+                        .instructions
+                        .push(Instruction::LoadLocal(source_slot));
+                    compiler
+                        .instructions
+                        .push(Instruction::LoadLocal(index_slot));
+                    compiler
+                        .instructions
+                        .push(Instruction::Index(SequenceKind::Slice));
+                    Ok(())
+                })?;
+
+                self.compile_block(body)?;
+                self.instructions.push(Instruction::LoadLocal(index_slot));
+                self.instructions.push(Instruction::PushInt(1));
+                self.instructions.push(Instruction::Add);
+                self.instructions.push(Instruction::StoreLocal(index_slot));
+                self.instructions.push(Instruction::Jump(loop_start));
+                let loop_end = self.instructions.len();
+                self.patch_jump(jump_to_end, Instruction::JumpIfFalse(loop_end));
+            }
+            Type::Map { key, .. } => {
+                let keys_slot = self.allocate_hidden_local("keys");
+                let index_slot = self.allocate_hidden_local("index");
+                self.instructions.push(Instruction::LoadLocal(source_slot));
+                self.instructions
+                    .push(Instruction::MapKeys(lower_value_type(key.as_ref())?));
+                self.instructions.push(Instruction::StoreLocal(keys_slot));
+                self.instructions.push(Instruction::PushInt(0));
+                self.instructions.push(Instruction::StoreLocal(index_slot));
+
+                let loop_start = self.instructions.len();
+                self.instructions.push(Instruction::LoadLocal(index_slot));
+                self.instructions.push(Instruction::LoadLocal(keys_slot));
+                self.instructions
+                    .push(Instruction::CallBuiltin(BuiltinFunction::Len, 1));
+                self.instructions.push(Instruction::Less);
+                let jump_to_end = self.push_instruction(Instruction::JumpIfFalse(usize::MAX));
+
+                self.compile_range_binding_value(key_binding, |compiler| {
+                    compiler
+                        .instructions
+                        .push(Instruction::LoadLocal(keys_slot));
+                    compiler
+                        .instructions
+                        .push(Instruction::LoadLocal(index_slot));
+                    compiler
+                        .instructions
+                        .push(Instruction::Index(SequenceKind::Slice));
+                    Ok(())
+                })?;
+                self.compile_range_binding_value(value_binding, |compiler| {
+                    compiler
+                        .instructions
+                        .push(Instruction::LoadLocal(source_slot));
+                    compiler
+                        .instructions
+                        .push(Instruction::LoadLocal(keys_slot));
+                    compiler
+                        .instructions
+                        .push(Instruction::LoadLocal(index_slot));
+                    compiler
+                        .instructions
+                        .push(Instruction::Index(SequenceKind::Slice));
+                    compiler
+                        .instructions
+                        .push(Instruction::IndexMap(lower_value_type(&source.ty)?));
+                    Ok(())
+                })?;
+
+                self.compile_block(body)?;
+                self.instructions.push(Instruction::LoadLocal(index_slot));
+                self.instructions.push(Instruction::PushInt(1));
+                self.instructions.push(Instruction::Add);
+                self.instructions.push(Instruction::StoreLocal(index_slot));
+                self.instructions.push(Instruction::Jump(loop_start));
+                let loop_end = self.instructions.len();
+                self.patch_jump(jump_to_end, Instruction::JumpIfFalse(loop_end));
+            }
+            _ => {
+                return Err(CompileError::new(format!(
+                    "range lowering does not support `{}`",
+                    source.ty.render()
+                )));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn compile_range_binding_value(
+        &mut self,
+        binding: Option<&CheckedRangeBinding>,
+        emit_value: impl FnOnce(&mut Self) -> Result<(), CompileError>,
+    ) -> Result<(), CompileError> {
+        let Some(binding) = binding else {
+            return Ok(());
+        };
+        emit_value(self)?;
+        match binding {
+            CheckedRangeBinding::Local { slot, .. } => {
+                self.instructions.push(Instruction::StoreLocal(*slot));
+            }
+            CheckedRangeBinding::Discard => self.instructions.push(Instruction::Pop),
+        }
+        Ok(())
     }
 }
 

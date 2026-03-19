@@ -125,6 +125,12 @@ pub enum Statement {
         condition: Expression,
         body: Block,
     },
+    RangeFor {
+        bindings: Vec<RangeBinding>,
+        binding_mode: Option<RangeBindingMode>,
+        target: Expression,
+        body: Block,
+    },
     Return(Option<Expression>),
 }
 
@@ -193,10 +199,54 @@ impl Statement {
                 lines.push(format!("{}}}", indent_str(indent)));
                 lines.join("\n")
             }
+            Statement::RangeFor {
+                bindings,
+                binding_mode,
+                target,
+                body,
+            } => {
+                let header = render_range_header(bindings, *binding_mode, target);
+                let mut lines = vec![format!("{}for {} {{", indent_str(indent), header)];
+                for statement in &body.statements {
+                    lines.push(statement.render(indent + 1));
+                }
+                lines.push(format!("{}}}", indent_str(indent)));
+                lines.join("\n")
+            }
             Statement::Return(Some(expression)) => {
                 format!("{}return {}", indent_str(indent), expression.render())
             }
             Statement::Return(None) => format!("{}return", indent_str(indent)),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RangeBindingMode {
+    Assign,
+    Define,
+}
+
+impl RangeBindingMode {
+    fn render(self) -> &'static str {
+        match self {
+            RangeBindingMode::Assign => "=",
+            RangeBindingMode::Define => ":=",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RangeBinding {
+    Identifier(String),
+    Blank,
+}
+
+impl RangeBinding {
+    fn render(&self) -> String {
+        match self {
+            RangeBinding::Identifier(name) => name.clone(),
+            RangeBinding::Blank => "_".to_string(),
         }
     }
 }
@@ -391,6 +441,28 @@ impl BinaryOperator {
 
 fn indent_str(indent: usize) -> String {
     "    ".repeat(indent)
+}
+
+fn render_range_header(
+    bindings: &[RangeBinding],
+    binding_mode: Option<RangeBindingMode>,
+    target: &Expression,
+) -> String {
+    if bindings.is_empty() {
+        return format!("range {}", target.render());
+    }
+
+    let bindings = bindings
+        .iter()
+        .map(RangeBinding::render)
+        .collect::<Vec<_>>()
+        .join(", ");
+    let binding_mode = binding_mode.expect("non-empty range bindings require a binding mode");
+    format!(
+        "{bindings} {} range {}",
+        binding_mode.render(),
+        target.render()
+    )
 }
 
 fn render_string_literal(value: &str) -> String {

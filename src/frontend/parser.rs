@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::frontend::ast::{
     AssignmentTarget, BinaryOperator, Block, Expression, FunctionDecl, ImportDecl, MapLiteralEntry,
-    Parameter, SourceFileAst, Statement, TypeRef,
+    Parameter, RangeBinding, RangeBindingMode, SourceFileAst, Statement, TypeRef,
 };
 use crate::frontend::token::{Token, TokenKind};
 
@@ -175,9 +175,7 @@ impl<'a> Parser<'a> {
         }
 
         if self.match_kind(&TokenKind::For) {
-            let condition = self.parse_expression()?;
-            let body = self.parse_block()?;
-            return Ok(Statement::For { condition, body });
+            return self.parse_for_statement();
         }
 
         let expression = self.parse_expression()?;
@@ -191,6 +189,54 @@ impl<'a> Parser<'a> {
 
     fn parse_expression(&mut self) -> Result<Expression, ParseError> {
         self.parse_equality_expression()
+    }
+
+    fn parse_for_statement(&mut self) -> Result<Statement, ParseError> {
+        if self.check(&TokenKind::LeftBrace) {
+            let body = self.parse_block()?;
+            return Ok(Statement::For {
+                condition: Expression::Bool(true),
+                body,
+            });
+        }
+
+        if self.match_kind(&TokenKind::Range) {
+            let target = self.parse_expression()?;
+            let body = self.parse_block()?;
+            return Ok(Statement::RangeFor {
+                bindings: Vec::new(),
+                binding_mode: None,
+                target,
+                body,
+            });
+        }
+
+        if self.is_range_header_start() {
+            let first = self.parse_range_binding()?;
+            let mut bindings = vec![first];
+            if self.match_kind(&TokenKind::Comma) {
+                bindings.push(self.parse_range_binding()?);
+            }
+            let binding_mode = if self.match_kind(&TokenKind::Define) {
+                RangeBindingMode::Define
+            } else {
+                self.expect(TokenKind::Assign)?;
+                RangeBindingMode::Assign
+            };
+            self.expect(TokenKind::Range)?;
+            let target = self.parse_expression()?;
+            let body = self.parse_block()?;
+            return Ok(Statement::RangeFor {
+                bindings,
+                binding_mode: Some(binding_mode),
+                target,
+                body,
+            });
+        }
+
+        let condition = self.parse_expression()?;
+        let body = self.parse_block()?;
+        Ok(Statement::For { condition, body })
     }
 
     fn parse_equality_expression(&mut self) -> Result<Expression, ParseError> {
@@ -551,6 +597,41 @@ impl<'a> Parser<'a> {
             || matches!(self.current_token().kind, TokenKind::Identifier(_))
     }
 
+    fn parse_range_binding(&mut self) -> Result<RangeBinding, ParseError> {
+        let name = self.expect_identifier()?;
+        if name == "_" {
+            Ok(RangeBinding::Blank)
+        } else {
+            Ok(RangeBinding::Identifier(name))
+        }
+    }
+
+    fn is_range_header_start(&self) -> bool {
+        match (
+            self.current_kind(),
+            self.peek_kind(),
+            self.peek_second_kind(),
+            self.peek_third_kind(),
+            self.peek_fourth_kind(),
+        ) {
+            (
+                Some(TokenKind::Identifier(_)),
+                Some(TokenKind::Define | TokenKind::Assign),
+                Some(TokenKind::Range),
+                _,
+                _,
+            ) => true,
+            (
+                Some(TokenKind::Identifier(_)),
+                Some(TokenKind::Comma),
+                Some(TokenKind::Identifier(_)),
+                Some(TokenKind::Define | TokenKind::Assign),
+                Some(TokenKind::Range),
+            ) => true,
+            _ => false,
+        }
+    }
+
     fn match_binary_operator(&mut self, candidates: &[TokenKind]) -> Option<BinaryOperator> {
         for candidate in candidates {
             if self.match_kind(candidate) {
@@ -660,6 +741,22 @@ impl<'a> Parser<'a> {
 
     fn peek_kind(&self) -> Option<&TokenKind> {
         self.peek().map(|token| &token.kind)
+    }
+
+    fn current_kind(&self) -> Option<&TokenKind> {
+        Some(&self.current_token().kind)
+    }
+
+    fn peek_second_kind(&self) -> Option<&TokenKind> {
+        self.tokens.get(self.index + 2).map(|token| &token.kind)
+    }
+
+    fn peek_third_kind(&self) -> Option<&TokenKind> {
+        self.tokens.get(self.index + 3).map(|token| &token.kind)
+    }
+
+    fn peek_fourth_kind(&self) -> Option<&TokenKind> {
+        self.tokens.get(self.index + 4).map(|token| &token.kind)
     }
 
     fn advance(&mut self) {

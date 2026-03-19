@@ -34,6 +34,7 @@ This directory stores experience validation reports close to the real user path.
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `2026-03-20-range-loops-slices-maps-playtest.md`: records the CLI walkthrough for staged `range` loops over `slice` and `map`
 - `2026-03-19-bootstrap-cli-playtest.md`: records the bootstrap CLI happy path and error path experience
 - `2026-03-19-semantic-functions-branches-playtest.md`: records the multi-function and semantic-error CLI walkthrough
 - `2026-03-19-m2-loop-closeout-playtest.md`: records the milestone-closeout CLI walkthrough for branches and loops

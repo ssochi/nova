@@ -29,6 +29,7 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 - Validate staged map key comparability centrally so unsupported key types fail during semantic analysis before reaching the VM.
 - Validate builtin `delete(map, key)` centrally so map mutation rules stay aligned with map indexing and assignment typing.
 - Validate `slice/map == nil` and `slice/map != nil` centrally while continuing to reject broader composite equality.
+- Validate staged `range` loops over `slice` and `map`, including no-binding, `:=`, and `=` forms, nil zero-iteration behavior, and typed iteration-variable assignments.
 - Validate loop conditions and model loop bodies as scoped blocks.
 - Ensure non-void functions do not fall through on any reachable path in the supported subset.
 
@@ -62,6 +63,7 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 - Termination analysis only treats the literal `for true { ... }` as definitely non-fallthrough because `break` and `continue` do not exist yet.
 - Builtin coverage is still intentionally small, and conversions are now deliberately modeled outside the builtin table.
 - Slice support is still staged: simple slice expressions on `[]T` and `string` are supported, while full slice expressions remain deferred.
-- Map support is still staged: explicit `nil`, map literals, single-result indexing, `len`, nil-map zero values, `make`, `delete`, index assignment, and `nil` equality are supported, while duplicate-constant-key diagnostics, comma-ok lookups, and `range` remain deferred.
+- Map support is still staged: explicit `nil`, map literals, single-result indexing, `len`, nil-map zero values, `make`, `delete`, index assignment, `nil` equality, and staged `range` loops are supported, while duplicate-constant-key diagnostics and comma-ok lookups remain deferred.
 - Explicit `nil` still needs typed slice/map context; `var value = nil`, `nil == nil`, and broader nilable-type work remain deferred.
 - General conversion syntax beyond the narrow `[]byte(string)` / `string([]byte)` pair is still deferred.
+- Range support is still staged: only `slice` and `map` are iterable, assignment-form left sides are identifier-only, and string/channel/integer/function ranges plus `break` / `continue` remain deferred.

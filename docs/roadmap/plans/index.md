@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-04-49-50-slice-map-range-loops`
+- Opened `2026-03-20-04-49-50-slice-map-range-loops` for staged `range` loops over `slice` and `map` under `M3`
 - Completed and archived `2026-03-20-04-28-25-explicit-nil-comparisons`
 - Opened `2026-03-20-04-28-25-explicit-nil-comparisons` for explicit `nil` expressions and composite-nil equality under `M3`
 - Completed and archived `2026-03-20-04-07-11-map-literals-delete`
