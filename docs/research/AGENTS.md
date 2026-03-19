@@ -43,3 +43,4 @@ This directory stores research notes that inform roadmap choices and implementat
 - `2026-03-20-map-runtime-groundwork.md`: official behavior baseline for staged `map[K]V` support with `make`, `len`, indexing, and assignment
 - `2026-03-20-composite-nil-semantics.md`: official behavior baseline for explicit `nil` usage with the current slice/map surface
 - `2026-03-20-simple-statements-incdec.md`: official behavior baseline for staged short declarations and explicit `++` / `--` statements
+- `2026-03-20-compound-assignments.md`: official behavior baseline for staged `op=` assignment semantics, single-evaluation lowering, and the supported operator subset

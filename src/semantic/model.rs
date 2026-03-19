@@ -39,6 +39,11 @@ pub enum CheckedStatement {
         target: CheckedAssignmentTarget,
         value: CheckedExpression,
     },
+    CompoundAssign {
+        target: CheckedAssignmentTarget,
+        operator: CheckedCompoundAssignOperator,
+        value: CheckedExpression,
+    },
     Expr(CheckedExpression),
     If(CheckedIfStatement),
     Switch(CheckedSwitchStatement),
@@ -87,6 +92,11 @@ pub enum CheckedHeaderStatement {
     },
     Assign {
         target: CheckedAssignmentTarget,
+        value: CheckedExpression,
+    },
+    CompoundAssign {
+        target: CheckedAssignmentTarget,
+        operator: CheckedCompoundAssignOperator,
         value: CheckedExpression,
     },
     Expr(CheckedExpression),
@@ -139,6 +149,11 @@ pub enum CheckedForPostStatement {
         target: CheckedAssignmentTarget,
         value: CheckedExpression,
     },
+    CompoundAssign {
+        target: CheckedAssignmentTarget,
+        operator: CheckedCompoundAssignOperator,
+        value: CheckedExpression,
+    },
     Expr(CheckedExpression),
     MapLookup {
         map: CheckedExpression,
@@ -157,6 +172,15 @@ pub enum CheckedForPostStatement {
 pub enum CheckedIncDecOperator {
     Increment,
     Decrement,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CheckedCompoundAssignOperator {
+    Add,
+    Concat,
+    Subtract,
+    Multiply,
+    Divide,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

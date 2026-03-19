@@ -100,6 +100,13 @@ impl<'a> FunctionCompiler<'a> {
             CheckedStatement::Assign { target, value } => {
                 self.compile_assignment(target, value, "assignment")?
             }
+            CheckedStatement::CompoundAssign {
+                target,
+                operator,
+                value,
+            } => {
+                self.compile_compound_assignment(target, *operator, value, "compound assignment")?
+            }
             CheckedStatement::Expr(expression) => {
                 self.compile_expression(expression)?;
                 if expression.ty.produces_value() {

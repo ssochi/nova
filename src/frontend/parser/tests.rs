@@ -654,3 +654,75 @@ fn parse_short_declarations_and_inc_dec_statements() {
         _ => panic!("expected for statement"),
     }
 }
+
+#[test]
+fn parse_compound_assignments() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\ttotal := 1\n\ttotal += 2\n\tif total -= 1; total > 0 {\n\t\tprintln(total)\n\t}\n\tswitch total += 3; {\n\tcase total > 1:\n\t\tprintln(total)\n\t}\n\tfor i := 0; i < 3; i += 1 {\n\t\tvalues[i] *= factor\n\t}\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let function = &ast.functions[0];
+
+    assert!(matches!(
+        &function.body.statements[1],
+        Statement::CompoundAssign {
+            target: AssignmentTarget::Identifier(name),
+            operator: crate::frontend::ast::CompoundAssignOperator::Add,
+            value: Expression::Integer(2),
+        } if name == "total"
+    ));
+
+    match &function.body.statements[2] {
+        Statement::If(if_statement) => {
+            assert!(matches!(
+                &if_statement.header,
+                Some(HeaderStatement::CompoundAssign {
+                    target: AssignmentTarget::Identifier(name),
+                    operator: crate::frontend::ast::CompoundAssignOperator::Subtract,
+                    value: Expression::Integer(1),
+                }) if name == "total"
+            ));
+        }
+        _ => panic!("expected if statement"),
+    }
+
+    match &function.body.statements[3] {
+        Statement::Switch(switch_statement) => {
+            assert!(matches!(
+                &switch_statement.header,
+                Some(HeaderStatement::CompoundAssign {
+                    target: AssignmentTarget::Identifier(name),
+                    operator: crate::frontend::ast::CompoundAssignOperator::Add,
+                    value: Expression::Integer(3),
+                }) if name == "total"
+            ));
+        }
+        _ => panic!("expected switch statement"),
+    }
+
+    match &function.body.statements[4] {
+        Statement::For(for_statement) => {
+            assert!(matches!(
+                &for_statement.post,
+                Some(ForPostStatement::CompoundAssign {
+                    target: AssignmentTarget::Identifier(name),
+                    operator: crate::frontend::ast::CompoundAssignOperator::Add,
+                    value: Expression::Integer(1),
+                }) if name == "i"
+            ));
+            assert!(matches!(
+                &for_statement.body.statements[0],
+                Statement::CompoundAssign {
+                    target: AssignmentTarget::Index { .. },
+                    operator: crate::frontend::ast::CompoundAssignOperator::Multiply,
+                    ..
+                }
+            ));
+        }
+        _ => panic!("expected for statement"),
+    }
+}

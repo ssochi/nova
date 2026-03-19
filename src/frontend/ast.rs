@@ -119,6 +119,11 @@ pub enum Statement {
         target: AssignmentTarget,
         value: Expression,
     },
+    CompoundAssign {
+        target: AssignmentTarget,
+        operator: CompoundAssignOperator,
+        value: Expression,
+    },
     Expr(Expression),
     If(IfStatement),
     Switch(SwitchStatement),
@@ -165,6 +170,11 @@ pub enum HeaderStatement {
     },
     Assign {
         target: AssignmentTarget,
+        value: Expression,
+    },
+    CompoundAssign {
+        target: AssignmentTarget,
+        operator: CompoundAssignOperator,
         value: Expression,
     },
     Expr(Expression),
@@ -216,6 +226,11 @@ pub enum ForPostStatement {
         target: AssignmentTarget,
         value: Expression,
     },
+    CompoundAssign {
+        target: AssignmentTarget,
+        operator: CompoundAssignOperator,
+        value: Expression,
+    },
     Expr(Expression),
     MapLookup {
         bindings: Vec<Binding>,
@@ -232,6 +247,14 @@ pub enum ForPostStatement {
 pub enum IncDecOperator {
     Increment,
     Decrement,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CompoundAssignOperator {
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
 }
 
 impl Statement {
@@ -264,6 +287,17 @@ impl Statement {
                     value.render()
                 )
             }
+            Statement::CompoundAssign {
+                target,
+                operator,
+                value,
+            } => format!(
+                "{}{} {} {}",
+                indent_str(indent),
+                target.render(),
+                operator.render(),
+                value.render()
+            ),
             Statement::Expr(expression) => {
                 format!("{}{}", indent_str(indent), expression.render())
             }
@@ -337,6 +371,16 @@ impl HeaderStatement {
             HeaderStatement::Assign { target, value } => {
                 format!("{} = {}", target.render(), value.render())
             }
+            HeaderStatement::CompoundAssign {
+                target,
+                operator,
+                value,
+            } => format!(
+                "{} {} {}",
+                target.render(),
+                operator.render(),
+                value.render()
+            ),
             HeaderStatement::Expr(expression) => expression.render(),
             HeaderStatement::MapLookup {
                 bindings,
@@ -357,6 +401,16 @@ impl ForPostStatement {
             ForPostStatement::Assign { target, value } => {
                 format!("{} = {}", target.render(), value.render())
             }
+            ForPostStatement::CompoundAssign {
+                target,
+                operator,
+                value,
+            } => format!(
+                "{} {} {}",
+                target.render(),
+                operator.render(),
+                value.render()
+            ),
             ForPostStatement::Expr(expression) => expression.render(),
             ForPostStatement::MapLookup {
                 bindings,
@@ -375,6 +429,17 @@ impl IncDecOperator {
         match self {
             IncDecOperator::Increment => "++",
             IncDecOperator::Decrement => "--",
+        }
+    }
+}
+
+impl CompoundAssignOperator {
+    fn render(self) -> &'static str {
+        match self {
+            CompoundAssignOperator::Add => "+=",
+            CompoundAssignOperator::Subtract => "-=",
+            CompoundAssignOperator::Multiply => "*=",
+            CompoundAssignOperator::Divide => "/=",
         }
     }
 }

@@ -229,6 +229,39 @@ fn execute_string_indexing_slicing_and_byte_copy() {
 }
 
 #[test]
+fn execute_byte_multiply_and_divide() {
+    let program = Program {
+        package_name: "main".to_string(),
+        entry_function: "main".to_string(),
+        entry_function_index: 0,
+        functions: vec![CompiledFunction {
+            name: "main".to_string(),
+            parameter_count: 0,
+            returns_value: false,
+            local_names: vec![],
+            instructions: vec![
+                Instruction::PushByte(6),
+                Instruction::PushByte(2),
+                Instruction::Multiply,
+                Instruction::CallBuiltin(BuiltinFunction::Println, 1),
+                Instruction::PushByte(6),
+                Instruction::PushByte(2),
+                Instruction::Divide,
+                Instruction::CallBuiltin(BuiltinFunction::Println, 1),
+                Instruction::Return,
+            ],
+        }],
+    };
+
+    let output = VirtualMachine::new()
+        .execute(&program)
+        .expect("byte arithmetic program should execute")
+        .render_output();
+
+    assert_eq!(output, "12\n3\n");
+}
+
+#[test]
 fn execute_string_byte_conversions() {
     let program = Program {
         package_name: "main".to_string(),

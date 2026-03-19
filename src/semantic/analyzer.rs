@@ -3,11 +3,12 @@ use std::fmt;
 
 use crate::config::ExecutionConfig;
 use crate::frontend::ast::{
-    AssignmentTarget, Block, FunctionDecl, IncDecOperator, SourceFileAst, Statement, TypeRef,
+    AssignmentTarget, Block, CompoundAssignOperator, FunctionDecl, IncDecOperator, SourceFileAst,
+    Statement, TypeRef,
 };
 use crate::semantic::model::{
-    CheckedAssignmentTarget, CheckedBlock, CheckedExpression, CheckedFunction,
-    CheckedIncDecOperator, CheckedProgram, CheckedStatement, Type,
+    CheckedAssignmentTarget, CheckedBlock, CheckedCompoundAssignOperator, CheckedExpression,
+    CheckedFunction, CheckedIncDecOperator, CheckedProgram, CheckedStatement, Type,
 };
 use crate::semantic::registry::{FunctionRegistry, ImportRegistry};
 use crate::semantic::support::{
@@ -204,6 +205,11 @@ impl<'a> FunctionAnalyzer<'a> {
                 value,
             } => self.analyze_var_decl_statement(name, type_ref.as_ref(), value.as_ref()),
             Statement::Assign { target, value } => self.analyze_assignment_statement(target, value),
+            Statement::CompoundAssign {
+                target,
+                operator,
+                value,
+            } => self.analyze_compound_assign_statement(target, *operator, value),
             Statement::Expr(expression) => self.analyze_expression_statement(expression),
             Statement::If(if_statement) => self.analyze_if_statement(if_statement),
             Statement::Switch(switch_statement) => self.analyze_switch_statement(switch_statement),
@@ -357,6 +363,23 @@ impl<'a> FunctionAnalyzer<'a> {
             ));
         }
         Ok(CheckedStatement::Expr(expression))
+    }
+
+    pub(super) fn analyze_compound_assign_statement(
+        &mut self,
+        target: &AssignmentTarget,
+        operator: CompoundAssignOperator,
+        value: &crate::frontend::ast::Expression,
+    ) -> Result<CheckedStatement, SemanticError> {
+        let target = self.analyze_assignment_target(target)?;
+        let target_type = self.checked_assignment_target_type(&target)?;
+        let value = self.analyze_expression(value)?;
+        let (operator, value) = analyze_compound_assign(operator, &target_type, value)?;
+        Ok(CheckedStatement::CompoundAssign {
+            target,
+            operator,
+            value,
+        })
     }
 
     pub(super) fn analyze_inc_dec_statement(
@@ -526,6 +549,69 @@ fn checked_inc_dec_operator(operator: IncDecOperator) -> CheckedIncDecOperator {
         IncDecOperator::Increment => CheckedIncDecOperator::Increment,
         IncDecOperator::Decrement => CheckedIncDecOperator::Decrement,
     }
+}
+
+fn analyze_compound_assign(
+    operator: CompoundAssignOperator,
+    target_type: &Type,
+    value: CheckedExpression,
+) -> Result<(CheckedCompoundAssignOperator, CheckedExpression), SemanticError> {
+    match operator {
+        CompoundAssignOperator::Add => match target_type {
+            Type::Int | Type::Byte => Ok((
+                CheckedCompoundAssignOperator::Add,
+                coerce_expression_to_type(target_type, value, "compound assignment `+=`")?,
+            )),
+            Type::String => Ok((
+                CheckedCompoundAssignOperator::Concat,
+                coerce_expression_to_type(target_type, value, "compound assignment `+=`")?,
+            )),
+            _ => Err(SemanticError::new(format!(
+                "`+=` requires `int`, `byte`, or `string`, found `{}`",
+                target_type.render()
+            ))),
+        },
+        CompoundAssignOperator::Subtract => analyze_numeric_compound_assign(
+            target_type,
+            value,
+            "`-=`",
+            CheckedCompoundAssignOperator::Subtract,
+        ),
+        CompoundAssignOperator::Multiply => analyze_numeric_compound_assign(
+            target_type,
+            value,
+            "`*=`",
+            CheckedCompoundAssignOperator::Multiply,
+        ),
+        CompoundAssignOperator::Divide => analyze_numeric_compound_assign(
+            target_type,
+            value,
+            "`/=`",
+            CheckedCompoundAssignOperator::Divide,
+        ),
+    }
+}
+
+fn analyze_numeric_compound_assign(
+    target_type: &Type,
+    value: CheckedExpression,
+    operator: &str,
+    checked_operator: CheckedCompoundAssignOperator,
+) -> Result<(CheckedCompoundAssignOperator, CheckedExpression), SemanticError> {
+    if !matches!(target_type, Type::Int | Type::Byte) {
+        return Err(SemanticError::new(format!(
+            "{operator} requires `int` or `byte`, found `{}`",
+            target_type.render()
+        )));
+    }
+    Ok((
+        checked_operator,
+        coerce_expression_to_type(
+            target_type,
+            value,
+            &format!("compound assignment {operator}"),
+        )?,
+    ))
 }
 
 fn render_inc_dec_operator(operator: IncDecOperator) -> &'static str {

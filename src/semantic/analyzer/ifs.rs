@@ -54,6 +54,13 @@ impl<'a> FunctionAnalyzer<'a> {
             HeaderStatement::Assign { target, value } => checked_statement_to_header_statement(
                 self.analyze_assignment_statement(target, value)?,
             ),
+            HeaderStatement::CompoundAssign {
+                target,
+                operator,
+                value,
+            } => checked_statement_to_header_statement(
+                self.analyze_compound_assign_statement(target, *operator, value)?,
+            ),
             HeaderStatement::Expr(expression) => checked_statement_to_header_statement(
                 self.analyze_expression_statement(expression)?,
             ),
@@ -101,6 +108,15 @@ fn checked_statement_to_header_statement(
         CheckedStatement::Assign { target, value } => {
             CheckedHeaderStatement::Assign { target, value }
         }
+        CheckedStatement::CompoundAssign {
+            target,
+            operator,
+            value,
+        } => CheckedHeaderStatement::CompoundAssign {
+            target,
+            operator,
+            value,
+        },
         CheckedStatement::Expr(expression) => CheckedHeaderStatement::Expr(expression),
         CheckedStatement::MapLookup {
             map,

@@ -1,8 +1,8 @@
 use super::{CompileError, FunctionCompiler, lower_sequence_kind, lower_value_type};
 use crate::bytecode::instruction::Instruction;
 use crate::semantic::model::{
-    CheckedAssignmentTarget, CheckedBinding, CheckedExpression, CheckedForPostStatement,
-    CheckedHeaderStatement, CheckedIncDecOperator, Type,
+    CheckedAssignmentTarget, CheckedBinding, CheckedCompoundAssignOperator, CheckedExpression,
+    CheckedForPostStatement, CheckedHeaderStatement, CheckedIncDecOperator, Type,
 };
 
 impl<'a> FunctionCompiler<'a> {
@@ -27,6 +27,16 @@ impl<'a> FunctionCompiler<'a> {
             CheckedHeaderStatement::Assign { target, value } => {
                 self.compile_assignment(target, value, &format!("{context} assignment"))?
             }
+            CheckedHeaderStatement::CompoundAssign {
+                target,
+                operator,
+                value,
+            } => self.compile_compound_assignment(
+                target,
+                *operator,
+                value,
+                &format!("{context} compound assignment"),
+            )?,
             CheckedHeaderStatement::Expr(expression) => {
                 self.compile_expression(expression)?;
                 if expression.ty.produces_value() {
@@ -74,6 +84,16 @@ impl<'a> FunctionCompiler<'a> {
             CheckedForPostStatement::Assign { target, value } => {
                 self.compile_assignment(target, value, "for post assignment")?
             }
+            CheckedForPostStatement::CompoundAssign {
+                target,
+                operator,
+                value,
+            } => self.compile_compound_assignment(
+                target,
+                *operator,
+                value,
+                "for post compound assignment",
+            )?,
             CheckedForPostStatement::Expr(expression) => {
                 self.compile_expression(expression)?;
                 if expression.ty.produces_value() {
@@ -188,6 +208,63 @@ impl<'a> FunctionCompiler<'a> {
         Ok(())
     }
 
+    pub(super) fn compile_compound_assignment(
+        &mut self,
+        target: &CheckedAssignmentTarget,
+        operator: CheckedCompoundAssignOperator,
+        value: &CheckedExpression,
+        context: &str,
+    ) -> Result<(), CompileError> {
+        match target {
+            CheckedAssignmentTarget::Local { slot, .. } => {
+                self.instructions.push(Instruction::LoadLocal(*slot));
+                self.compile_expression(value)?;
+                self.expect_value(&value.ty, context)?;
+                self.instructions
+                    .push(self.compound_assign_instruction(operator)?);
+                self.instructions.push(Instruction::StoreLocal(*slot));
+            }
+            CheckedAssignmentTarget::Index { target, index } => {
+                let target_slot = self.allocate_hidden_local("compound$target");
+                let index_slot = self.allocate_hidden_local("compound$index");
+                let value_slot = self.allocate_hidden_local("compound$value");
+
+                self.compile_expression(target)?;
+                self.expect_value(&target.ty, context)?;
+                self.instructions.push(Instruction::StoreLocal(target_slot));
+
+                self.compile_expression(index)?;
+                self.expect_value(&index.ty, context)?;
+                self.instructions.push(Instruction::StoreLocal(index_slot));
+
+                self.instructions.push(Instruction::LoadLocal(target_slot));
+                self.instructions.push(Instruction::LoadLocal(index_slot));
+                if matches!(target.ty, Type::Map { .. }) {
+                    self.instructions
+                        .push(Instruction::IndexMap(lower_value_type(&target.ty)?));
+                } else {
+                    self.instructions
+                        .push(Instruction::Index(lower_sequence_kind(&target.ty)?));
+                }
+                self.compile_expression(value)?;
+                self.expect_value(&value.ty, context)?;
+                self.instructions
+                    .push(self.compound_assign_instruction(operator)?);
+                self.instructions.push(Instruction::StoreLocal(value_slot));
+
+                self.instructions.push(Instruction::LoadLocal(target_slot));
+                self.instructions.push(Instruction::LoadLocal(index_slot));
+                self.instructions.push(Instruction::LoadLocal(value_slot));
+                if matches!(target.ty, Type::Map { .. }) {
+                    self.instructions.push(Instruction::SetMapIndex);
+                } else {
+                    self.instructions.push(Instruction::SetIndex);
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn push_inc_dec_delta(&mut self, operand_type: &Type) -> Result<(), CompileError> {
         match operand_type {
             Type::Int => self.instructions.push(Instruction::PushInt(1)),
@@ -217,5 +294,18 @@ impl<'a> FunctionCompiler<'a> {
                 operand_type.render()
             ))),
         }
+    }
+
+    fn compound_assign_instruction(
+        &self,
+        operator: CheckedCompoundAssignOperator,
+    ) -> Result<Instruction, CompileError> {
+        Ok(match operator {
+            CheckedCompoundAssignOperator::Add => Instruction::Add,
+            CheckedCompoundAssignOperator::Concat => Instruction::Concat,
+            CheckedCompoundAssignOperator::Subtract => Instruction::Subtract,
+            CheckedCompoundAssignOperator::Multiply => Instruction::Multiply,
+            CheckedCompoundAssignOperator::Divide => Instruction::Divide,
+        })
     }
 }

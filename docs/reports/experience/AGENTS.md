@@ -56,3 +56,4 @@ This directory stores experience validation reports close to the real user path.
 - `2026-03-20-map-literals-delete-playtest.md`: records the CLI walkthrough for staged map literals, empty-map construction, and builtin `delete`
 - `2026-03-20-explicit-nil-comparisons-playtest.md`: records the CLI walkthrough for explicit `nil`, typed nil coercion, and `slice/map` nil comparisons
 - `2026-03-20-simple-statements-incdec-playtest.md`: records the CLI walkthrough for staged short declarations and explicit `++` / `--`
+- `2026-03-20-compound-assignments-playtest.md`: records the CLI walkthrough for staged compound assignments and single-evaluation index updates

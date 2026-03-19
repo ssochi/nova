@@ -349,6 +349,32 @@ fn check_rejects_inc_dec_on_string_target() {
 }
 
 #[test]
+fn check_rejects_compound_assignment_on_invalid_target_type() {
+    let path = write_temp_source(
+        "check-bad-compound-type",
+        "package main\n\nfunc main() {\n\tvar label bool = true\n\tlabel += false\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("`+=` requires `int`, `byte`, or `string`, found `bool`"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_compound_assignment_on_non_assignable_left_side() {
+    let path = write_temp_source(
+        "check-bad-compound-target",
+        "package main\n\nfunc main() {\n\tlen([]int{1}) += 1\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("assignment target must be a variable name or index expression"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
 fn check_rejects_short_declaration_in_for_post_clause() {
     let path = write_temp_source(
         "check-bad-for-post-short",

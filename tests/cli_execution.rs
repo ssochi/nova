@@ -140,6 +140,12 @@ fn run_executes_short_declarations_and_inc_dec_statements() {
 }
 
 #[test]
+fn run_executes_compound_assignments() {
+    let output = run_cli(&["run", "examples/compound_assignments.go"]).expect("program should run");
+    assert_eq!(output, "6 gopher 33 3 3\nready\n");
+}
+
+#[test]
 fn dump_bytecode_shows_stack_machine_instructions() {
     let output = run_cli(&["dump-bytecode", "examples/arithmetic.go"])
         .expect("bytecode should be generated");
@@ -285,6 +291,17 @@ fn dump_tokens_show_short_declaration_and_inc_dec_tokens() {
 }
 
 #[test]
+fn dump_tokens_show_compound_assignment_tokens() {
+    let output = run_cli(&["dump-tokens", "examples/compound_assignments.go"])
+        .expect("tokens should be rendered");
+
+    assert!(output.contains("+="));
+    assert!(output.contains("-="));
+    assert!(output.contains("*="));
+    assert!(output.contains("/="));
+}
+
+#[test]
 fn dump_bytecode_shows_short_declarations_and_inc_dec_lowering() {
     let output = run_cli(&["dump-bytecode", "examples/simple_statements.go"])
         .expect("bytecode should be generated");
@@ -292,6 +309,16 @@ fn dump_bytecode_shows_short_declarations_and_inc_dec_lowering() {
     assert!(output.contains("incdec$target"));
     assert!(output.contains("push-int 1"));
     assert!(output.contains("set-map-index"));
+}
+
+#[test]
+fn dump_bytecode_shows_compound_assignment_lowering() {
+    let output = run_cli(&["dump-bytecode", "examples/compound_assignments.go"])
+        .expect("bytecode should be generated");
+
+    assert!(output.contains("compound$target"));
+    assert!(output.contains("concat"));
+    assert!(output.contains("divide"));
 }
 
 #[test]
@@ -338,6 +365,16 @@ fn dump_ast_renders_slice_windows_and_index_assignment() {
     assert!(output.contains("var head = values[:2]"));
     assert!(output.contains("var reopen = head[1:4]"));
     assert!(output.contains("reopen[2] = 7"));
+}
+
+#[test]
+fn dump_ast_renders_compound_assignments() {
+    let output =
+        run_cli(&["dump-ast", "examples/compound_assignments.go"]).expect("ast should be rendered");
+
+    assert!(output.contains("for i := 0; (i < len(values)); i += 1 {"));
+    assert!(output.contains("words[\"lang\"] += \"pher\""));
+    assert!(output.contains("if probe += len(values); (probe > 2) {"));
 }
 
 #[test]

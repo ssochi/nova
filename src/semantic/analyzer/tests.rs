@@ -220,6 +220,21 @@ fn analyze_short_declarations_and_inc_dec_statements() {
 }
 
 #[test]
+fn analyze_compound_assignments() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\ttotal := 1\n\tvalues := []int{2, 3}\n\tfor i := 0; i < len(values); i += 1 {\n\t\ttotal += values[i]\n\t}\n\twords := map[string]string{\"lang\": \"go\"}\n\twords[\"lang\"] += \"pher\"\n\tif total -= 1; total > 0 {\n\t\tprintln(total, words[\"lang\"])\n\t}\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let program = analyze_package(&ast).expect("analysis should succeed");
+
+    assert_eq!(program.functions.len(), 1);
+}
+
+#[test]
 fn reject_short_declaration_in_same_scope() {
     let source = SourceFile {
         path: "test.go".into(),
@@ -255,6 +270,26 @@ fn reject_inc_dec_on_non_numeric_target() {
         error
             .to_string()
             .contains("`++` requires `int` or `byte`, found `string`")
+    );
+}
+
+#[test]
+fn reject_compound_assignment_on_invalid_target_type() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tvar label bool = true\n\tlabel += false\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let error =
+        analyze_package(&ast).expect_err("analysis should reject invalid compound assignment");
+
+    assert!(
+        error
+            .to_string()
+            .contains("`+=` requires `int`, `byte`, or `string`, found `bool`")
     );
 }
 

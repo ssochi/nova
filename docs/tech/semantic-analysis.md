@@ -31,6 +31,7 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 - Validate staged `if` statement headers centrally, including the current simple-statement subset, dedicated header scopes shared by the condition / `then` / `else` path, and explicit `else if` chaining.
 - Validate staged expression `switch` statements centrally, including shared header scopes, tagless `switch`, clause-local scopes, duplicate `default` rejection, and the current duplicate scalar literal-case diagnostics.
 - Validate staged short declarations centrally so they remain explicit, create fresh locals in the current scope, and reject current-scope reuse without a broader multi-binding model.
+- Validate staged compound assignments centrally so they remain explicit, reuse assignable-target checking, keep operator support aligned with the modeled runtime surface, and preserve single-evaluation index semantics during lowering.
 - Validate staged classic `for` clauses centrally, including dedicated init scope, optional condition / post handling, and the current post-statement subset.
 - Validate explicit `++` / `--` centrally so they remain statement-only and only apply to assignable `int` / `byte` targets.
 - Validate unlabeled `break` / `continue` centrally against the nearest enclosing modeled control-flow target instead of leaving invalid jumps to bytecode lowering.
@@ -66,7 +67,7 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 
 - Supported concrete runtime types are limited to `int`, `byte`, `bool`, `string`, `[]T`, `map[K]V`, and `void`; semantic analysis also carries a dedicated untyped `nil` marker until typed slice/map context resolves it.
 - Package loading is still single-file and does not model imports.
-- Loop support is staged but broader: infinite `for`, condition-only `for`, classic `for init; condition; post`, single-expression short declarations in `for` init, explicit `++` / `--`, unlabeled `break`, unlabeled `continue`, and `range` over `slice` / `map` are supported.
+- Loop support is staged but broader: infinite `for`, condition-only `for`, classic `for init; condition; post`, single-expression short declarations in `for` init, staged compound assignments, explicit `++` / `--`, unlabeled `break`, unlabeled `continue`, and `range` over `slice` / `map` are supported.
 - Termination analysis remains conservative: infinite or literal-`true` loops only count as non-fallthrough when no modeled `break` can escape the loop, and terminating `switch` clauses fail that classification when a clause can `break`.
 - Builtin coverage is still intentionally small, and conversions are now deliberately modeled outside the builtin table.
 - Slice support is still staged: simple slice expressions on `[]T` and `string` are supported, while full slice expressions remain deferred.
@@ -74,6 +75,7 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 - Explicit `nil` still needs typed slice/map context; `var value = nil`, `nil == nil`, and broader nilable-type work remain deferred.
 - General conversion syntax beyond the narrow `[]byte(string)` / `string([]byte)` pair is still deferred.
 - Range support is still staged: only `slice` and `map` are iterable, assignment-form left sides are identifier-only, and string/channel/integer/function ranges remain deferred.
-- Statement-header support is still staged: `if` and expression `switch` support header simple statements, and that support is limited to expression statements, assignments, `var` declarations, single-expression short declarations, explicit `++` / `--`, and staged comma-ok `map` lookups.
+- Statement-header support is still staged: `if` and expression `switch` support header simple statements, and that support is limited to expression statements, assignments, staged compound assignments, `var` declarations, single-expression short declarations, explicit `++` / `--`, and staged comma-ok `map` lookups.
 - Short declarations are still staged: the general form is intentionally limited to one named binding plus one expression, while the existing explicit comma-ok map lookup path continues to cover the current two-binding lookup case.
+- Compound assignments are still staged: `+=`, `-=`, `*=`, and `/=` are supported in explicit statement positions, while modulo, bitwise, and shift assignment operators remain deferred with their wider expression support.
 - Switch support is still staged: only expression and tagless `switch` are supported, with no type switches, `fallthrough`, labels, or broader constant-expression duplicate detection.

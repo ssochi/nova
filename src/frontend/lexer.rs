@@ -104,14 +104,23 @@ impl<'a> Lexer<'a> {
                 '!' if self.peek_next() == Some('=') => {
                     self.push_double(TokenKind::BangEqual, &mut tokens)
                 }
+                '+' if self.peek_next() == Some('=') => {
+                    self.push_double(TokenKind::PlusAssign, &mut tokens)
+                }
                 '+' if self.peek_next() == Some('+') => {
                     self.push_double(TokenKind::PlusPlus, &mut tokens)
                 }
                 '+' => self.push_simple(TokenKind::Plus, &mut tokens),
+                '-' if self.peek_next() == Some('=') => {
+                    self.push_double(TokenKind::MinusAssign, &mut tokens)
+                }
                 '-' if self.peek_next() == Some('-') => {
                     self.push_double(TokenKind::MinusMinus, &mut tokens)
                 }
                 '-' => self.push_simple(TokenKind::Minus, &mut tokens),
+                '*' if self.peek_next() == Some('=') => {
+                    self.push_double(TokenKind::StarAssign, &mut tokens)
+                }
                 '*' => self.push_simple(TokenKind::Star, &mut tokens),
                 '<' if self.peek_next() == Some('=') => {
                     self.push_double(TokenKind::LessEqual, &mut tokens)
@@ -121,6 +130,9 @@ impl<'a> Lexer<'a> {
                     self.push_double(TokenKind::GreaterEqual, &mut tokens)
                 }
                 '>' => self.push_simple(TokenKind::Greater, &mut tokens),
+                '/' if self.peek_next() == Some('=') => {
+                    self.push_double(TokenKind::SlashAssign, &mut tokens)
+                }
                 '/' => self.push_simple(TokenKind::Slash, &mut tokens),
                 other => {
                     return Err(LexError::new(format!(

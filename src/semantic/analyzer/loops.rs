@@ -77,6 +77,28 @@ impl<'a> FunctionAnalyzer<'a> {
                 };
                 Ok(CheckedForPostStatement::Assign { target, value })
             }
+            ForPostStatement::CompoundAssign {
+                target,
+                operator,
+                value,
+            } => {
+                let statement = self.analyze_compound_assign_statement(target, *operator, value)?;
+                let CheckedStatement::CompoundAssign {
+                    target,
+                    operator,
+                    value,
+                } = statement
+                else {
+                    unreachable!(
+                        "compound-assignment analysis always returns checked compound-assignment data"
+                    );
+                };
+                Ok(CheckedForPostStatement::CompoundAssign {
+                    target,
+                    operator,
+                    value,
+                })
+            }
             ForPostStatement::Expr(expression) => {
                 let statement = self.analyze_expression_statement(expression)?;
                 let CheckedStatement::Expr(expression) = statement else {

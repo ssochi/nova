@@ -57,6 +57,7 @@ Operational clarifications:
 22. When extending `break` / `continue`, keep nearest-target resolution explicit in semantic analysis and lowering; `continue` must patch to the loop post-step for classic `for` and to the increment path for staged `range`.
 23. When extending short variable declarations, keep them explicit in the AST and checked model instead of collapsing them into plain assignment; do not imply a broader multi-binding model until tuple / multi-result support exists.
 24. When extending `++` / `--`, keep them statement-only across parsing, semantic analysis, and lowering; do not treat them as expressions just to reuse arithmetic code paths.
+25. When extending compound assignments, keep them explicit in the AST / checked / bytecode pipeline and preserve single-evaluation behavior for index targets instead of rewriting them into plain assignment too early.
 
 If no task is explicitly specified, you must proactively choose the most worthwhile piece of work to advance, with the following priorities:
 1. **Obvious gaps in functionality, core experience, or core flow** (search the web more, do research, refer to relevant experience from similar high-quality projects, and established methodologies)

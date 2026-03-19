@@ -25,6 +25,7 @@
 
 ## Related Plans
 
+- `2026-03-20-06-56-53-compound-assignments`: completed staged compound assignments across ordinary statements, headers, classic `for` clauses, and single-evaluation index lowering
 - `2026-03-20-06-12-55-for-clauses-break-continue`: completed staged classic `for` clauses, unlabeled `break` / `continue`, and conservative loop termination analysis
 - `2026-03-20-06-34-01-simple-statements-incdec`: completed staged short declarations plus explicit `++` / `--` in ordinary statements, headers, and classic `for` clauses
 - `2026-03-20-05-46-33-switch-statements`: completed staged expression `switch`, tagless `switch`, shared control-flow header modeling, and duplicate-clause diagnostics
@@ -50,10 +51,10 @@
 - Runtime-surface growth can sprawl quickly if types, builtins, imports, and control-flow work are mixed into the same plan.
 - Builtin additions can become hardcoded special cases unless their contracts stay centralized.
 - Supporting more realistic Go programs will require careful staging so the VM remains understandable.
-- The current runtime now has byte-oriented strings, slice allocation, narrow explicit string/byte conversions, staged map groundwork, staged map literals plus `delete`, explicit `nil` for slice/map contexts, staged `range` loops over slices/maps, duplicate constant literal-key diagnostics, staged comma-ok lookups, staged `if` headers, staged expression `switch`, classic `for` clauses, unlabeled `break` / `continue`, staged single-expression short declarations, and explicit `++` / `--`; channels, labels, compound assignments, real import graphs, and wider package-backed runtime services remain open.
+- The current runtime now has byte-oriented strings, slice allocation, narrow explicit string/byte conversions, staged map groundwork, staged map literals plus `delete`, explicit `nil` for slice/map contexts, staged `range` loops over slices/maps, duplicate constant literal-key diagnostics, staged comma-ok lookups, staged `if` headers, staged expression `switch`, classic `for` clauses, unlabeled `break` / `continue`, staged single-expression short declarations, explicit `++` / `--`, and staged compound assignments; channels, labels, broader `assign_op` coverage, real import graphs, and wider package-backed runtime services remain open.
 
 ## Next-Round Recommendations
 
-- Open the next `M3` plan either for compound assignments as the next simple-statement slice or for the first `chan` runtime slice, depending on whether syntax friction or runtime breadth is blocking the next target program more.
+- Open the next `M3` plan for the first `chan` runtime slice unless a higher-priority compatibility gap appears; the simple-statement path is materially stronger after staged compound assignments.
 - If control-flow stays the next priority, reuse the explicit `ForStatement` / `CheckedForStatement` model and the compiler control-flow stack instead of lowering new targets through ad hoc jumps.
 - Reuse the `docs/research/` flow before locking the next compatibility-sensitive slice.

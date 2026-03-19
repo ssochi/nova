@@ -1,6 +1,7 @@
 use crate::frontend::ast::{
-    Binding, BindingMode, ElseBranch, Expression, ForPostStatement, ForStatement, HeaderStatement,
-    IfStatement, IncDecOperator, Statement, SwitchClause, SwitchStatement,
+    Binding, BindingMode, CompoundAssignOperator, ElseBranch, Expression, ForPostStatement,
+    ForStatement, HeaderStatement, IfStatement, IncDecOperator, Statement, SwitchClause,
+    SwitchStatement,
 };
 use crate::frontend::token::TokenKind;
 
@@ -249,6 +250,20 @@ impl<'a> Parser<'a> {
             let condition = self.parse_expression()?;
             return Ok((Some(HeaderStatement::Assign { target, value }), condition));
         }
+        if let Some(operator) = self.match_compound_assign_operator() {
+            let target = assignment_target_from_expression(expression)?;
+            let value = self.parse_expression()?;
+            self.expect(TokenKind::Semicolon)?;
+            let condition = self.parse_expression()?;
+            return Ok((
+                Some(HeaderStatement::CompoundAssign {
+                    target,
+                    operator,
+                    value,
+                }),
+                condition,
+            ));
+        }
         if let Some(operator) = self.match_inc_dec_operator() {
             let target = assignment_target_from_expression(expression)?;
             self.expect(TokenKind::Semicolon)?;
@@ -322,6 +337,24 @@ impl<'a> Parser<'a> {
             };
             return Ok((
                 Some(HeaderStatement::Assign { target, value }),
+                switch_expression,
+            ));
+        }
+        if let Some(operator) = self.match_compound_assign_operator() {
+            let target = assignment_target_from_expression(expression)?;
+            let value = self.parse_expression()?;
+            self.expect(TokenKind::Semicolon)?;
+            let switch_expression = if self.check(&TokenKind::LeftBrace) {
+                None
+            } else {
+                Some(self.parse_expression()?)
+            };
+            return Ok((
+                Some(HeaderStatement::CompoundAssign {
+                    target,
+                    operator,
+                    value,
+                }),
                 switch_expression,
             ));
         }
@@ -448,6 +481,15 @@ impl<'a> Parser<'a> {
             let value = self.parse_expression()?;
             return Ok(HeaderStatement::Assign { target, value });
         }
+        if let Some(operator) = self.match_compound_assign_operator() {
+            let target = assignment_target_from_expression(expression)?;
+            let value = self.parse_expression()?;
+            return Ok(HeaderStatement::CompoundAssign {
+                target,
+                operator,
+                value,
+            });
+        }
         if let Some(operator) = self.match_inc_dec_operator() {
             let target = assignment_target_from_expression(expression)?;
             return Ok(HeaderStatement::IncDec { target, operator });
@@ -489,6 +531,15 @@ impl<'a> Parser<'a> {
             let value = self.parse_expression()?;
             return Ok(ForPostStatement::Assign { target, value });
         }
+        if let Some(operator) = self.match_compound_assign_operator() {
+            let target = assignment_target_from_expression(expression)?;
+            let value = self.parse_expression()?;
+            return Ok(ForPostStatement::CompoundAssign {
+                target,
+                operator,
+                value,
+            });
+        }
         if let Some(operator) = self.match_inc_dec_operator() {
             let target = assignment_target_from_expression(expression)?;
             return Ok(ForPostStatement::IncDec { target, operator });
@@ -509,6 +560,15 @@ impl<'a> Parser<'a> {
             let value = self.parse_expression()?;
             return Ok(Statement::Assign { target, value });
         }
+        if let Some(operator) = self.match_compound_assign_operator() {
+            let target = assignment_target_from_expression(expression)?;
+            let value = self.parse_expression()?;
+            return Ok(Statement::CompoundAssign {
+                target,
+                operator,
+                value,
+            });
+        }
         if let Some(operator) = self.match_inc_dec_operator() {
             let target = assignment_target_from_expression(expression)?;
             return Ok(Statement::IncDec { target, operator });
@@ -521,6 +581,20 @@ impl<'a> Parser<'a> {
             Some(IncDecOperator::Increment)
         } else if self.match_kind(&TokenKind::MinusMinus) {
             Some(IncDecOperator::Decrement)
+        } else {
+            None
+        }
+    }
+
+    fn match_compound_assign_operator(&mut self) -> Option<CompoundAssignOperator> {
+        if self.match_kind(&TokenKind::PlusAssign) {
+            Some(CompoundAssignOperator::Add)
+        } else if self.match_kind(&TokenKind::MinusAssign) {
+            Some(CompoundAssignOperator::Subtract)
+        } else if self.match_kind(&TokenKind::StarAssign) {
+            Some(CompoundAssignOperator::Multiply)
+        } else if self.match_kind(&TokenKind::SlashAssign) {
+            Some(CompoundAssignOperator::Divide)
         } else {
             None
         }

@@ -145,14 +145,26 @@ impl VirtualMachine {
                     |left, right| left - right,
                     |left, right| left.wrapping_sub(right),
                 )?,
-                Instruction::Multiply => self.binary_integer_op(|left, right| left * right)?,
-                Instruction::Divide => self.binary_integer_op_checked(|left, right| {
-                    if right == 0 {
-                        Err(RuntimeError::new("division by zero"))
-                    } else {
-                        Ok(left / right)
-                    }
-                })?,
+                Instruction::Multiply => self.binary_numeric_op(
+                    |left, right| left * right,
+                    |left, right| left.wrapping_mul(right),
+                )?,
+                Instruction::Divide => self.binary_numeric_op_checked(
+                    |left, right| {
+                        if right == 0 {
+                            Err(RuntimeError::new("division by zero"))
+                        } else {
+                            Ok(left / right)
+                        }
+                    },
+                    |left, right| {
+                        if right == 0 {
+                            Err(RuntimeError::new("division by zero"))
+                        } else {
+                            Ok(left / right)
+                        }
+                    },
+                )?,
                 Instruction::Equal => self.binary_compare(|left, right| left == right)?,
                 Instruction::NotEqual => self.binary_compare(|left, right| left != right)?,
                 Instruction::Less => self.binary_integer_compare(|left, right| left < right)?,
@@ -251,13 +263,24 @@ impl VirtualMachine {
         integer_operation: impl FnOnce(i64, i64) -> i64,
         byte_operation: impl FnOnce(u8, u8) -> u8,
     ) -> Result<(), RuntimeError> {
+        self.binary_numeric_op_checked(
+            |left, right| Ok(integer_operation(left, right)),
+            |left, right| Ok(byte_operation(left, right)),
+        )
+    }
+
+    fn binary_numeric_op_checked(
+        &mut self,
+        integer_operation: impl FnOnce(i64, i64) -> Result<i64, RuntimeError>,
+        byte_operation: impl FnOnce(u8, u8) -> Result<u8, RuntimeError>,
+    ) -> Result<(), RuntimeError> {
         let right = self.pop_value()?;
         let left = self.pop_value()?;
         let value = match (left, right) {
             (Value::Integer(left), Value::Integer(right)) => {
-                Value::Integer(integer_operation(left, right))
+                Value::Integer(integer_operation(left, right)?)
             }
-            (Value::Byte(left), Value::Byte(right)) => Value::Byte(byte_operation(left, right)),
+            (Value::Byte(left), Value::Byte(right)) => Value::Byte(byte_operation(left, right)?),
             (left, right) => {
                 return Err(RuntimeError::new(format!(
                     "arithmetic expected matching `int` or `byte` operands, found `{}` and `{}`",
@@ -267,23 +290,6 @@ impl VirtualMachine {
             }
         };
         self.stack.push(value);
-        Ok(())
-    }
-
-    fn binary_integer_op(
-        &mut self,
-        operation: impl FnOnce(i64, i64) -> i64,
-    ) -> Result<(), RuntimeError> {
-        self.binary_integer_op_checked(|left, right| Ok(operation(left, right)))
-    }
-
-    fn binary_integer_op_checked(
-        &mut self,
-        operation: impl FnOnce(i64, i64) -> Result<i64, RuntimeError>,
-    ) -> Result<(), RuntimeError> {
-        let right = self.pop_integer()?;
-        let left = self.pop_integer()?;
-        self.stack.push(Value::Integer(operation(left, right)?));
         Ok(())
     }
 
