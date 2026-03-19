@@ -315,6 +315,108 @@ fn execute_maps_with_nil_reads_and_updates() {
 }
 
 #[test]
+fn execute_map_literals_and_delete() {
+    let map_type = ValueType::Map {
+        key: Box::new(ValueType::String),
+        value: Box::new(ValueType::Int),
+    };
+    let program = Program {
+        package_name: "main".to_string(),
+        entry_function: "main".to_string(),
+        entry_function_index: 0,
+        functions: vec![CompiledFunction {
+            name: "main".to_string(),
+            parameter_count: 0,
+            returns_value: false,
+            local_names: vec!["counts".to_string(), "nil_counts".to_string()],
+            instructions: vec![
+                Instruction::PushString("nova".to_string()),
+                Instruction::PushInt(3),
+                Instruction::PushString("go".to_string()),
+                Instruction::PushInt(2),
+                Instruction::BuildMap {
+                    map_type: map_type.clone(),
+                    entry_count: 2,
+                },
+                Instruction::StoreLocal(0),
+                Instruction::LoadLocal(0),
+                Instruction::PushString("go".to_string()),
+                Instruction::CallBuiltin(BuiltinFunction::Delete, 2),
+                Instruction::LoadLocal(0),
+                Instruction::CallBuiltin(BuiltinFunction::Len, 1),
+                Instruction::LoadLocal(0),
+                Instruction::PushString("nova".to_string()),
+                Instruction::IndexMap(map_type.clone()),
+                Instruction::LoadLocal(0),
+                Instruction::PushString("go".to_string()),
+                Instruction::IndexMap(map_type.clone()),
+                Instruction::CallBuiltin(BuiltinFunction::Println, 3),
+                Instruction::PushNilMap,
+                Instruction::StoreLocal(1),
+                Instruction::LoadLocal(1),
+                Instruction::PushString("ghost".to_string()),
+                Instruction::CallBuiltin(BuiltinFunction::Delete, 2),
+                Instruction::LoadLocal(1),
+                Instruction::CallBuiltin(BuiltinFunction::Len, 1),
+                Instruction::CallBuiltin(BuiltinFunction::Println, 1),
+                Instruction::Return,
+            ],
+        }],
+    };
+
+    let output = VirtualMachine::new()
+        .execute(&program)
+        .expect("map literal program should execute")
+        .render_output();
+
+    assert_eq!(output, "1 3 0\n0\n");
+}
+
+#[test]
+fn execute_map_literals_keep_last_duplicate_key() {
+    let map_type = ValueType::Map {
+        key: Box::new(ValueType::String),
+        value: Box::new(ValueType::Int),
+    };
+    let program = Program {
+        package_name: "main".to_string(),
+        entry_function: "main".to_string(),
+        entry_function_index: 0,
+        functions: vec![CompiledFunction {
+            name: "main".to_string(),
+            parameter_count: 0,
+            returns_value: false,
+            local_names: vec!["counts".to_string()],
+            instructions: vec![
+                Instruction::PushString("nova".to_string()),
+                Instruction::PushInt(1),
+                Instruction::PushString("nova".to_string()),
+                Instruction::PushInt(5),
+                Instruction::BuildMap {
+                    map_type: map_type.clone(),
+                    entry_count: 2,
+                },
+                Instruction::StoreLocal(0),
+                Instruction::LoadLocal(0),
+                Instruction::CallBuiltin(BuiltinFunction::Len, 1),
+                Instruction::LoadLocal(0),
+                Instruction::PushString("nova".to_string()),
+                Instruction::IndexMap(map_type),
+                Instruction::CallBuiltin(BuiltinFunction::Println, 2),
+                Instruction::Return,
+            ],
+        }],
+    };
+
+    let output = VirtualMachine::new()
+        .execute(&program)
+        .expect("duplicate-key map literal should execute")
+        .render_output();
+
+    assert_eq!(output, "1 5\n");
+}
+
+#[test]
 fn execute_nil_map_assignment_fails() {
     let program = Program {
         package_name: "main".to_string(),

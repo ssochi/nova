@@ -48,3 +48,4 @@ This directory stores validation evidence that "proves the change holds."
 - `2026-03-20-byte-strings-and-slicing.md`: validates byte-oriented strings, `byte`, string indexing/slicing, and `copy([]byte, string)`
 - `2026-03-20-string-byte-conversions.md`: validates explicit `[]byte(string)` / `string([]byte)` conversions across the full CLI and VM stack
 - `2026-03-20-map-runtime-groundwork.md`: validates staged `map[K]V` support across parsing, semantic analysis, bytecode lowering, VM execution, and CLI inspection
+- `2026-03-20-map-literals-delete.md`: validates staged `map[K]V{...}` literals and builtin `delete(map, key)` across the full CLI and VM stack

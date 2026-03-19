@@ -130,6 +130,21 @@ fn analyze_maps_with_make_len_index_and_assignment() {
 }
 
 #[test]
+fn analyze_map_literals_and_delete() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tvar counts = map[string]int{\"nova\": 3, \"go\": 2}\n\tdelete(counts, \"go\")\n\tprintln(len(counts), counts[\"nova\"], counts[\"go\"])\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let program = analyze_package(&ast).expect("analysis should succeed");
+
+    assert_eq!(program.functions.len(), 1);
+}
+
+#[test]
 fn reject_make_with_constant_length_exceeding_capacity() {
     let source = SourceFile {
         path: "test.go".into(),
@@ -142,6 +157,26 @@ fn reject_make_with_constant_length_exceeding_capacity() {
     let error = analyze_package(&ast).expect_err("analysis should reject invalid make bounds");
 
     assert!(error.to_string().contains("length 3 exceeds capacity 2"));
+}
+
+#[test]
+fn reject_map_literal_value_type_mismatch() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tvar counts = map[string]int{\"nova\": \"oops\"}\n\tprintln(counts)\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let error =
+        analyze_package(&ast).expect_err("analysis should reject invalid map literal values");
+
+    assert!(
+        error
+            .to_string()
+            .contains("map literal value 1 requires `int`, found `string`")
+    );
 }
 
 #[test]
@@ -196,4 +231,24 @@ fn reject_non_comparable_map_key_type() {
     let error = analyze_package(&ast).expect_err("analysis should reject invalid map key types");
 
     assert!(error.to_string().contains("comparable map key type"));
+}
+
+#[test]
+fn reject_delete_with_wrong_key_type() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents:
+            "package main\n\nfunc main() {\n\tvar counts = make(map[string]int)\n\tdelete(counts, 1)\n}\n"
+                .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let error = analyze_package(&ast).expect_err("analysis should reject mismatched delete keys");
+
+    assert!(
+        error
+            .to_string()
+            .contains("argument 2 in call to builtin `delete` requires `string`")
+    );
 }

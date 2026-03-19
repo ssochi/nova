@@ -5,7 +5,8 @@ use crate::bytecode::instruction::{
 };
 use crate::semantic::model::{
     CallTarget, CheckedAssignmentTarget, CheckedBinaryOperator, CheckedBlock, CheckedExpression,
-    CheckedExpressionKind, CheckedFunction, CheckedProgram, CheckedStatement, Type,
+    CheckedExpressionKind, CheckedFunction, CheckedMapLiteralEntry, CheckedProgram,
+    CheckedStatement, Type,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -188,6 +189,18 @@ impl<'a> FunctionCompiler<'a> {
                 }
                 self.instructions
                     .push(Instruction::BuildSlice(elements.len()));
+            }
+            CheckedExpressionKind::MapLiteral { entries } => {
+                for CheckedMapLiteralEntry { key, value } in entries {
+                    self.compile_expression(key)?;
+                    self.expect_value(&key.ty, "map literal key")?;
+                    self.compile_expression(value)?;
+                    self.expect_value(&value.ty, "map literal value")?;
+                }
+                self.instructions.push(Instruction::BuildMap {
+                    map_type: lower_value_type(&expression.ty)?,
+                    entry_count: entries.len(),
+                });
             }
             CheckedExpressionKind::MakeSlice {
                 element_type,

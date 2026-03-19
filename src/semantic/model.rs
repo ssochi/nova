@@ -66,6 +66,12 @@ pub struct CheckedExpression {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CheckedMapLiteralEntry {
+    pub key: CheckedExpression,
+    pub value: CheckedExpression,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CheckedExpressionKind {
     Integer(i64),
     Bool(bool),
@@ -73,6 +79,9 @@ pub enum CheckedExpressionKind {
     ZeroValue,
     SliceLiteral {
         elements: Vec<CheckedExpression>,
+    },
+    MapLiteral {
+        entries: Vec<CheckedMapLiteralEntry>,
     },
     Local {
         slot: usize,

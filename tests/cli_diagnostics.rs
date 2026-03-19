@@ -342,6 +342,34 @@ fn check_rejects_non_comparable_map_key_type() {
 }
 
 #[test]
+fn check_rejects_map_literal_value_type_mismatch() {
+    let path = write_temp_source(
+        "check-bad-map-literal-value",
+        "package main\n\nfunc main() {\n\tvar counts = map[string]int{\"nova\": \"oops\"}\n\tprintln(counts)\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("map literal value 1 requires `int`, found `string`"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_delete_with_wrong_key_type() {
+    let path = write_temp_source(
+        "check-bad-delete-key",
+        "package main\n\nfunc main() {\n\tvar counts = make(map[string]int)\n\tdelete(counts, 1)\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(
+        error.contains("argument 2 in call to builtin `delete` requires `string`, found `int`")
+    );
+
+    cleanup_temp_source(path);
+}
+
+#[test]
 fn run_rejects_nil_map_assignment() {
     let path = write_temp_source(
         "run-nil-map-assign",

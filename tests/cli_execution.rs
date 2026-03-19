@@ -89,6 +89,12 @@ fn run_executes_maps() {
 }
 
 #[test]
+fn run_executes_map_literals_and_delete() {
+    let output = run_cli(&["run", "examples/map_literals.go"]).expect("program should run");
+    assert_eq!(output, "1 3 0\n0\n0 0\n");
+}
+
+#[test]
 fn dump_bytecode_shows_stack_machine_instructions() {
     let output = run_cli(&["dump-bytecode", "examples/arithmetic.go"])
         .expect("bytecode should be generated");
@@ -262,6 +268,16 @@ fn dump_ast_renders_maps() {
 }
 
 #[test]
+fn dump_ast_renders_map_literals() {
+    let output =
+        run_cli(&["dump-ast", "examples/map_literals.go"]).expect("ast should be rendered");
+
+    assert!(output.contains("var counts = map[string]int{\"nova\": 3, \"go\": 2}"));
+    assert!(output.contains("delete(counts, \"go\")"));
+    assert!(output.contains("var empty = map[string]int{}"));
+}
+
+#[test]
 fn dump_bytecode_shows_loop_jumps() {
     let output =
         run_cli(&["dump-bytecode", "examples/loops.go"]).expect("bytecode should be generated");
@@ -365,6 +381,16 @@ fn dump_bytecode_shows_map_instructions() {
     assert!(output.contains("make-map map[string]int hint=explicit"));
     assert!(output.contains("index-map map[string]int"));
     assert!(output.contains("set-map-index"));
+}
+
+#[test]
+fn dump_bytecode_shows_map_literal_and_delete_instructions() {
+    let output = run_cli(&["dump-bytecode", "examples/map_literals.go"])
+        .expect("bytecode should be generated");
+
+    assert!(output.contains("build-map map[string]int 2"));
+    assert!(output.contains("call-builtin delete 2"));
+    assert!(output.contains("build-map map[string]int 0"));
 }
 
 #[test]

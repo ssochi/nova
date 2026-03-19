@@ -111,6 +111,10 @@ pub enum Instruction {
     PushNilSlice,
     PushNilMap,
     BuildSlice(usize),
+    BuildMap {
+        map_type: ValueType,
+        entry_count: usize,
+    },
     MakeSlice {
         element_type: ValueType,
         has_capacity: bool,
@@ -163,6 +167,10 @@ impl Instruction {
             Instruction::PushNilSlice => "push-nil-slice".to_string(),
             Instruction::PushNilMap => "push-nil-map".to_string(),
             Instruction::BuildSlice(count) => format!("build-slice {count}"),
+            Instruction::BuildMap {
+                map_type,
+                entry_count,
+            } => format!("build-map {} {}", map_type.render(), entry_count),
             Instruction::MakeSlice {
                 element_type,
                 has_capacity,

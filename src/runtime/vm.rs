@@ -100,6 +100,10 @@ impl VirtualMachine {
                     elements.reverse();
                     self.stack.push(Value::Slice(SliceValue::new(elements)));
                 }
+                Instruction::BuildMap {
+                    map_type,
+                    entry_count,
+                } => self.build_map(&map_type, entry_count)?,
                 Instruction::MakeSlice {
                     element_type,
                     has_capacity,
@@ -346,6 +350,29 @@ impl VirtualMachine {
                 return Err(RuntimeError::new(
                     "builtin `make` is lowered into dedicated allocation bytecode",
                 ));
+            }
+            BuiltinFunction::Delete => {
+                let [target, key] = expect_exact_builtin_arguments(arguments, 2, "delete")?;
+                let map = match target {
+                    Value::Map(map) => map,
+                    _ => {
+                        return Err(RuntimeError::new(
+                            "builtin `delete` expected a map as argument 1",
+                        ));
+                    }
+                };
+                let key = match key {
+                    Value::Integer(value) => MapKey::Integer(value),
+                    Value::Byte(value) => MapKey::Byte(value),
+                    Value::Boolean(value) => MapKey::Boolean(value),
+                    Value::String(value) => MapKey::String(value),
+                    Value::Slice(_) | Value::Map(_) => {
+                        return Err(RuntimeError::new(
+                            "builtin `delete` expected a comparable scalar key as argument 2",
+                        ));
+                    }
+                };
+                map.remove(&key);
             }
         }
 
@@ -604,6 +631,28 @@ impl VirtualMachine {
         }
 
         self.stack.push(Value::Map(MapValue::with_hint(hint)));
+        Ok(())
+    }
+
+    fn build_map(&mut self, map_type: &ValueType, entry_count: usize) -> Result<(), RuntimeError> {
+        if !matches!(map_type, ValueType::Map { .. }) {
+            return Err(RuntimeError::new("build-map expected a map runtime type"));
+        }
+
+        let mut entries = Vec::with_capacity(entry_count);
+        for _ in 0..entry_count {
+            let value = self.pop_value()?;
+            let key = self.pop_map_key()?;
+            entries.push((key, value));
+        }
+        entries.reverse();
+
+        let map = MapValue::with_hint(entry_count);
+        for (key, value) in entries {
+            map.insert(key, value)
+                .map_err(|_| RuntimeError::new("map literal construction encountered a nil map"))?;
+        }
+        self.stack.push(Value::Map(map));
         Ok(())
     }
 

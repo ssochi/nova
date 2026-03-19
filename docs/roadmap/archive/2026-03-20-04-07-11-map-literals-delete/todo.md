@@ -1,0 +1,5 @@
+- [done] Extend the existing map research/design baseline and register the active `M3` plan for map literals plus `delete`.
+- [done] Implement frontend, semantic, bytecode, and runtime support for `map[K]V{...}` literals and builtin `delete(map, key)`.
+- [done] Add examples, automated tests, and CLI diagnostics for the new map usability slice.
+- [done] Run formatting, tests, and serial CLI validation, then write verification and experience reports.
+- [done] Sync roadmap and technical documents, archive the finished plan, and update `BOOT.md` if the guidance changes.

@@ -10,7 +10,8 @@ use crate::frontend::ast::{
 use crate::semantic::builtins::{resolve_builtin, validate_builtin_call, validate_make_call};
 use crate::semantic::model::{
     CallTarget, CheckedAssignmentTarget, CheckedBinaryOperator, CheckedBlock, CheckedExpression,
-    CheckedExpressionKind, CheckedFunction, CheckedProgram, CheckedStatement, Type,
+    CheckedExpressionKind, CheckedFunction, CheckedMapLiteralEntry, CheckedProgram,
+    CheckedStatement, Type,
 };
 use crate::semantic::packages::{resolve_package_function, validate_package_call};
 use crate::semantic::registry::{FunctionRegistry, ImportRegistry};
@@ -347,39 +348,9 @@ impl<'a> FunctionAnalyzer<'a> {
             Expression::SliceLiteral {
                 element_type,
                 elements,
-            } => {
-                let slice_type = resolve_type_ref(element_type).ok_or_else(|| {
-                    SemanticError::new(format!(
-                        "unsupported slice literal type `{}`",
-                        element_type.render()
-                    ))
-                })?;
-                validate_runtime_type(&slice_type, "slice literal type")?;
-                let element_type = slice_type.slice_element_type().cloned().ok_or_else(|| {
-                    SemanticError::new(format!(
-                        "slice literal requires `[]T` type syntax, found `{}`",
-                        element_type.render()
-                    ))
-                })?;
-                let checked_elements = elements
-                    .iter()
-                    .enumerate()
-                    .map(|(index, element)| {
-                        let checked = self.analyze_expression(element)?;
-                        expect_type(
-                            &element_type,
-                            &checked.ty,
-                            &format!("slice literal element {}", index + 1),
-                        )?;
-                        Ok(checked)
-                    })
-                    .collect::<Result<Vec<_>, SemanticError>>()?;
-                Ok(CheckedExpression {
-                    ty: slice_type,
-                    kind: CheckedExpressionKind::SliceLiteral {
-                        elements: checked_elements,
-                    },
-                })
+            } => self.analyze_slice_literal_expression(element_type, elements),
+            Expression::MapLiteral { map_type, entries } => {
+                self.analyze_map_literal_expression(map_type, entries)
             }
             Expression::Identifier(name) => {
                 let binding = self.lookup_local(name)?.clone();
@@ -699,6 +670,86 @@ impl<'a> FunctionAnalyzer<'a> {
             kind: CheckedExpressionKind::Conversion {
                 conversion,
                 value: Box::new(value),
+            },
+        })
+    }
+
+    fn analyze_slice_literal_expression(
+        &mut self,
+        element_type: &TypeRef,
+        elements: &[Expression],
+    ) -> Result<CheckedExpression, SemanticError> {
+        let slice_type = resolve_type_ref(element_type).ok_or_else(|| {
+            SemanticError::new(format!(
+                "unsupported slice literal type `{}`",
+                element_type.render()
+            ))
+        })?;
+        validate_runtime_type(&slice_type, "slice literal type")?;
+        let element_type = slice_type.slice_element_type().cloned().ok_or_else(|| {
+            SemanticError::new(format!(
+                "slice literal requires `[]T` type syntax, found `{}`",
+                element_type.render()
+            ))
+        })?;
+        let checked_elements = elements
+            .iter()
+            .enumerate()
+            .map(|(index, element)| {
+                let checked = self.analyze_expression(element)?;
+                expect_type(
+                    &element_type,
+                    &checked.ty,
+                    &format!("slice literal element {}", index + 1),
+                )?;
+                Ok(checked)
+            })
+            .collect::<Result<Vec<_>, SemanticError>>()?;
+        Ok(CheckedExpression {
+            ty: slice_type,
+            kind: CheckedExpressionKind::SliceLiteral {
+                elements: checked_elements,
+            },
+        })
+    }
+
+    fn analyze_map_literal_expression(
+        &mut self,
+        map_type_ref: &TypeRef,
+        entries: &[crate::frontend::ast::MapLiteralEntry],
+    ) -> Result<CheckedExpression, SemanticError> {
+        let map_type = resolve_type_ref(map_type_ref).ok_or_else(|| {
+            SemanticError::new(format!(
+                "unsupported map literal type `{}`",
+                map_type_ref.render()
+            ))
+        })?;
+        validate_runtime_type(&map_type, "map literal type")?;
+        let (key_type, value_type) = map_type.map_parts().ok_or_else(|| {
+            SemanticError::new(format!(
+                "map literal requires `map[K]V` type syntax, found `{}`",
+                map_type_ref.render()
+            ))
+        })?;
+        let checked_entries = entries
+            .iter()
+            .enumerate()
+            .map(|(index, entry)| {
+                let key = self.analyze_expression(&entry.key)?;
+                expect_type(key_type, &key.ty, &format!("map literal key {}", index + 1))?;
+                let value = self.analyze_expression(&entry.value)?;
+                expect_type(
+                    value_type,
+                    &value.ty,
+                    &format!("map literal value {}", index + 1),
+                )?;
+                Ok(CheckedMapLiteralEntry { key, value })
+            })
+            .collect::<Result<Vec<_>, SemanticError>>()?;
+        Ok(CheckedExpression {
+            ty: map_type,
+            kind: CheckedExpressionKind::MapLiteral {
+                entries: checked_entries,
             },
         })
     }

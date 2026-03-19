@@ -48,3 +48,4 @@ This directory stores experience validation reports close to the real user path.
 - `2026-03-20-byte-strings-and-slicing-playtest.md`: records the CLI walkthrough for `byte`, string indexing/slicing, and `copy([]byte, string)`
 - `2026-03-20-string-byte-conversions-playtest.md`: records the CLI walkthrough for explicit `[]byte(string)` and `string([]byte)` conversions
 - `2026-03-20-map-runtime-groundwork-playtest.md`: records the CLI walkthrough for staged `map[K]V` support, nil-map behavior, and explicit map bytecode
+- `2026-03-20-map-literals-delete-playtest.md`: records the CLI walkthrough for staged map literals, empty-map construction, and builtin `delete`

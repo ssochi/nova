@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-04-07-11-map-literals-delete`
+- Opened `2026-03-20-04-07-11-map-literals-delete` for staged map literals and builtin `delete` under `M3`
 - Completed and archived `2026-03-20-03-42-30-map-runtime-groundwork`
 - Opened `2026-03-20-03-42-30-map-runtime-groundwork` for the first map runtime slice under `M3`
 - Completed and archived `2026-03-20-03-23-06-string-byte-conversions`

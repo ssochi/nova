@@ -1,8 +1,8 @@
 use std::fmt;
 
 use crate::frontend::ast::{
-    AssignmentTarget, BinaryOperator, Block, Expression, FunctionDecl, ImportDecl, Parameter,
-    SourceFileAst, Statement, TypeRef,
+    AssignmentTarget, BinaryOperator, Block, Expression, FunctionDecl, ImportDecl, MapLiteralEntry,
+    Parameter, SourceFileAst, Statement, TypeRef,
 };
 use crate::frontend::token::{Token, TokenKind};
 
@@ -353,8 +353,9 @@ impl<'a> Parser<'a> {
                 }
             }
             TokenKind::LeftBracket if self.peek_kind() == Some(&TokenKind::RightBracket) => {
-                self.parse_slice_type_expression()
+                self.parse_type_prefixed_expression()
             }
+            TokenKind::Map => self.parse_type_prefixed_expression(),
             TokenKind::LeftParen => {
                 self.advance();
                 let expression = self.parse_expression()?;
@@ -365,15 +366,28 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_slice_type_expression(&mut self) -> Result<Expression, ParseError> {
-        let element_type = self.parse_type_ref()?;
+    fn parse_type_prefixed_expression(&mut self) -> Result<Expression, ParseError> {
+        let type_ref = self.parse_type_ref()?;
         if self.check(&TokenKind::LeftBrace) {
-            return self.parse_slice_literal_with_type(element_type);
+            return self.parse_composite_literal_with_type(type_ref);
         }
         if self.check(&TokenKind::LeftParen) {
-            return self.parse_conversion_expression(element_type);
+            return self.parse_conversion_expression(type_ref);
         }
-        Err(self.error_at_current("expected `{` or `(` after slice type"))
+        Err(self.error_at_current("expected `{` or `(` after type"))
+    }
+
+    fn parse_composite_literal_with_type(
+        &mut self,
+        type_ref: TypeRef,
+    ) -> Result<Expression, ParseError> {
+        match type_ref {
+            TypeRef::Slice(element_type) => self.parse_slice_literal_with_type(*element_type),
+            TypeRef::Map { key, value } => self.parse_map_literal_with_type(*key, *value),
+            TypeRef::Named(name) => Err(ParseError::new(format!(
+                "composite literal requires `slice` or `map` type, found `{name}`"
+            ))),
+        }
     }
 
     fn parse_slice_literal_with_type(
@@ -381,20 +395,74 @@ impl<'a> Parser<'a> {
         element_type: TypeRef,
     ) -> Result<Expression, ParseError> {
         self.expect(TokenKind::LeftBrace)?;
-        let mut elements = Vec::new();
-        if !self.check(&TokenKind::RightBrace) {
+        let elements = self.parse_trailing_comma_expression_list(TokenKind::RightBrace)?;
+        Ok(Expression::SliceLiteral {
+            element_type: TypeRef::Slice(Box::new(element_type)),
+            elements,
+        })
+    }
+
+    fn parse_map_literal_with_type(
+        &mut self,
+        key: TypeRef,
+        value: TypeRef,
+    ) -> Result<Expression, ParseError> {
+        self.expect(TokenKind::LeftBrace)?;
+        let mut entries = Vec::new();
+        if !self.match_kind(&TokenKind::RightBrace) {
             loop {
-                elements.push(self.parse_expression()?);
+                let key_expression = self.parse_expression()?;
+                self.expect(TokenKind::Colon)?;
+                let value_expression = self.parse_expression()?;
+                entries.push(MapLiteralEntry {
+                    key: key_expression,
+                    value: value_expression,
+                });
                 if !self.match_kind(&TokenKind::Comma) {
                     break;
                 }
+                if self.check(&TokenKind::RightBrace) {
+                    break;
+                }
+            }
+            if !matches!(
+                self.current_token().kind,
+                TokenKind::RightBrace | TokenKind::Eof
+            ) {
+                return Err(self.error_at_current("expected `,` or `}` in map literal"));
+            }
+            self.expect(TokenKind::RightBrace)?;
+        }
+        Ok(Expression::MapLiteral {
+            map_type: TypeRef::Map {
+                key: Box::new(key),
+                value: Box::new(value),
+            },
+            entries,
+        })
+    }
+
+    fn parse_trailing_comma_expression_list(
+        &mut self,
+        end: TokenKind,
+    ) -> Result<Vec<Expression>, ParseError> {
+        let mut expressions = Vec::new();
+        if self.match_kind(&end) {
+            return Ok(expressions);
+        }
+
+        loop {
+            expressions.push(self.parse_expression()?);
+            if !self.match_kind(&TokenKind::Comma) {
+                break;
+            }
+            if self.match_kind(&end) {
+                return Ok(expressions);
             }
         }
-        self.expect(TokenKind::RightBrace)?;
-        Ok(Expression::SliceLiteral {
-            element_type,
-            elements,
-        })
+
+        self.expect(end)?;
+        Ok(expressions)
     }
 
     fn parse_conversion_expression(&mut self, type_ref: TypeRef) -> Result<Expression, ParseError> {
@@ -606,237 +674,7 @@ fn is_supported_named_type(name: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::parse_source_file;
-    use crate::frontend::ast::{AssignmentTarget, Expression, Statement, TypeRef};
-    use crate::frontend::lexer::lex;
-    use crate::source::SourceFile;
-
-    #[test]
-    fn parse_slice_literal_and_index_expression() {
-        let source = SourceFile {
-            path: "test.go".into(),
-            contents:
-                "package main\n\nfunc main() {\n\tvar values = []int{1, 2}\n\tprintln(values[1])\n}\n"
-                    .to_string(),
-        };
-
-        let tokens = lex(&source).expect("lexing should succeed");
-        let ast = parse_source_file(&tokens).expect("parsing should succeed");
-        let function = &ast.functions[0];
-
-        match &function.body.statements[0] {
-            Statement::VarDecl { value, .. } => match value.as_ref() {
-                Some(Expression::SliceLiteral { element_type, .. }) => {
-                    assert_eq!(
-                        element_type,
-                        &TypeRef::Slice(Box::new(TypeRef::Named("int".into())))
-                    );
-                }
-                _ => panic!("expected slice literal"),
-            },
-            _ => panic!("expected variable declaration"),
-        }
-
-        match &function.body.statements[1] {
-            Statement::Expr(Expression::Call { arguments, .. }) => {
-                assert!(matches!(arguments[0], Expression::Index { .. }));
-            }
-            _ => panic!("expected call expression"),
-        }
-    }
-
-    #[test]
-    fn parse_slice_expression_and_index_assignment() {
-        let source = SourceFile {
-            path: "test.go".into(),
-            contents: "package main\n\nfunc main() {\n\tvar values = []int{1, 2, 3}\n\tvar middle = values[1:3]\n\tvalues[:2][1] = 9\n}\n"
-                .to_string(),
-        };
-
-        let tokens = lex(&source).expect("lexing should succeed");
-        let ast = parse_source_file(&tokens).expect("parsing should succeed");
-        let function = &ast.functions[0];
-
-        match &function.body.statements[1] {
-            Statement::VarDecl { value, .. } => match value.as_ref() {
-                Some(Expression::Slice { low, high, .. }) => {
-                    assert!(matches!(low, Some(value) if **value == Expression::Integer(1)));
-                    assert!(matches!(high, Some(value) if **value == Expression::Integer(3)));
-                }
-                _ => panic!("expected slice expression"),
-            },
-            _ => panic!("expected variable declaration"),
-        }
-
-        match &function.body.statements[2] {
-            Statement::Assign { target, .. } => match target {
-                AssignmentTarget::Index { target, index } => {
-                    assert_eq!(*index, Expression::Integer(1));
-                    assert!(matches!(target, Expression::Slice { .. }));
-                }
-                _ => panic!("expected index assignment target"),
-            },
-            _ => panic!("expected assignment statement"),
-        }
-    }
-
-    #[test]
-    fn parse_typed_var_declarations_with_and_without_initializers() {
-        let source = SourceFile {
-            path: "test.go".into(),
-            contents: "package main\n\nfunc main() {\n\tvar total int\n\tvar values []int = []int{1, 2}\n}\n"
-                .to_string(),
-        };
-
-        let tokens = lex(&source).expect("lexing should succeed");
-        let ast = parse_source_file(&tokens).expect("parsing should succeed");
-        let function = &ast.functions[0];
-
-        match &function.body.statements[0] {
-            Statement::VarDecl {
-                type_ref, value, ..
-            } => {
-                assert_eq!(type_ref, &Some(TypeRef::Named("int".into())));
-                assert!(value.is_none());
-            }
-            _ => panic!("expected typed variable declaration"),
-        }
-
-        match &function.body.statements[1] {
-            Statement::VarDecl {
-                type_ref, value, ..
-            } => {
-                assert_eq!(
-                    type_ref,
-                    &Some(TypeRef::Slice(Box::new(TypeRef::Named("int".into()))))
-                );
-                assert!(matches!(value, Some(Expression::SliceLiteral { .. })));
-            }
-            _ => panic!("expected typed variable declaration with initializer"),
-        }
-    }
-
-    #[test]
-    fn parse_make_slice_expression() {
-        let source = SourceFile {
-            path: "test.go".into(),
-            contents: "package main\n\nfunc main() {\n\tvar values = make([]int, 2, 4)\n}\n"
-                .to_string(),
-        };
-
-        let tokens = lex(&source).expect("lexing should succeed");
-        let ast = parse_source_file(&tokens).expect("parsing should succeed");
-        let function = &ast.functions[0];
-
-        match &function.body.statements[0] {
-            Statement::VarDecl { value, .. } => match value.as_ref() {
-                Some(Expression::Make {
-                    type_ref,
-                    arguments,
-                }) => {
-                    assert_eq!(
-                        type_ref,
-                        &TypeRef::Slice(Box::new(TypeRef::Named("int".into())))
-                    );
-                    assert_eq!(
-                        arguments,
-                        &vec![Expression::Integer(2), Expression::Integer(4)]
-                    );
-                }
-                _ => panic!("expected make expression"),
-            },
-            _ => panic!("expected variable declaration"),
-        }
-    }
-
-    #[test]
-    fn parse_map_types_and_make_expression() {
-        let source = SourceFile {
-            path: "test.go".into(),
-            contents: "package main\n\nfunc main() {\n\tvar counts map[string]int\n\tvar ready = make(map[bool]string)\n}\n"
-                .to_string(),
-        };
-
-        let tokens = lex(&source).expect("lexing should succeed");
-        let ast = parse_source_file(&tokens).expect("parsing should succeed");
-        let function = &ast.functions[0];
-
-        match &function.body.statements[0] {
-            Statement::VarDecl {
-                type_ref, value, ..
-            } => {
-                assert_eq!(
-                    type_ref,
-                    &Some(TypeRef::Map {
-                        key: Box::new(TypeRef::Named("string".into())),
-                        value: Box::new(TypeRef::Named("int".into())),
-                    })
-                );
-                assert!(value.is_none());
-            }
-            _ => panic!("expected typed map declaration"),
-        }
-
-        match &function.body.statements[1] {
-            Statement::VarDecl { value, .. } => match value.as_ref() {
-                Some(Expression::Make {
-                    type_ref,
-                    arguments,
-                }) => {
-                    assert_eq!(
-                        type_ref,
-                        &TypeRef::Map {
-                            key: Box::new(TypeRef::Named("bool".into())),
-                            value: Box::new(TypeRef::Named("string".into())),
-                        }
-                    );
-                    assert!(arguments.is_empty());
-                }
-                _ => panic!("expected map make expression"),
-            },
-            _ => panic!("expected variable declaration"),
-        }
-    }
-
-    #[test]
-    fn parse_string_and_byte_conversions() {
-        let source = SourceFile {
-            path: "test.go".into(),
-            contents: "package main\n\nfunc main() {\n\tvar bytes = []byte(\"go\",)\n\tvar text = string(bytes)\n}\n"
-                .to_string(),
-        };
-
-        let tokens = lex(&source).expect("lexing should succeed");
-        let ast = parse_source_file(&tokens).expect("parsing should succeed");
-        let function = &ast.functions[0];
-
-        match &function.body.statements[0] {
-            Statement::VarDecl { value, .. } => match value.as_ref() {
-                Some(Expression::Conversion { type_ref, value }) => {
-                    assert_eq!(
-                        type_ref,
-                        &TypeRef::Slice(Box::new(TypeRef::Named("byte".into())))
-                    );
-                    assert_eq!(value.as_ref(), &Expression::String("go".into()));
-                }
-                _ => panic!("expected byte conversion"),
-            },
-            _ => panic!("expected variable declaration"),
-        }
-
-        match &function.body.statements[1] {
-            Statement::VarDecl { value, .. } => match value.as_ref() {
-                Some(Expression::Conversion { type_ref, value }) => {
-                    assert_eq!(type_ref, &TypeRef::Named("string".into()));
-                    assert_eq!(value.as_ref(), &Expression::Identifier("bytes".into()));
-                }
-                _ => panic!("expected string conversion"),
-            },
-            _ => panic!("expected variable declaration"),
-        }
-    }
-}
+mod tests;
 
 fn assignment_target_from_expression(
     expression: Expression,

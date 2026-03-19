@@ -8,7 +8,7 @@ pub struct BuiltinContract {
     pub validator: fn(&[Type]) -> Result<Type, String>,
 }
 
-const BUILTIN_CONTRACTS: [BuiltinContract; 7] = [
+const BUILTIN_CONTRACTS: [BuiltinContract; 8] = [
     BuiltinContract {
         builtin: BuiltinFunction::Print,
         name: "print",
@@ -43,6 +43,11 @@ const BUILTIN_CONTRACTS: [BuiltinContract; 7] = [
         builtin: BuiltinFunction::Make,
         name: "make",
         validator: validate_make_value_builtin,
+    },
+    BuiltinContract {
+        builtin: BuiltinFunction::Delete,
+        name: "delete",
+        validator: validate_delete_builtin,
     },
 ];
 
@@ -168,6 +173,26 @@ pub fn validate_make_call(allocated_type: &Type, argument_types: &[Type]) -> Res
 
 fn validate_make_value_builtin(_argument_types: &[Type]) -> Result<Type, String> {
     Err("builtin `make` requires a type argument".to_string())
+}
+
+fn validate_delete_builtin(argument_types: &[Type]) -> Result<Type, String> {
+    validate_exact_arity("delete", 2, argument_types.len())?;
+    let map_type = argument_types[0].clone();
+    let (key_type, _) = map_type.map_parts().ok_or_else(|| {
+        format!(
+            "argument 1 in call to builtin `delete` requires `map`, found `{}`",
+            argument_types[0].render()
+        )
+    })?;
+    if &argument_types[1] != key_type {
+        return Err(format!(
+            "argument 2 in call to builtin `delete` requires `{}`, found `{}`",
+            key_type.render(),
+            argument_types[1].render()
+        ));
+    }
+
+    Ok(Type::Void)
 }
 
 fn validate_exact_arity(name: &str, expected: usize, actual: usize) -> Result<(), String> {
@@ -344,5 +369,30 @@ mod tests {
                 value: Box::new(Type::Int),
             }
         );
+    }
+
+    #[test]
+    fn delete_accepts_map_and_matching_key() {
+        let result = validate_builtin_call(
+            BuiltinFunction::Delete,
+            &[
+                Type::Map {
+                    key: Box::new(Type::String),
+                    value: Box::new(Type::Int),
+                },
+                Type::String,
+            ],
+        )
+        .expect("delete should accept maps");
+
+        assert_eq!(result, Type::Void);
+    }
+
+    #[test]
+    fn delete_rejects_non_map_argument() {
+        let error = validate_builtin_call(BuiltinFunction::Delete, &[Type::Int, Type::String])
+            .expect_err("delete should reject non-map targets");
+
+        assert!(error.contains("argument 1 in call to builtin `delete` requires `map`"));
     }
 }

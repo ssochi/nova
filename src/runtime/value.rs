@@ -384,6 +384,13 @@ impl MapValue {
         Ok(())
     }
 
+    pub fn remove(&self, key: &MapKey) {
+        if self.is_nil {
+            return;
+        }
+        self.entries.borrow_mut().remove(key);
+    }
+
     pub fn visible_entries(&self) -> Vec<(MapKey, Value)> {
         self.entries
             .borrow()
@@ -597,5 +604,21 @@ mod tests {
                 (MapKey::String(StringValue::from("nova")), Value::Integer(3)),
             ]
         );
+    }
+
+    #[test]
+    fn deleting_from_maps_handles_nil_and_missing_entries() {
+        let nil_map = MapValue::nil();
+        nil_map.remove(&MapKey::String(StringValue::from("ghost")));
+        assert_eq!(nil_map.len(), 0);
+
+        let ready = MapValue::with_hint(1);
+        ready
+            .insert(MapKey::String(StringValue::from("nova")), Value::Integer(3))
+            .expect("map should accept writes");
+        ready.remove(&MapKey::String(StringValue::from("missing")));
+        assert_eq!(ready.len(), 1);
+        ready.remove(&MapKey::String(StringValue::from("nova")));
+        assert_eq!(ready.len(), 0);
     }
 }

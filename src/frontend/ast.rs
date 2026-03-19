@@ -231,6 +231,10 @@ pub enum Expression {
         element_type: TypeRef,
         elements: Vec<Expression>,
     },
+    MapLiteral {
+        map_type: TypeRef,
+        entries: Vec<MapLiteralEntry>,
+    },
     Binary {
         left: Box<Expression>,
         operator: BinaryOperator,
@@ -263,6 +267,18 @@ pub enum Expression {
     },
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MapLiteralEntry {
+    pub key: Expression,
+    pub value: Expression,
+}
+
+impl MapLiteralEntry {
+    fn render(&self) -> String {
+        format!("{}: {}", self.key.render(), self.value.render())
+    }
+}
+
 impl Expression {
     pub fn render(&self) -> String {
         match self {
@@ -279,6 +295,15 @@ impl Expression {
                 elements
                     .iter()
                     .map(Expression::render)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Expression::MapLiteral { map_type, entries } => format!(
+                "{}{{{}}}",
+                map_type.render(),
+                entries
+                    .iter()
+                    .map(MapLiteralEntry::render)
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
