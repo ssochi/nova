@@ -2,12 +2,13 @@
 
 ## Current Active Plan
 
-- `xxx`
-  - Status: `in_progress`
-  - Topic:
-  - Milestone:
+- None
+  - Status: `idle`
+  - Topic: waiting for the next plan under `M2-frontend-expansion`
+  - Milestone: `M2-frontend-expansion`
 
 ## Recent Updates
 
-- Initialized the general framework repository skeleton
-- Added the general runner, SOPs, technical mapping, and basic tests
+- Completed and archived `2026-03-19-23-19-47-bootstrap-vm-foundation`
+- Promoted `M2-frontend-expansion` as the current in-progress milestone
+- Added the first Rust CLI, bootstrap VM pipeline, reports, and SOP baselines

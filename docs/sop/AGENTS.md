@@ -34,6 +34,7 @@ This directory stores high-frequency, reusable, and easy-to-miss processes. What
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `cli-blackbox-playtest.md`: CLI milestone closeout playtest SOP
 - `startup-context-refresh.md`: startup context refresh SOP
 - `self-validation.md`: self-validation SOP
 - `self-experience.md`: self-experience SOP

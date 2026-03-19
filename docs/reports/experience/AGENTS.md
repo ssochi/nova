@@ -34,4 +34,4 @@ This directory stores experience validation reports close to the real user path.
 ## File Index
 
 - `AGENTS.md`: this directory convention
-- There are currently no formal experience reports; after adding reports, the file name and purpose must be added here
+- `2026-03-19-bootstrap-cli-playtest.md`: records the bootstrap CLI happy path and error path experience

@@ -1,12 +1,14 @@
-# Self-Validation SOP (Incomplete)
+# Self-Validation SOP
 
 ## Trigger Conditions
 
 Applicable to any iteration that needs to prove the change holds.
 
-## Goal
+## Prerequisite Checks
 
-Without assuming the project shape in advance, choose an appropriate primary validation surface and secondary validation surface for the current project, and leave reviewable evidence.
+- Identify available automated validation commands.
+- Identify the real delivery surface for the current scope.
+- Confirm where the validation evidence will be written back (`docs/reports/verification/` or plan `context.md`).
 
 ## Execution Steps
 
@@ -30,15 +32,19 @@ Without assuming the project shape in advance, choose an appropriate primary val
    - Do not pretend it has been "validated"
    - Clearly write the gap, the impact, and the next plan to fill it
 
-## Recommended Evidence
+## Completion Criteria
 
-- Test commands pass
-- Build or static checks pass
-- Key file structure exists
-- Key configuration can be read by the real entry point
+- A primary validation surface is executed and recorded.
+- A secondary validation surface covers the most important residual risk.
+- Any missing validation capability is written down as a concrete gap.
 
 ## Common Mistakes
 
 - Reusing old commands without exploring first
 - Running only the easiest checks and skipping core risks
 - Failing validation without recording the blockers
+
+## Related Entry Points
+
+- `docs/reports/verification/`
+- `docs/sop/cli-blackbox-playtest.md`

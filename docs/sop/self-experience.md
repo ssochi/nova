@@ -1,12 +1,14 @@
-# Self-Experience SOP (Incomplete)
+# Self-Experience SOP
 
 ## Trigger Conditions
 
-Applicable when the current project has a real user path and this round's changes need to confirm whether "actual use holds up."
+Applicable when the current project has a real user path and this round's changes need to confirm whether actual use holds up.
 
-## Definition
+## Prerequisite Checks
 
-Real experience validation means: using the project's real external entry point and operating step by step in the real way it is used, observing the results and forming conclusions. It is not the same as calling internal interfaces, nor is it the same as pure code inference.
+- Confirm the real entry point for the current scope.
+- Confirm whether a milestone-closeout playtest is required; if so, use `docs/sop/cli-blackbox-playtest.md`.
+- Prepare at least one happy-path input and one failure-path input when the project has a CLI.
 
 ## Execution Steps
 
@@ -31,8 +33,19 @@ Real experience validation means: using the project's real external entry point 
    - Do not generate an experience report
    - State the gap and fallback phrasing in the validation report or plan
 
-## Acceptance Focus
+## Completion Criteria
 
 1. The report must be based on a real entry point
 2. Conclusions must be tied to specific paths and scenarios
 3. If no real experience was performed in this round, clearly state why
+
+## Common Mistakes
+
+- Calling library APIs directly and treating that as experience validation
+- Walking only the happy path and skipping real user failure behavior
+- Forgetting to link the report back to the milestone or plan
+
+## Related Entry Points
+
+- `docs/reports/experience/`
+- `docs/sop/cli-blackbox-playtest.md`

@@ -34,4 +34,4 @@ This directory stores validation evidence that "proves the change holds."
 ## File Index
 
 - `AGENTS.md`: this directory convention
-- There are currently no formal validation reports; after adding reports, the file name and purpose must be added here
+- `2026-03-19-bootstrap-vm-foundation.md`: validates the bootstrap CLI, VM, and test loop

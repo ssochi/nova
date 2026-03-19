@@ -5,6 +5,7 @@ This directory stores the persistent documentation for the current repository. I
 You do not need to be limited by the current directories. As long as a new type of documentation needs to be included, create the corresponding directory yourself.
 ## Directory Responsibilities
 
+- `design/`: feature and subsystem design baselines
 - `roadmap/`: milestones, active plans, archives, and roadmap progress state
 - `reports/`: validation and real experience evidence
 - `sop/`: high-frequency, reusable, and easy-to-miss processes
@@ -29,3 +30,9 @@ You do not need to be limited by the current directories. As long as a new type 
   - The places that need to be written back into subdirectories
 
 ## File Index (only important files and all directories)
+
+- `design/`: design documentation root
+- `roadmap/`: roadmap documentation root
+- `reports/`: validation and experience report root
+- `sop/`: SOP documentation root
+- `tech/`: technical documentation root

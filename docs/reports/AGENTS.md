@@ -34,4 +34,5 @@ This directory stores result documents. It records validation evidence and real 
 - `AGENTS.md`: this directory convention
 - `verification/AGENTS.md`: validation report subdirectory convention
 - `experience/AGENTS.md`: experience report subdirectory convention
-- There are currently no formal report files; after adding reports, this index must be completed
+- `verification/2026-03-19-bootstrap-vm-foundation.md`: bootstrap VM validation evidence
+- `experience/2026-03-19-bootstrap-cli-playtest.md`: bootstrap CLI playtest evidence

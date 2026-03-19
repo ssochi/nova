@@ -1,0 +1,5 @@
+- [done] Define the first milestone and attach a concrete bootstrap plan
+- [done] Initialize the Rust crate and CLI command surface
+- [done] Implement lexer, parser, bytecode compiler, and VM for the bootstrap subset
+- [done] Add examples, automated tests, and validation reports
+- [done] Update roadmap, architecture, SOP, and handoff context

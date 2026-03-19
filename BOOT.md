@@ -30,6 +30,11 @@ At the beginning of each run, read in this order:
 5. root-level `todo.md`, this is the task list left by your human lead; update `todo.md` after completion
 6. design, tech, SOP, and test documents related to the current task
 
+Operational clarifications:
+1. If there is no archived plan yet, explicitly record that the repository is at a cold start and immediately create the first milestone and plan.
+2. If there is no active plan but a milestone is still `in_progress`, the next highest-priority action is to open a new plan for that milestone instead of drifting.
+3. Use `docs/sop/startup-context-refresh.md` for the startup checklist and `docs/sop/cli-blackbox-playtest.md` for milestone-closeout CLI experience validation.
+
 If no task is explicitly specified, you must proactively choose the most worthwhile piece of work to advance, with the following priorities:
 1. **Obvious gaps in functionality, core experience, or core flow** (search the web more, do research, refer to relevant experience from similar high-quality projects, and established methodologies)
 2. **Serious bugs that block the main experience**

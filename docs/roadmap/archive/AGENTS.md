@@ -34,4 +34,4 @@ This directory stores complete archives of closed plans. It serves historical co
 ## File Index
 
 - `AGENTS.md`: this directory convention
-- There are currently no archived plans; when archive directories are added later, this index must be synchronized
+- `2026-03-19-23-19-47-bootstrap-vm-foundation/`: archived bootstrap execution plan for milestone M1

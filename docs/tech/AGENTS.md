@@ -9,3 +9,4 @@
 ## File Index
 
 - `architecture.md`: framework structure description
+- `vm-execution-pipeline.md`: bootstrap execution pipeline reference
