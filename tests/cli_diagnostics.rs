@@ -420,6 +420,45 @@ fn check_rejects_map_literal_value_type_mismatch() {
 }
 
 #[test]
+fn check_rejects_duplicate_constant_map_literal_keys() {
+    let path = write_temp_source(
+        "check-bad-map-literal-duplicate",
+        "package main\n\nfunc main() {\n\tvar counts = map[string]int{\"go\": 1, \"go\": 2}\n\tprintln(counts)\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("map literal contains duplicate constant key \"go\""));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_map_lookup_with_non_map_target() {
+    let path = write_temp_source(
+        "check-bad-map-lookup-target",
+        "package main\n\nfunc main() {\n\tvar values = []int{1}\n\tvalue, ok := values[0]\n\tprintln(value, ok)\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("comma-ok lookup requires `map` target, found `[]int`"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_map_lookup_define_without_new_name() {
+    let path = write_temp_source(
+        "check-bad-map-lookup-define",
+        "package main\n\nfunc main() {\n\tvar counts map[string]int\n\tvar value int = 1\n\tvar ok bool\n\tvalue, ok := counts[\"nova\"]\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("comma-ok lookup `:=` requires at least one new named variable"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
 fn check_rejects_delete_with_wrong_key_type() {
     let path = write_temp_source(
         "check-bad-delete-key",

@@ -46,15 +46,21 @@ pub enum CheckedStatement {
     },
     RangeFor {
         source: CheckedExpression,
-        key_binding: Option<CheckedRangeBinding>,
-        value_binding: Option<CheckedRangeBinding>,
+        key_binding: Option<CheckedBinding>,
+        value_binding: Option<CheckedBinding>,
         body: CheckedBlock,
+    },
+    MapLookup {
+        map: CheckedExpression,
+        key: CheckedExpression,
+        value_binding: CheckedBinding,
+        ok_binding: CheckedBinding,
     },
     Return(Option<CheckedExpression>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum CheckedRangeBinding {
+pub enum CheckedBinding {
     Local { slot: usize, name: String },
     Discard,
 }

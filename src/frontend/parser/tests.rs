@@ -1,6 +1,6 @@
 use super::parse_source_file;
 use crate::frontend::ast::{
-    AssignmentTarget, Expression, RangeBinding, RangeBindingMode, Statement, TypeRef,
+    AssignmentTarget, Binding, BindingMode, Expression, Statement, TypeRef,
 };
 use crate::frontend::lexer::lex;
 use crate::source::SourceFile;
@@ -257,8 +257,8 @@ fn parse_range_loop_forms() {
             binding_mode,
             ..
         } => {
-            assert_eq!(bindings, &vec![RangeBinding::Identifier("index".into())]);
-            assert_eq!(binding_mode, &Some(RangeBindingMode::Define));
+            assert_eq!(bindings, &vec![Binding::Identifier("index".into())]);
+            assert_eq!(binding_mode, &Some(BindingMode::Define));
         }
         _ => panic!("expected define-style range loop"),
     }
@@ -271,14 +271,60 @@ fn parse_range_loop_forms() {
         } => {
             assert_eq!(
                 bindings,
-                &vec![
-                    RangeBinding::Blank,
-                    RangeBinding::Identifier("value".into())
-                ]
+                &vec![Binding::Blank, Binding::Identifier("value".into())]
             );
-            assert_eq!(binding_mode, &Some(RangeBindingMode::Assign));
+            assert_eq!(binding_mode, &Some(BindingMode::Assign));
         }
         _ => panic!("expected assign-style range loop"),
+    }
+}
+
+#[test]
+fn parse_map_lookup_statement_forms() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tvar counts = map[string]int{\"go\": 2}\n\tvalue, ok := counts[\"go\"]\n\t_, present = counts[\"nova\"]\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let function = &ast.functions[0];
+
+    match &function.body.statements[1] {
+        Statement::MapLookup {
+            bindings,
+            binding_mode,
+            target,
+            key,
+        } => {
+            assert_eq!(
+                bindings,
+                &vec![
+                    Binding::Identifier("value".into()),
+                    Binding::Identifier("ok".into())
+                ]
+            );
+            assert_eq!(binding_mode, &BindingMode::Define);
+            assert_eq!(target, &Expression::Identifier("counts".into()));
+            assert_eq!(key, &Expression::String("go".into()));
+        }
+        _ => panic!("expected define-style map lookup"),
+    }
+
+    match &function.body.statements[2] {
+        Statement::MapLookup {
+            bindings,
+            binding_mode,
+            ..
+        } => {
+            assert_eq!(
+                bindings,
+                &vec![Binding::Blank, Binding::Identifier("present".into())]
+            );
+            assert_eq!(binding_mode, &BindingMode::Assign);
+        }
+        _ => panic!("expected assign-style map lookup"),
     }
 }
 

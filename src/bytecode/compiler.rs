@@ -5,9 +5,9 @@ use crate::bytecode::instruction::{
     CompiledFunction, Instruction, Program, SequenceKind, ValueType,
 };
 use crate::semantic::model::{
-    CallTarget, CheckedAssignmentTarget, CheckedBinaryOperator, CheckedBlock, CheckedExpression,
-    CheckedExpressionKind, CheckedFunction, CheckedMapLiteralEntry, CheckedProgram,
-    CheckedRangeBinding, CheckedStatement, Type,
+    CallTarget, CheckedAssignmentTarget, CheckedBinaryOperator, CheckedBinding, CheckedBlock,
+    CheckedExpression, CheckedExpressionKind, CheckedFunction, CheckedMapLiteralEntry,
+    CheckedProgram, CheckedStatement, Type,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -157,6 +157,12 @@ impl<'a> FunctionCompiler<'a> {
                 value_binding.as_ref(),
                 body,
             )?,
+            CheckedStatement::MapLookup {
+                map,
+                key,
+                value_binding,
+                ok_binding,
+            } => self.compile_map_lookup_statement(map, key, value_binding, ok_binding)?,
             CheckedStatement::Return(value) => {
                 if let Some(expression) = value {
                     self.compile_expression(expression)?;
@@ -166,6 +172,24 @@ impl<'a> FunctionCompiler<'a> {
             }
         }
 
+        Ok(())
+    }
+
+    fn compile_map_lookup_statement(
+        &mut self,
+        map: &CheckedExpression,
+        key: &CheckedExpression,
+        value_binding: &CheckedBinding,
+        ok_binding: &CheckedBinding,
+    ) -> Result<(), CompileError> {
+        self.compile_expression(map)?;
+        self.expect_value(&map.ty, "comma-ok lookup")?;
+        self.compile_expression(key)?;
+        self.expect_value(&key.ty, "comma-ok lookup")?;
+        self.instructions
+            .push(Instruction::LookupMap(lower_value_type(&map.ty)?));
+        self.consume_binding_value(ok_binding);
+        self.consume_binding_value(value_binding);
         Ok(())
     }
 
@@ -368,8 +392,8 @@ impl<'a> FunctionCompiler<'a> {
     fn compile_range_statement(
         &mut self,
         source: &CheckedExpression,
-        key_binding: Option<&CheckedRangeBinding>,
-        value_binding: Option<&CheckedRangeBinding>,
+        key_binding: Option<&CheckedBinding>,
+        value_binding: Option<&CheckedBinding>,
         body: &CheckedBlock,
     ) -> Result<(), CompileError> {
         self.compile_expression(source)?;
@@ -490,20 +514,24 @@ impl<'a> FunctionCompiler<'a> {
 
     fn compile_range_binding_value(
         &mut self,
-        binding: Option<&CheckedRangeBinding>,
+        binding: Option<&CheckedBinding>,
         emit_value: impl FnOnce(&mut Self) -> Result<(), CompileError>,
     ) -> Result<(), CompileError> {
         let Some(binding) = binding else {
             return Ok(());
         };
         emit_value(self)?;
+        self.consume_binding_value(binding);
+        Ok(())
+    }
+
+    fn consume_binding_value(&mut self, binding: &CheckedBinding) {
         match binding {
-            CheckedRangeBinding::Local { slot, .. } => {
+            CheckedBinding::Local { slot, .. } => {
                 self.instructions.push(Instruction::StoreLocal(*slot));
             }
-            CheckedRangeBinding::Discard => self.instructions.push(Instruction::Pop),
+            CheckedBinding::Discard => self.instructions.push(Instruction::Pop),
         }
-        Ok(())
     }
 }
 

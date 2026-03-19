@@ -1,11 +1,19 @@
 use std::convert::TryFrom;
 use std::fmt;
 
+use self::support::{
+    expect_exact_builtin_arguments, expect_exact_package_arguments,
+    expect_integer_package_argument, expect_string_package_argument,
+    expect_string_slice_package_argument, normalize_slice_bound, render_builtin_arguments,
+    render_package_arguments, slice_bounds_error_message, zero_value_for_type,
+};
 use crate::builtin::BuiltinFunction;
 use crate::bytecode::instruction::{Instruction, Program, SequenceKind, ValueType};
 use crate::conversion::ConversionKind;
 use crate::package::PackageFunction;
 use crate::runtime::value::{MapKey, MapValue, SliceValue, StringValue, Value};
+
+mod support;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeError {
@@ -156,6 +164,7 @@ impl VirtualMachine {
                     has_high,
                 } => self.slice_value(target_kind, has_low, has_high)?,
                 Instruction::IndexMap(map_type) => self.index_map(&map_type)?,
+                Instruction::LookupMap(map_type) => self.lookup_map(&map_type)?,
                 Instruction::MapKeys(key_type) => self.map_keys(&key_type)?,
                 Instruction::SetIndex => self.set_slice_index()?,
                 Instruction::SetMapIndex => self.set_map_index()?,
@@ -684,6 +693,19 @@ impl VirtualMachine {
     }
 
     fn index_map(&mut self, map_type: &ValueType) -> Result<(), RuntimeError> {
+        let (value, _) = self.read_map(map_type)?;
+        self.stack.push(value);
+        Ok(())
+    }
+
+    fn lookup_map(&mut self, map_type: &ValueType) -> Result<(), RuntimeError> {
+        let (value, present) = self.read_map(map_type)?;
+        self.stack.push(value);
+        self.stack.push(Value::Boolean(present));
+        Ok(())
+    }
+
+    fn read_map(&mut self, map_type: &ValueType) -> Result<(Value, bool), RuntimeError> {
         let key = self.pop_map_key()?;
         let target = self.pop_value()?;
         let map = match target {
@@ -693,11 +715,13 @@ impl VirtualMachine {
         let value_type = map_type
             .map_value_type()
             .ok_or_else(|| RuntimeError::new("index-map expected a map runtime type"))?;
-        let value = map
-            .get(&key)
-            .unwrap_or_else(|| zero_value_for_type(value_type));
-        self.stack.push(value);
-        Ok(())
+        let value = map.get(&key);
+        Ok((
+            value
+                .clone()
+                .unwrap_or_else(|| zero_value_for_type(value_type)),
+            value.is_some(),
+        ))
     }
 
     fn map_keys(&mut self, key_type: &ValueType) -> Result<(), RuntimeError> {
@@ -786,174 +810,6 @@ impl CallFrame {
             locals: vec![Value::default(); local_count],
         }
     }
-}
-
-fn render_builtin_arguments(arguments: &[Value]) -> String {
-    arguments
-        .iter()
-        .map(ToString::to_string)
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn render_package_arguments(arguments: &[Value], separator: &str) -> String {
-    arguments
-        .iter()
-        .map(ToString::to_string)
-        .collect::<Vec<_>>()
-        .join(separator)
-}
-
-fn expect_exact_package_arguments<const N: usize>(
-    function: PackageFunction,
-    arguments: Vec<Value>,
-    expected: usize,
-) -> Result<[Value; N], RuntimeError> {
-    if arguments.len() != expected {
-        return Err(RuntimeError::new(format!(
-            "package function `{}` expected {} arguments, received {}",
-            function.render(),
-            expected,
-            arguments.len()
-        )));
-    }
-
-    arguments.try_into().map_err(|arguments: Vec<Value>| {
-        RuntimeError::new(format!(
-            "package function `{}` expected {} arguments, received {}",
-            function.render(),
-            expected,
-            arguments.len()
-        ))
-    })
-}
-
-fn expect_string_package_argument(
-    function: PackageFunction,
-    position: usize,
-    value: Value,
-) -> Result<StringValue, RuntimeError> {
-    match value {
-        Value::String(value) => Ok(value),
-        other => Err(RuntimeError::new(format!(
-            "argument {} in call to `{}` expected `string`, found `{}`",
-            position,
-            function.render(),
-            runtime_type_name(&other)
-        ))),
-    }
-}
-
-fn expect_integer_package_argument(
-    function: PackageFunction,
-    position: usize,
-    value: Value,
-) -> Result<i64, RuntimeError> {
-    match value {
-        Value::Integer(value) => Ok(value),
-        other => Err(RuntimeError::new(format!(
-            "argument {} in call to `{}` expected `int`, found `{}`",
-            position,
-            function.render(),
-            runtime_type_name(&other)
-        ))),
-    }
-}
-
-fn expect_string_slice_package_argument(
-    function: PackageFunction,
-    position: usize,
-    value: Value,
-) -> Result<Vec<StringValue>, RuntimeError> {
-    let elements = match value {
-        Value::Slice(slice) => slice.visible_elements(),
-        other => {
-            return Err(RuntimeError::new(format!(
-                "argument {} in call to `{}` expected `[]string`, found `{}`",
-                position,
-                function.render(),
-                runtime_type_name(&other)
-            )));
-        }
-    };
-
-    let mut strings = Vec::with_capacity(elements.len());
-    for element in elements {
-        match element {
-            Value::String(value) => strings.push(value),
-            other => {
-                return Err(RuntimeError::new(format!(
-                    "argument {} in call to `{}` expected `[]string`, found `[]{}`",
-                    position,
-                    function.render(),
-                    runtime_type_name(&other)
-                )));
-            }
-        }
-    }
-
-    Ok(strings)
-}
-
-fn expect_exact_builtin_arguments<const N: usize>(
-    arguments: Vec<Value>,
-    expected: usize,
-    builtin: &str,
-) -> Result<[Value; N], RuntimeError> {
-    if arguments.len() != expected {
-        return Err(RuntimeError::new(format!(
-            "builtin `{builtin}` expected {expected} arguments, received {}",
-            arguments.len()
-        )));
-    }
-
-    arguments.try_into().map_err(|arguments: Vec<Value>| {
-        RuntimeError::new(format!(
-            "builtin `{builtin}` expected {expected} arguments, received {}",
-            arguments.len()
-        ))
-    })
-}
-
-fn runtime_type_name(value: &Value) -> &'static str {
-    match value {
-        Value::Integer(_) => "int",
-        Value::Byte(_) => "byte",
-        Value::Boolean(_) => "bool",
-        Value::String(_) => "string",
-        Value::Slice(_) => "slice",
-        Value::Map(_) => "map",
-    }
-}
-
-fn zero_value_for_type(value_type: &ValueType) -> Value {
-    match value_type {
-        ValueType::Int => Value::Integer(0),
-        ValueType::Byte => Value::Byte(0),
-        ValueType::Bool => Value::Boolean(false),
-        ValueType::String => Value::String(StringValue::empty()),
-        ValueType::Slice(_) => Value::Slice(SliceValue::nil()),
-        ValueType::Map { .. } => Value::Map(MapValue::nil()),
-    }
-}
-
-fn normalize_slice_bound(
-    bound: Option<i64>,
-    default: i64,
-    position: &str,
-) -> Result<usize, RuntimeError> {
-    let value = bound.unwrap_or(default);
-    if value < 0 {
-        return Err(RuntimeError::new(format!(
-            "slice {position} bound {value} is out of bounds"
-        )));
-    }
-    usize::try_from(value)
-        .map_err(|_| RuntimeError::new(format!("slice {position} bound {value} is out of bounds")))
-}
-
-fn slice_bounds_error_message(low: usize, high: usize) -> String {
-    format!("slice bounds [{low}:{high}] are out of range")
 }
 
 #[cfg(test)]

@@ -1,14 +1,14 @@
 use std::collections::HashSet;
 
-use crate::frontend::ast::{Block, Expression, RangeBinding, RangeBindingMode};
+use crate::frontend::ast::{Binding, BindingMode, Block, Expression};
 use crate::semantic::analyzer::{FunctionAnalyzer, SemanticError};
-use crate::semantic::model::{CheckedRangeBinding, CheckedStatement, Type};
+use crate::semantic::model::{CheckedBinding, CheckedStatement, Type};
 
 impl<'a> FunctionAnalyzer<'a> {
     pub(super) fn analyze_range_statement(
         &mut self,
-        bindings: &[RangeBinding],
-        binding_mode: Option<RangeBindingMode>,
+        bindings: &[Binding],
+        binding_mode: Option<BindingMode>,
         target: &Expression,
         body: &Block,
     ) -> Result<CheckedStatement, SemanticError> {
@@ -48,11 +48,11 @@ impl<'a> FunctionAnalyzer<'a> {
 
     fn resolve_range_bindings(
         &mut self,
-        bindings: &[RangeBinding],
-        binding_mode: Option<RangeBindingMode>,
+        bindings: &[Binding],
+        binding_mode: Option<BindingMode>,
         key_type: &Type,
         value_type: &Type,
-    ) -> Result<Vec<Option<CheckedRangeBinding>>, SemanticError> {
+    ) -> Result<Vec<Option<CheckedBinding>>, SemanticError> {
         if bindings.is_empty() {
             return Ok(Vec::new());
         }
@@ -64,23 +64,23 @@ impl<'a> FunctionAnalyzer<'a> {
         for (index, binding) in bindings.iter().enumerate() {
             let expected_type = if index == 0 { key_type } else { value_type };
             resolved.push(match binding {
-                RangeBinding::Blank => None,
-                RangeBinding::Identifier(name) => {
+                Binding::Blank => None,
+                Binding::Identifier(name) => {
                     if !seen.insert(name.clone()) {
                         return Err(SemanticError::new(format!(
                             "range loop variable `{name}` is declared more than once"
                         )));
                     }
                     match binding_mode {
-                        RangeBindingMode::Define => {
+                        BindingMode::Define => {
                             has_named_define = true;
                             let slot = self.allocate_local(name.clone(), expected_type.clone());
-                            Some(CheckedRangeBinding::Local {
+                            Some(CheckedBinding::Local {
                                 slot,
                                 name: name.clone(),
                             })
                         }
-                        RangeBindingMode::Assign => {
+                        BindingMode::Assign => {
                             let binding = self.lookup_local(name)?;
                             if binding.ty != *expected_type {
                                 return Err(SemanticError::new(format!(
@@ -89,7 +89,7 @@ impl<'a> FunctionAnalyzer<'a> {
                                     expected_type.render()
                                 )));
                             }
-                            Some(CheckedRangeBinding::Local {
+                            Some(CheckedBinding::Local {
                                 slot: binding.slot,
                                 name: name.clone(),
                             })
@@ -99,7 +99,7 @@ impl<'a> FunctionAnalyzer<'a> {
             });
         }
 
-        if binding_mode == RangeBindingMode::Define && !has_named_define {
+        if binding_mode == BindingMode::Define && !has_named_define {
             return Err(SemanticError::new(
                 "range loop `:=` requires at least one named iteration variable",
             ));
@@ -107,7 +107,7 @@ impl<'a> FunctionAnalyzer<'a> {
 
         Ok(resolved
             .into_iter()
-            .map(|binding| binding.or(Some(CheckedRangeBinding::Discard)))
+            .map(|binding| binding.or(Some(CheckedBinding::Discard)))
             .collect())
     }
 }

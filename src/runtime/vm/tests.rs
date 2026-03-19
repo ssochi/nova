@@ -491,3 +491,52 @@ fn execute_map_keys_returns_deterministic_key_slice() {
 
     assert_eq!(output, "go nova\n");
 }
+
+#[test]
+fn execute_lookup_map_reports_value_and_presence() {
+    let map_type = ValueType::Map {
+        key: Box::new(ValueType::String),
+        value: Box::new(ValueType::Int),
+    };
+    let program = Program {
+        package_name: "main".to_string(),
+        entry_function: "main".to_string(),
+        entry_function_index: 0,
+        functions: vec![CompiledFunction {
+            name: "main".to_string(),
+            parameter_count: 0,
+            returns_value: false,
+            local_names: vec!["counts".to_string()],
+            instructions: vec![
+                Instruction::PushNilMap,
+                Instruction::StoreLocal(0),
+                Instruction::LoadLocal(0),
+                Instruction::PushString("nova".to_string()),
+                Instruction::LookupMap(map_type.clone()),
+                Instruction::CallBuiltin(BuiltinFunction::Println, 2),
+                Instruction::PushInt(1),
+                Instruction::MakeMap {
+                    map_type: map_type.clone(),
+                    has_hint: true,
+                },
+                Instruction::StoreLocal(0),
+                Instruction::LoadLocal(0),
+                Instruction::PushString("nova".to_string()),
+                Instruction::PushInt(3),
+                Instruction::SetMapIndex,
+                Instruction::LoadLocal(0),
+                Instruction::PushString("nova".to_string()),
+                Instruction::LookupMap(map_type),
+                Instruction::CallBuiltin(BuiltinFunction::Println, 2),
+                Instruction::Return,
+            ],
+        }],
+    };
+
+    let output = VirtualMachine::new()
+        .execute(&program)
+        .expect("lookup-map program should execute")
+        .render_output();
+
+    assert_eq!(output, "0 false\n3 true\n");
+}

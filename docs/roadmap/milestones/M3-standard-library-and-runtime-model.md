@@ -25,6 +25,7 @@
 
 ## Related Plans
 
+- `2026-03-20-05-11-15-map-comma-ok-and-literal-diagnostics`: completed staged comma-ok `map` lookups, short redeclaration rules, and duplicate literal-key diagnostics
 - `2026-03-20-04-49-50-slice-map-range-loops`: completed staged `range` loops over `slice` and `map`
 - `2026-03-20-04-28-25-explicit-nil-comparisons`: completed explicit `nil` expressions and `slice/map` nil comparisons
 - `2026-03-20-04-07-11-map-literals-delete`: completed staged map usability work for `map[K]V{...}` literals and builtin `delete`
@@ -45,9 +46,9 @@
 - Runtime-surface growth can sprawl quickly if types, builtins, and imports are mixed into the same plan.
 - Builtin additions can become hardcoded special cases unless their contracts stay centralized.
 - Supporting more realistic Go programs will require careful staging so the VM remains understandable.
-- The current runtime now has byte-oriented strings, slice allocation, narrow explicit string/byte conversions, staged map groundwork, staged map literals plus `delete`, explicit `nil` for slice/map contexts, and staged `range` loops over slices/maps; duplicate-constant-key diagnostics, comma-ok lookups, channels, fuller append growth semantics, real import graphs, and broader package-backed runtime services remain open.
+- The current runtime now has byte-oriented strings, slice allocation, narrow explicit string/byte conversions, staged map groundwork, staged map literals plus `delete`, explicit `nil` for slice/map contexts, staged `range` loops over slices/maps, duplicate constant literal-key diagnostics, and staged comma-ok lookups; channels, fuller append growth semantics, real import graphs, broader package-backed runtime services, and richer multi-result control-flow ergonomics remain open.
 
 ## Next-Round Recommendations
 
-- Open the next `M3` plan either to deepen map compatibility with duplicate-key diagnostics and comma-ok lookups on top of the new range groundwork, or to pivot into channel/runtime package groundwork if concurrency leverage becomes more important.
+- Open the next `M3` plan either to build on the new explicit lookup surface with `if` initializers / broader control-flow ergonomics, or to pivot into channel/runtime groundwork if concurrency leverage becomes more important.
 - Reuse the `docs/research/` flow before locking the next compatibility-sensitive slice.

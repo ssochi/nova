@@ -160,6 +160,21 @@ fn analyze_range_loops_for_slices_and_maps() {
 }
 
 #[test]
+fn analyze_map_lookup_statements() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tvar counts map[string]int\n\tvalue, ok := counts[\"nova\"]\n\tcounts = map[string]int{\"nova\": 3}\n\tvalue, ok = counts[\"nova\"]\n\tvalue, seen := counts[\"nova\"]\n\tprintln(value, ok, seen)\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let program = analyze_package(&ast).expect("analysis should succeed");
+
+    assert_eq!(program.functions.len(), 1);
+}
+
+#[test]
 fn reject_range_loop_with_non_iterable_source() {
     let source = SourceFile {
         path: "test.go".into(),
@@ -210,6 +225,44 @@ fn reject_map_literal_value_type_mismatch() {
         error
             .to_string()
             .contains("map literal value 1 requires `int`, found `string`")
+    );
+}
+
+#[test]
+fn reject_duplicate_constant_map_literal_keys() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tvar counts = map[string]int{\"go\": 1, \"go\": 2}\n\tprintln(counts)\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let error = analyze_package(&ast).expect_err("analysis should reject duplicate keys");
+
+    assert!(
+        error
+            .to_string()
+            .contains("map literal contains duplicate constant key \"go\"")
+    );
+}
+
+#[test]
+fn reject_map_lookup_define_without_new_name() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tvar counts map[string]int\n\tvar value int = 1\n\tvar ok bool\n\tvalue, ok := counts[\"nova\"]\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let error = analyze_package(&ast).expect_err("analysis should reject stale short define");
+
+    assert!(
+        error
+            .to_string()
+            .contains("comma-ok lookup `:=` requires at least one new named variable")
     );
 }
 

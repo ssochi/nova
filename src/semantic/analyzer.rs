@@ -13,6 +13,7 @@ use crate::semantic::support::{
 };
 
 mod expressions;
+mod lookup;
 mod range;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -329,6 +330,12 @@ impl<'a> FunctionAnalyzer<'a> {
                 target,
                 body,
             } => self.analyze_range_statement(bindings, *binding_mode, target, body),
+            Statement::MapLookup {
+                bindings,
+                binding_mode,
+                target,
+                key,
+            } => self.analyze_map_lookup_statement(bindings, *binding_mode, target, key),
             Statement::Return(value) => {
                 let expected = self
                     .registry

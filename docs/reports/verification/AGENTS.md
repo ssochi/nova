@@ -34,6 +34,7 @@ This directory stores validation evidence that "proves the change holds."
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `2026-03-20-map-comma-ok-lookups.md`: validates staged comma-ok `map` lookups and duplicate constant-key diagnostics across the full CLI and VM stack
 - `2026-03-20-range-loops-slices-maps.md`: validates staged `range` loops over `slice` and `map` across the full CLI and VM stack
 - `2026-03-19-bootstrap-vm-foundation.md`: validates the bootstrap CLI, VM, and test loop
 - `2026-03-19-semantic-functions-branches.md`: validates semantic analysis, user-defined calls, and branch execution

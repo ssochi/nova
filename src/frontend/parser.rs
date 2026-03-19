@@ -1,8 +1,8 @@
 use std::fmt;
 
 use crate::frontend::ast::{
-    AssignmentTarget, BinaryOperator, Block, Expression, FunctionDecl, ImportDecl, MapLiteralEntry,
-    Parameter, RangeBinding, RangeBindingMode, SourceFileAst, Statement, TypeRef,
+    AssignmentTarget, BinaryOperator, Binding, BindingMode, Block, Expression, FunctionDecl,
+    ImportDecl, MapLiteralEntry, Parameter, SourceFileAst, Statement, TypeRef,
 };
 use crate::frontend::token::{Token, TokenKind};
 
@@ -178,6 +178,10 @@ impl<'a> Parser<'a> {
             return self.parse_for_statement();
         }
 
+        if self.is_map_lookup_statement_start() {
+            return self.parse_map_lookup_statement();
+        }
+
         let expression = self.parse_expression()?;
         if self.match_kind(&TokenKind::Assign) {
             let target = assignment_target_from_expression(expression)?;
@@ -212,16 +216,16 @@ impl<'a> Parser<'a> {
         }
 
         if self.is_range_header_start() {
-            let first = self.parse_range_binding()?;
+            let first = self.parse_binding()?;
             let mut bindings = vec![first];
             if self.match_kind(&TokenKind::Comma) {
-                bindings.push(self.parse_range_binding()?);
+                bindings.push(self.parse_binding()?);
             }
             let binding_mode = if self.match_kind(&TokenKind::Define) {
-                RangeBindingMode::Define
+                BindingMode::Define
             } else {
                 self.expect(TokenKind::Assign)?;
-                RangeBindingMode::Assign
+                BindingMode::Assign
             };
             self.expect(TokenKind::Range)?;
             let target = self.parse_expression()?;
@@ -237,6 +241,30 @@ impl<'a> Parser<'a> {
         let condition = self.parse_expression()?;
         let body = self.parse_block()?;
         Ok(Statement::For { condition, body })
+    }
+
+    fn parse_map_lookup_statement(&mut self) -> Result<Statement, ParseError> {
+        let mut bindings = vec![self.parse_binding()?];
+        self.expect(TokenKind::Comma)?;
+        bindings.push(self.parse_binding()?);
+        let binding_mode = if self.match_kind(&TokenKind::Define) {
+            BindingMode::Define
+        } else {
+            self.expect(TokenKind::Assign)?;
+            BindingMode::Assign
+        };
+        let expression = self.parse_expression()?;
+        let Expression::Index { target, index } = expression else {
+            return Err(ParseError::new(
+                "comma-ok lookup requires a map index expression on the right side",
+            ));
+        };
+        Ok(Statement::MapLookup {
+            bindings,
+            binding_mode,
+            target: *target,
+            key: *index,
+        })
     }
 
     fn parse_equality_expression(&mut self) -> Result<Expression, ParseError> {
@@ -597,12 +625,12 @@ impl<'a> Parser<'a> {
             || matches!(self.current_token().kind, TokenKind::Identifier(_))
     }
 
-    fn parse_range_binding(&mut self) -> Result<RangeBinding, ParseError> {
+    fn parse_binding(&mut self) -> Result<Binding, ParseError> {
         let name = self.expect_identifier()?;
         if name == "_" {
-            Ok(RangeBinding::Blank)
+            Ok(Binding::Blank)
         } else {
-            Ok(RangeBinding::Identifier(name))
+            Ok(Binding::Identifier(name))
         }
     }
 
@@ -630,6 +658,23 @@ impl<'a> Parser<'a> {
             ) => true,
             _ => false,
         }
+    }
+
+    fn is_map_lookup_statement_start(&self) -> bool {
+        matches!(
+            (
+                self.current_kind(),
+                self.peek_kind(),
+                self.peek_second_kind(),
+                self.peek_third_kind(),
+            ),
+            (
+                Some(TokenKind::Identifier(_)),
+                Some(TokenKind::Comma),
+                Some(TokenKind::Identifier(_)),
+                Some(TokenKind::Define | TokenKind::Assign),
+            )
+        )
     }
 
     fn match_binary_operator(&mut self, candidates: &[TokenKind]) -> Option<BinaryOperator> {

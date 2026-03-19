@@ -101,6 +101,12 @@ fn run_executes_map_literals_and_delete() {
 }
 
 #[test]
+fn run_executes_map_lookup_statements() {
+    let output = run_cli(&["run", "examples/map_lookup.go"]).expect("program should run");
+    assert_eq!(output, "0 false\n3 true\nfalse\n2 true\n");
+}
+
+#[test]
 fn run_executes_explicit_nil_values_and_comparisons() {
     let output = run_cli(&["run", "examples/nil_values.go"]).expect("program should run");
     assert_eq!(
@@ -340,6 +346,15 @@ fn dump_ast_renders_map_literals() {
 }
 
 #[test]
+fn dump_ast_renders_map_lookup_statements() {
+    let output = run_cli(&["dump-ast", "examples/map_lookup.go"]).expect("ast should be rendered");
+
+    assert!(output.contains("value, ok := counts[\"nova\"]"));
+    assert!(output.contains("value, ok = counts[\"nova\"]"));
+    assert!(output.contains("_, ok = counts[\"missing\"]"));
+}
+
+#[test]
 fn dump_bytecode_shows_loop_jumps() {
     let output =
         run_cli(&["dump-bytecode", "examples/loops.go"]).expect("bytecode should be generated");
@@ -463,6 +478,16 @@ fn dump_bytecode_shows_map_literal_and_delete_instructions() {
     assert!(output.contains("build-map map[string]int 2"));
     assert!(output.contains("call-builtin delete 2"));
     assert!(output.contains("build-map map[string]int 0"));
+}
+
+#[test]
+fn dump_bytecode_shows_map_lookup_instructions() {
+    let output = run_cli(&["dump-bytecode", "examples/map_lookup.go"])
+        .expect("bytecode should be generated");
+
+    assert!(output.contains("lookup-map map[string]int"));
+    assert!(output.contains("store-local 1"));
+    assert!(output.contains("store-local 2"));
 }
 
 #[test]

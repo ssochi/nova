@@ -49,6 +49,8 @@ Operational clarifications:
 14. When exposing source-level `nil`, keep untyped `nil` explicit in the checked layer and only resolve it where slice/map type context already exists; do not erase that distinction inside parsing or generic runtime values.
 15. When extending `range`, keep the staged surface explicit in the AST and bytecode; the current baseline is `slice/map` with omitted bindings, `:=`, or `=` over identifiers / `_`, plus deterministic map traversal through explicit lowering.
 16. Do not add string `range` until rune semantics are modeled deliberately; byte-oriented string indexing is not enough to claim Go-compatible string iteration.
+17. When extending comma-ok `map` lookups, keep them explicit as statement-scoped AST / checked / bytecode forms; do not hide them inside generic tuple expressions before the broader multi-result model exists.
+18. Duplicate constant `map` literal keys should fail during semantic analysis for the currently modeled scalar literal-key forms before lowering; do not rely on runtime last-write-wins behavior for user-facing diagnostics.
 
 If no task is explicitly specified, you must proactively choose the most worthwhile piece of work to advance, with the following priorities:
 1. **Obvious gaps in functionality, core experience, or core flow** (search the web more, do research, refer to relevant experience from similar high-quality projects, and established methodologies)

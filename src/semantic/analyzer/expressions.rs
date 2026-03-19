@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::conversion::ConversionKind;
 use crate::frontend::ast::{BinaryOperator, Expression, TypeRef};
 use crate::semantic::analyzer::{FunctionAnalyzer, SemanticError};
@@ -421,12 +423,21 @@ impl<'a> FunctionAnalyzer<'a> {
                 map_type_ref.render()
             ))
         })?;
+        let mut constant_keys = HashSet::new();
         let checked_entries = entries
             .iter()
             .enumerate()
             .map(|(index, entry)| {
                 let key = self.analyze_expression(&entry.key)?;
                 expect_type(key_type, &key.ty, &format!("map literal key {}", index + 1))?;
+                if let Some(constant_key) = constant_map_key(&key) {
+                    if !constant_keys.insert(constant_key.clone()) {
+                        return Err(SemanticError::new(format!(
+                            "map literal contains duplicate constant key {}",
+                            constant_key.render()
+                        )));
+                    }
+                }
                 let value = coerce_expression_to_type(
                     value_type,
                     self.analyze_expression(&entry.value)?,
@@ -441,6 +452,32 @@ impl<'a> FunctionAnalyzer<'a> {
                 entries: checked_entries,
             },
         })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum ConstantMapKey {
+    Integer(i64),
+    Bool(bool),
+    String(String),
+}
+
+impl ConstantMapKey {
+    fn render(&self) -> String {
+        match self {
+            ConstantMapKey::Integer(value) => value.to_string(),
+            ConstantMapKey::Bool(value) => value.to_string(),
+            ConstantMapKey::String(value) => format!("{value:?}"),
+        }
+    }
+}
+
+fn constant_map_key(expression: &CheckedExpression) -> Option<ConstantMapKey> {
+    match &expression.kind {
+        CheckedExpressionKind::Integer(value) => Some(ConstantMapKey::Integer(*value)),
+        CheckedExpressionKind::Bool(value) => Some(ConstantMapKey::Bool(*value)),
+        CheckedExpressionKind::String(value) => Some(ConstantMapKey::String(value.clone())),
+        _ => None,
     }
 }
 
