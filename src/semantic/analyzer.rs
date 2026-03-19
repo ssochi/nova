@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 use crate::config::ExecutionConfig;
+use crate::conversion::ConversionKind;
 use crate::frontend::ast::{
     AssignmentTarget, BinaryOperator, Block, Expression, FunctionDecl, SourceFileAst, Statement,
     TypeRef,
@@ -15,6 +16,10 @@ use crate::semantic::model::{
 use crate::semantic::packages::{
     resolve_import_path, resolve_package_function, validate_package_call,
 };
+use crate::semantic::support::{
+    block_guarantees_return, expect_same_type, expect_type, is_supported_named_type,
+    resolve_type_ref, validate_make_literal_bounds, zero_value_expression,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SemanticError {
@@ -22,7 +27,7 @@ pub struct SemanticError {
 }
 
 impl SemanticError {
-    fn new(message: impl Into<String>) -> Self {
+    pub(crate) fn new(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
         }
@@ -104,6 +109,12 @@ impl FunctionRegistry {
             if resolve_builtin(function.name.as_str()).is_some() {
                 return Err(SemanticError::new(format!(
                     "function `{}` conflicts with a builtin name",
+                    function.name
+                )));
+            }
+            if is_supported_named_type(function.name.as_str()) {
+                return Err(SemanticError::new(format!(
+                    "function `{}` conflicts with a predeclared type name",
                     function.name
                 )));
             }
@@ -524,6 +535,9 @@ impl<'a> FunctionAnalyzer<'a> {
                 length,
                 capacity,
             } => self.analyze_make_expression(type_ref, length, capacity.as_deref()),
+            Expression::Conversion { type_ref, value } => {
+                self.analyze_conversion_expression(type_ref, value)
+            }
             Expression::Binary {
                 left,
                 operator,
@@ -703,6 +717,51 @@ impl<'a> FunctionAnalyzer<'a> {
         })
     }
 
+    fn analyze_conversion_expression(
+        &mut self,
+        type_ref: &TypeRef,
+        value: &Expression,
+    ) -> Result<CheckedExpression, SemanticError> {
+        let target_type = resolve_type_ref(type_ref).ok_or_else(|| {
+            SemanticError::new(format!(
+                "conversion does not support target type `{}`",
+                type_ref.render()
+            ))
+        })?;
+        let value = self.analyze_expression(value)?;
+        let conversion = match (&target_type, &value.ty) {
+            (Type::Slice(element), Type::String) if element.as_ref() == &Type::Byte => {
+                ConversionKind::StringToBytes
+            }
+            (Type::String, source) if source.is_byte_slice() => ConversionKind::BytesToString,
+            (Type::Slice(element), _) if element.as_ref() == &Type::Byte => {
+                return Err(SemanticError::new(format!(
+                    "conversion to `[]byte` requires `string`, found `{}`",
+                    value.ty.render()
+                )));
+            }
+            (Type::String, _) => {
+                return Err(SemanticError::new(format!(
+                    "conversion to `string` requires `[]byte`, found `{}`",
+                    value.ty.render()
+                )));
+            }
+            _ => {
+                return Err(SemanticError::new(format!(
+                    "conversion to `{}` is not supported",
+                    target_type.render()
+                )));
+            }
+        };
+        Ok(CheckedExpression {
+            ty: target_type,
+            kind: CheckedExpressionKind::Conversion {
+                conversion,
+                value: Box::new(value),
+            },
+        })
+    }
+
     fn current_scope(&self) -> &HashMap<String, LocalBinding> {
         self.scopes.last().expect("at least one scope exists")
     }
@@ -860,94 +919,5 @@ fn analyze_binary_operator(
     }
 }
 
-fn resolve_type_ref(type_ref: &TypeRef) -> Option<Type> {
-    match type_ref {
-        TypeRef::Named(name) => match name.as_str() {
-            "int" => Some(Type::Int),
-            "byte" => Some(Type::Byte),
-            "bool" => Some(Type::Bool),
-            "string" => Some(Type::String),
-            _ => None,
-        },
-        TypeRef::Slice(element) => Some(Type::Slice(Box::new(resolve_type_ref(element)?))),
-    }
-}
-
-fn expect_type(expected: &Type, actual: &Type, context: &str) -> Result<(), SemanticError> {
-    if expected == actual {
-        Ok(())
-    } else {
-        Err(SemanticError::new(format!(
-            "{context} requires `{}`, found `{}`",
-            expected.render(),
-            actual.render()
-        )))
-    }
-}
-
-fn expect_same_type(left: &Type, right: &Type, context: &str) -> Result<(), SemanticError> {
-    if left == right {
-        Ok(())
-    } else {
-        Err(SemanticError::new(format!(
-            "{context} requires matching operand types, found `{}` and `{}`",
-            left.render(),
-            right.render()
-        )))
-    }
-}
-
-fn block_guarantees_return(block: &CheckedBlock) -> bool {
-    for statement in &block.statements {
-        if statement_guarantees_termination(statement) {
-            return true;
-        }
-    }
-    false
-}
-
-fn statement_guarantees_termination(statement: &CheckedStatement) -> bool {
-    match statement {
-        CheckedStatement::Return(_) => true,
-        CheckedStatement::If {
-            then_block,
-            else_block: Some(else_block),
-            ..
-        } => block_guarantees_return(then_block) && block_guarantees_return(else_block),
-        CheckedStatement::For { condition, .. } => expression_is_compile_time_true(condition),
-        _ => false,
-    }
-}
-
-fn expression_is_compile_time_true(expression: &CheckedExpression) -> bool {
-    matches!(expression.kind, CheckedExpressionKind::Bool(true))
-}
-
 #[cfg(test)]
 mod tests;
-
-fn zero_value_expression(ty: Type) -> CheckedExpression {
-    CheckedExpression {
-        ty,
-        kind: CheckedExpressionKind::ZeroValue,
-    }
-}
-
-fn validate_make_literal_bounds(
-    length: &CheckedExpression,
-    capacity: &CheckedExpression,
-) -> Result<(), SemanticError> {
-    let CheckedExpressionKind::Integer(length_value) = &length.kind else {
-        return Ok(());
-    };
-    let CheckedExpressionKind::Integer(capacity_value) = &capacity.kind else {
-        return Ok(());
-    };
-    if length_value > capacity_value {
-        return Err(SemanticError::new(format!(
-            "builtin `make` length {} exceeds capacity {}",
-            length_value, capacity_value
-        )));
-    }
-    Ok(())
-}

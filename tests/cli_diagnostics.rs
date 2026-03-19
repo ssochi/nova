@@ -312,3 +312,16 @@ fn check_rejects_make_when_length_exceeds_capacity() {
 
     cleanup_temp_source(path);
 }
+
+#[test]
+fn check_rejects_string_conversion_from_non_byte_slice() {
+    let path = write_temp_source(
+        "check-bad-string-conversion",
+        "package main\n\nfunc main() {\n\tvar values = []int{65}\n\tprintln(string(values))\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("conversion to `string` requires `[]byte`, found `[]int`"));
+
+    cleanup_temp_source(path);
+}

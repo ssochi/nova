@@ -1,4 +1,5 @@
 use crate::builtin::BuiltinFunction;
+use crate::conversion::ConversionKind;
 use crate::package::PackageFunction;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -101,6 +102,7 @@ pub enum Instruction {
         element_type: ValueType,
         has_capacity: bool,
     },
+    Convert(ConversionKind),
     LoadLocal(usize),
     StoreLocal(usize),
     Add,
@@ -151,6 +153,7 @@ impl Instruction {
                     if *has_capacity { "explicit" } else { "len" }
                 )
             }
+            Instruction::Convert(conversion) => format!("convert {}", conversion.render()),
             Instruction::LoadLocal(index) => format!("load-local {index}"),
             Instruction::StoreLocal(index) => format!("store-local {index}"),
             Instruction::Add => "add".to_string(),

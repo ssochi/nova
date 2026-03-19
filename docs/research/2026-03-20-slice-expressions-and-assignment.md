@@ -1,8 +1,8 @@
-# Slice Expressions, String Slicing, Typed Zero Values, and Slice Allocation Research
+# Slice Expressions, String Slicing, Typed Zero Values, Slice Allocation, and String/Byte Conversion Research
 
 ## Goal
 
-Capture the official Go behavior baseline for the currently targeted slice surface: simple slice expressions on slices and strings, string indexing, typed `var` zero values, nil-slice behavior, `cap`, `copy`, slice-backed `append` reuse, and `make([]T, len[, cap])`.
+Capture the official Go behavior baseline for the currently targeted slice surface: simple slice expressions on slices and strings, string indexing, typed `var` zero values, nil-slice behavior, `cap`, `copy`, slice-backed `append` reuse, `make([]T, len[, cap])`, and explicit `[]byte(string)` / `string([]byte)` conversions.
 
 ## Sources Reviewed
 
@@ -13,6 +13,7 @@ Capture the official Go behavior baseline for the currently targeted slice surfa
 - Official Go language specification section `Appending to and copying slices`
 - Official Go language specification section `Length and capacity`
 - Official Go language specification section `Making slices, maps and channels`
+- Official Go language specification section `Conversions`
 - Official Go builtin package documentation for `make`
 
 ## Confirmed Findings
@@ -41,6 +42,9 @@ Capture the official Go behavior baseline for the currently targeted slice surfa
 - Slice elements created by `make` are initialized to the zero value of the element type.
 - `make` requires a slice, map, or channel type as its first argument in real Go; for slices, the length must not exceed the capacity.
 - Negative slice lengths or capacities and length-greater-than-capacity failures are rejected; some cases are compile-time failures when the values are constant, and otherwise they fail at runtime.
+- An explicit conversion has the source form `T(x)` where `T` is a type and `x` is an expression. The grammar also permits an optional trailing comma inside the parentheses.
+- Converting `[]byte` to `string` yields a string whose successive bytes are the slice elements; converting `nil` or empty `[]byte` to `string` yields the empty string.
+- Converting `string` to `[]byte` yields a non-nil byte slice whose successive elements are the string bytes. The resulting capacity is implementation-specific and may exceed the length in real Go.
 - Real Go also accepts arrays, pointers to arrays, channels, and some generic type-parameter cases for `cap`, but those surfaces are outside the current compiler subset.
 
 ## Implementation Implications
@@ -53,14 +57,17 @@ Capture the official Go behavior baseline for the currently targeted slice surfa
 - The existing slice runtime already tracks capacity metadata, so `cap(slice)` and capacity-aware `append` should extend that path instead of adding a second storage model.
 - `make([]T, len[, cap])` can reuse the current slice storage model if allocation reserves hidden capacity slots and fills the visible prefix with element zero values.
 - The first argument to `make` is a type, not a value, so the compiler should model that path explicitly instead of forcing it through ordinary expression arguments.
+- Explicit conversion syntax should also stay separate from ordinary value calls because the callee position contains a type rather than a runtime value.
 - Explicit typed `var` declarations are a good entry point for nil slices because they provide type context without forcing untyped `nil` expression support yet.
 - Zero-value synthesis can stay compile-time-driven for the current subset by lowering explicit typed declarations into concrete zero-producing instructions.
 - `copy` should snapshot the visible source elements before writing so overlapping slice windows behave independently of aliasing order, matching the spec.
 - Once `byte` exists, `copy([]byte, string)` is a high-value narrow special case because it makes byte slices usable without implementing general conversion syntax.
+- Now that runtime strings are byte-oriented and `[]byte` already exists, `[]byte(string)` and `string([]byte)` are the next narrow conversion pair with the highest practical leverage.
+- Returning a non-nil empty slice for `[]byte(\"\")` is important because the spec explicitly distinguishes string-to-byte-slice conversion from nil-slice zero values.
 - `append(slice, string...)` should remain deferred until the parser and call model can represent variadic forwarding explicitly.
 
 ## Deferred Questions
 
 - Whether later slice work should add compile-time constant folding strong enough to reject more invalid `make` sizes before runtime
 - Whether a future allocation model should grow beyond slice-only `make` into maps, channels, or more Go-like append growth heuristics
-- Whether later iterations should add general conversion syntax so `[]byte("text")` and `string(bytes)` stop relying on staged builtin special cases
+- Whether later iterations should widen conversion coverage beyond the narrow `[]byte(string)` / `string([]byte)` pair without collapsing into a generic cast system

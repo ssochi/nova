@@ -3,6 +3,7 @@ use std::fmt;
 
 use crate::builtin::BuiltinFunction;
 use crate::bytecode::instruction::{Instruction, Program, SequenceKind, ValueType};
+use crate::conversion::ConversionKind;
 use crate::package::PackageFunction;
 use crate::runtime::value::{SliceValue, StringValue, Value};
 
@@ -102,6 +103,7 @@ impl VirtualMachine {
                     element_type,
                     has_capacity,
                 } => self.make_slice(&element_type, has_capacity)?,
+                Instruction::Convert(conversion) => self.convert_value(conversion)?,
                 Instruction::LoadLocal(index) => {
                     let value = self.frames[frame_index]
                         .locals
@@ -557,6 +559,32 @@ impl VirtualMachine {
                 length,
                 capacity,
             )));
+        Ok(())
+    }
+
+    fn convert_value(&mut self, conversion: ConversionKind) -> Result<(), RuntimeError> {
+        let value = self.pop_value()?;
+        let converted = match (conversion, value) {
+            (ConversionKind::StringToBytes, Value::String(value)) => {
+                Value::Slice(SliceValue::from_string(&value))
+            }
+            (ConversionKind::BytesToString, Value::Slice(slice)) => {
+                Value::String(StringValue::from_byte_slice(&slice).map_err(|_| {
+                    RuntimeError::new("conversion `string([]byte)` encountered a non-byte slice")
+                })?)
+            }
+            (ConversionKind::StringToBytes, _) => {
+                return Err(RuntimeError::new(
+                    "conversion `[]byte(string)` expected a string value",
+                ));
+            }
+            (ConversionKind::BytesToString, _) => {
+                return Err(RuntimeError::new(
+                    "conversion `string([]byte)` expected a byte slice value",
+                ));
+            }
+        };
+        self.stack.push(converted);
         Ok(())
     }
 

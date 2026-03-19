@@ -76,6 +76,13 @@ fn run_executes_byte_oriented_strings() {
 }
 
 #[test]
+fn run_executes_string_byte_conversions() {
+    let output =
+        run_cli(&["run", "examples/string_byte_conversions.go"]).expect("program should run");
+    assert_eq!(output, "4 110 97\nnova Xova go\n0 0\n");
+}
+
+#[test]
 fn dump_bytecode_shows_stack_machine_instructions() {
     let output = run_cli(&["dump-bytecode", "examples/arithmetic.go"])
         .expect("bytecode should be generated");
@@ -230,6 +237,16 @@ fn dump_ast_renders_byte_oriented_strings() {
 }
 
 #[test]
+fn dump_ast_renders_string_byte_conversions() {
+    let output = run_cli(&["dump-ast", "examples/string_byte_conversions.go"])
+        .expect("ast should be rendered");
+
+    assert!(output.contains("var bytes = []byte(text)"));
+    assert!(output.contains("println(text, string(bytes), string([]byte(\"go\")))"));
+    assert!(output.contains("var empty = []byte(\"\")"));
+}
+
+#[test]
 fn dump_bytecode_shows_loop_jumps() {
     let output =
         run_cli(&["dump-bytecode", "examples/loops.go"]).expect("bytecode should be generated");
@@ -312,6 +329,16 @@ fn dump_bytecode_shows_byte_oriented_string_instructions() {
     assert!(output.contains("slice string low=true high=true"));
     assert!(output.contains("make-slice byte cap=len"));
     assert!(output.contains("call-builtin copy 2"));
+}
+
+#[test]
+fn dump_bytecode_shows_string_byte_conversion_instructions() {
+    let output = run_cli(&["dump-bytecode", "examples/string_byte_conversions.go"])
+        .expect("bytecode should be generated");
+
+    assert!(output.contains("convert string->[]byte"));
+    assert!(output.contains("convert []byte->string"));
+    assert!(output.contains("set-index"));
 }
 
 #[test]

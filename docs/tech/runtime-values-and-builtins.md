@@ -20,13 +20,14 @@ Describe the current runtime value categories and builtin execution model introd
   - Stored as byte-oriented runtime data rather than only Rust `String`
   - `len(string)` returns the byte length
   - Supports byte-oriented index expressions such as `text[0]` and simple slice expressions such as `text[1:3]`
+  - Supports explicit `string([]byte)` conversion by copying bytes out of a runtime byte slice
   - Current CLI rendering is lossy for invalid UTF-8 byte sequences because the output buffer is still a Rust `String`
 - `slice`
   - Stored as shared backing storage plus start / length / capacity metadata
   - Built by slice literals, `make([]T, len[, cap])`, and returned by `append`
   - Also used as the zero value for explicit typed slice declarations via a nil-slice runtime state
   - Currently rendered in a Go-like `[value value]` form for builtin and package output
-  - Supports `len(slice)`, `cap(slice)`, `copy(dst, src)`, index expressions such as `values[0]`, simple slice expressions such as `values[1:3]`, and element assignment such as `values[0] = 1`
+  - Supports `len(slice)`, `cap(slice)`, `copy(dst, src)`, index expressions such as `values[0]`, simple slice expressions such as `values[1:3]`, element assignment such as `values[0] = 1`, and explicit `[]byte(string)` conversion by copying string bytes into a new non-nil byte slice
 
 ## Builtin Contract Model
 
@@ -69,6 +70,7 @@ Describe the current runtime value categories and builtin execution model introd
 
 - Bytecode uses `push-string` for literals, `push-byte` for byte zero values, and `concat` for string addition
 - Bytecode now also uses `push-nil-slice` for typed zero-value slice declarations, `build-slice <count>` for slice literals, `make-slice <type>` for slice allocation, `index <slice|string>` for element reads, `slice <slice|string>` for window creation, and `set-index` for slice element writes
+- Bytecode now also uses `convert string->[]byte` and `convert []byte->string` for the narrow explicit conversion surface
 - Equality still reuses the generic value comparison path because runtime values are tagged
 - VM output is an accumulated string buffer instead of newline-separated records
 - `print` appends rendered arguments without an automatic trailing newline
@@ -80,6 +82,8 @@ Describe the current runtime value categories and builtin execution model introd
 - `make([]T, len[, cap])` lowers into dedicated allocation bytecode instead of a generic runtime builtin call because its first argument is a type
 - `make` allocation reserves hidden capacity slots filled with the element zero value, so reslicing into spare capacity exposes zero-initialized elements and later `append` can reuse that storage
 - Slice windows share backing storage, so updating one slice view is visible through overlapping slice values
+- `[]byte(string)` currently returns a non-nil byte slice with exact-length capacity; real Go leaves the capacity implementation-specific
+- `string([]byte)` copies the visible byte slice elements into a new runtime string value
 - Explicit typed local declarations are lowered into concrete zero-producing instructions, so `var total int`, `var marker byte`, `var ready bool`, `var label string`, and `var values []int` all produce Go-like zero values without runtime type reflection
 - Bytecode now also uses `call-package` for metadata-backed package functions
 - `fmt.Sprint` returns a runtime string value without mutating the output buffer
@@ -96,5 +100,5 @@ Describe the current runtime value categories and builtin execution model introd
 - Keep new runtime value categories reflected in both `src/runtime/value.rs` and semantic `Type`
 - If output behavior becomes more realistic or package-backed, extract builtin execution helpers from `src/runtime/vm.rs`
 - Keep package-function validation metadata centralized; do not reintroduce package-specific ad hoc type checks inside `src/semantic/analyzer.rs`
-- If string behavior expands into conversions, rune-aware iteration, or invalid-UTF-8-preserving printing, add that on top of the current byte-oriented representation instead of reverting to Rust `String`-only storage
+- If string behavior expands into broader conversions, rune-aware iteration, or invalid-UTF-8-preserving printing, add that on top of the current byte-oriented representation instead of reverting to Rust `String`-only storage
 - If slice behavior expands beyond the current window / builtin subset, consider separating slice-specific lowering and VM helpers from the core scalar path

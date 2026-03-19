@@ -136,6 +136,10 @@ impl StringValue {
         Self::new(bytes)
     }
 
+    pub fn from_byte_slice(slice: &SliceValue) -> Result<Self, ()> {
+        Ok(Self::new(slice.byte_elements()?))
+    }
+
     fn render_lossy(&self) -> String {
         String::from_utf8_lossy(&self.bytes).into_owned()
     }
@@ -266,6 +270,20 @@ impl SliceValue {
             storage[self.start + offset] = Value::Byte(*value);
         }
         count
+    }
+
+    pub fn byte_elements(&self) -> Result<Vec<u8>, ()> {
+        self.visible_elements()
+            .into_iter()
+            .map(|element| match element {
+                Value::Byte(value) => Ok(value),
+                _ => Err(()),
+            })
+            .collect()
+    }
+
+    pub fn from_string(value: &StringValue) -> Self {
+        Self::new(value.as_bytes().iter().copied().map(Value::Byte).collect())
     }
 
     pub fn append(&self, rest: &[Value]) -> Self {
@@ -430,5 +448,22 @@ mod tests {
             destination.visible_elements(),
             vec![Value::Byte(b'n'), Value::Byte(b'o'), Value::Byte(b'v')]
         );
+    }
+
+    #[test]
+    fn string_and_byte_slice_conversions_round_trip() {
+        let bytes = SliceValue::from_string(&StringValue::from("nova"));
+        let string = StringValue::from_byte_slice(&bytes).expect("byte slice should convert");
+
+        assert_eq!(
+            bytes.visible_elements(),
+            vec![
+                Value::Byte(b'n'),
+                Value::Byte(b'o'),
+                Value::Byte(b'v'),
+                Value::Byte(b'a'),
+            ]
+        );
+        assert_eq!(string, StringValue::from("nova"));
     }
 }

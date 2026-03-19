@@ -247,6 +247,10 @@ pub enum Expression {
         length: Box<Expression>,
         capacity: Option<Box<Expression>>,
     },
+    Conversion {
+        type_ref: TypeRef,
+        value: Box<Expression>,
+    },
     Call {
         callee: Box<Expression>,
         arguments: Vec<Expression>,
@@ -306,6 +310,9 @@ impl Expression {
                     arguments.push(capacity.render());
                 }
                 format!("make({})", arguments.join(", "))
+            }
+            Expression::Conversion { type_ref, value } => {
+                format!("{}({})", type_ref.render(), value.render())
             }
             Expression::Call { callee, arguments } => format!(
                 "{}({})",

@@ -1,0 +1,4 @@
+- [done] Extend the existing slice/string research note and add a design baseline for typed string/byte conversion expressions.
+- [done] Implement parser, semantic, bytecode, and VM support for `[]byte(string)` and `string([]byte)`.
+- [done] Add examples plus layered automated and serial CLI validation coverage for the new conversion surface.
+- [done] Sync reports, roadmap docs, `BOOT.md`, archive the plan, and commit plus push all current changes.

@@ -39,4 +39,5 @@ This directory stores feature and subsystem designs. It describes intent, scope 
 - `import-fmt-package-seam.md`: design baseline for top-level imports and the first package-backed `fmt` seam
 - `slice-runtime-values.md`: design baseline for slice runtime values, typed zero-value declarations, `make` allocation, shared storage, helper builtins, and layered test coverage
 - `byte-oriented-strings.md`: design baseline for byte-oriented runtime strings, string indexing/slicing, and the first `byte`-specialized builtin seam
+- `string-byte-conversions.md`: design baseline for first-class `[]byte(string)` and `string([]byte)` conversion expressions
 - `strings-package-contracts.md`: design baseline for typed package contracts and the first `strings` package seam

@@ -42,7 +42,8 @@ Operational clarifications:
 7. Keep automated validation layered: prefer focused unit tests inside `src/` plus reusable CLI integration helpers under `tests/` instead of one monolithic integration file.
 8. When adding a new language form or runtime path, keep both `dump-ast` and `dump-bytecode` useful enough to expose that path without reading the implementation.
 9. If a builtin needs a type argument, model that syntax explicitly in the AST and checked layer instead of forcing type syntax through ordinary value-expression call arguments.
-10. If a source file is already near the 1000-line limit, split tests or helpers into submodules in the same iteration instead of letting feature work push the file further over the limit.
+10. If explicit conversion syntax such as `T(x)` is added, keep it distinct from ordinary call expressions in the AST and checked model; do not hide conversions inside builtin dispatch.
+11. If a source file is already near the 1000-line limit, split tests or helpers into submodules in the same iteration instead of letting feature work push the file further over the limit.
 
 If no task is explicitly specified, you must proactively choose the most worthwhile piece of work to advance, with the following priorities:
 1. **Obvious gaps in functionality, core experience, or core flow** (search the web more, do research, refer to relevant experience from similar high-quality projects, and established methodologies)

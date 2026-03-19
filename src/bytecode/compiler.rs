@@ -200,6 +200,11 @@ impl<'a> FunctionCompiler<'a> {
                     has_capacity: capacity.is_some(),
                 });
             }
+            CheckedExpressionKind::Conversion { conversion, value } => {
+                self.compile_expression(value)?;
+                self.expect_value(&value.ty, "conversion expression")?;
+                self.instructions.push(Instruction::Convert(*conversion));
+            }
             CheckedExpressionKind::Local { slot, .. } => {
                 self.instructions.push(Instruction::LoadLocal(*slot));
             }

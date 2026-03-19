@@ -1,4 +1,5 @@
 use crate::builtin::BuiltinFunction;
+use crate::conversion::ConversionKind;
 use crate::package::PackageFunction;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -90,6 +91,10 @@ pub enum CheckedExpressionKind {
         element_type: Type,
         length: Box<CheckedExpression>,
         capacity: Option<Box<CheckedExpression>>,
+    },
+    Conversion {
+        conversion: ConversionKind,
+        value: Box<CheckedExpression>,
     },
     Binary {
         left: Box<CheckedExpression>,

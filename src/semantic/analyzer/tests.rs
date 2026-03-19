@@ -100,6 +100,21 @@ fn analyze_string_index_slice_and_byte_copy() {
 }
 
 #[test]
+fn analyze_string_byte_conversions() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tvar bytes = []byte(\"nova\")\n\tbytes[0] = \"X\"[0]\n\tvar text = string(bytes)\n\tprintln(text)\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let program = analyze_package(&ast).expect("analysis should succeed");
+
+    assert_eq!(program.functions.len(), 1);
+}
+
+#[test]
 fn reject_make_with_constant_length_exceeding_capacity() {
     let source = SourceFile {
         path: "test.go".into(),
@@ -130,5 +145,24 @@ fn reject_copy_from_string_into_non_byte_slice() {
         error
             .to_string()
             .contains("argument 2 in call to builtin `copy` requires `[]int`")
+    );
+}
+
+#[test]
+fn reject_string_conversion_from_non_byte_slice() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tvar values = []int{65}\n\tprintln(string(values))\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let error = analyze_package(&ast).expect_err("analysis should reject invalid conversion");
+
+    assert!(
+        error
+            .to_string()
+            .contains("conversion to `string` requires `[]byte`, found `[]int`")
     );
 }

@@ -3,6 +3,7 @@ use crate::builtin::BuiltinFunction;
 use crate::bytecode::instruction::{
     CompiledFunction, Instruction, Program, SequenceKind, ValueType,
 };
+use crate::conversion::ConversionKind;
 use crate::package::PackageFunction;
 
 #[test]
@@ -225,4 +226,39 @@ fn execute_string_indexing_slicing_and_byte_copy() {
         .render_output();
 
     assert_eq!(output, "111\nov\n4 103\n");
+}
+
+#[test]
+fn execute_string_byte_conversions() {
+    let program = Program {
+        package_name: "main".to_string(),
+        entry_function: "main".to_string(),
+        entry_function_index: 0,
+        functions: vec![CompiledFunction {
+            name: "main".to_string(),
+            parameter_count: 0,
+            returns_value: false,
+            local_names: vec!["bytes".to_string()],
+            instructions: vec![
+                Instruction::PushString("nova".to_string()),
+                Instruction::Convert(ConversionKind::StringToBytes),
+                Instruction::StoreLocal(0),
+                Instruction::LoadLocal(0),
+                Instruction::PushInt(0),
+                Instruction::PushByte(88),
+                Instruction::SetIndex,
+                Instruction::LoadLocal(0),
+                Instruction::Convert(ConversionKind::BytesToString),
+                Instruction::CallBuiltin(BuiltinFunction::Println, 1),
+                Instruction::Return,
+            ],
+        }],
+    };
+
+    let output = VirtualMachine::new()
+        .execute(&program)
+        .expect("conversion program should execute")
+        .render_output();
+
+    assert_eq!(output, "Xova\n");
 }
