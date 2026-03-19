@@ -8,6 +8,7 @@ pub enum BuiltinFunction {
     Append,
     Make,
     Delete,
+    Close,
 }
 
 impl BuiltinFunction {
@@ -21,6 +22,7 @@ impl BuiltinFunction {
             BuiltinFunction::Append => "append",
             BuiltinFunction::Make => "make",
             BuiltinFunction::Delete => "delete",
+            BuiltinFunction::Close => "close",
         }
     }
 }

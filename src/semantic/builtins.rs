@@ -8,7 +8,7 @@ pub struct BuiltinContract {
     pub validator: fn(&[Type]) -> Result<Type, String>,
 }
 
-const BUILTIN_CONTRACTS: [BuiltinContract; 8] = [
+const BUILTIN_CONTRACTS: [BuiltinContract; 9] = [
     BuiltinContract {
         builtin: BuiltinFunction::Print,
         name: "print",
@@ -48,6 +48,11 @@ const BUILTIN_CONTRACTS: [BuiltinContract; 8] = [
         builtin: BuiltinFunction::Delete,
         name: "delete",
         validator: validate_delete_builtin,
+    },
+    BuiltinContract {
+        builtin: BuiltinFunction::Close,
+        name: "close",
+        validator: validate_close_builtin,
     },
 ];
 
@@ -89,11 +94,14 @@ fn validate_variadic_output_builtin(argument_types: &[Type]) -> Result<Type, Str
 fn validate_len_builtin(argument_types: &[Type]) -> Result<Type, String> {
     validate_exact_arity("len", 1, argument_types.len())?;
     let actual = &argument_types[0];
-    if matches!(actual, Type::String | Type::Slice(_) | Type::Map { .. }) {
+    if matches!(
+        actual,
+        Type::String | Type::Slice(_) | Type::Chan(_) | Type::Map { .. }
+    ) {
         Ok(Type::Int)
     } else {
         Err(format!(
-            "argument 1 in call to builtin `len` requires `string`, `slice`, or `map`, found `{}`",
+            "argument 1 in call to builtin `len` requires `string`, `slice`, `chan`, or `map`, found `{}`",
             actual.render()
         ))
     }
@@ -102,11 +110,11 @@ fn validate_len_builtin(argument_types: &[Type]) -> Result<Type, String> {
 fn validate_cap_builtin(argument_types: &[Type]) -> Result<Type, String> {
     validate_exact_arity("cap", 1, argument_types.len())?;
     let actual = &argument_types[0];
-    if matches!(actual, Type::Slice(_)) {
+    if matches!(actual, Type::Slice(_) | Type::Chan(_)) {
         Ok(Type::Int)
     } else {
         Err(format!(
-            "argument 1 in call to builtin `cap` requires `slice`, found `{}`",
+            "argument 1 in call to builtin `cap` requires `slice` or `chan`, found `{}`",
             actual.render()
         ))
     }
@@ -163,9 +171,10 @@ fn validate_append_builtin(argument_types: &[Type]) -> Result<Type, String> {
 pub fn validate_make_call(allocated_type: &Type, argument_types: &[Type]) -> Result<Type, String> {
     match allocated_type {
         Type::Slice(_) => validate_make_slice_call(allocated_type, argument_types),
+        Type::Chan(_) => validate_make_chan_call(allocated_type, argument_types),
         Type::Map { .. } => validate_make_map_call(allocated_type, argument_types),
         _ => Err(format!(
-            "argument 1 in call to builtin `make` requires `slice` or `map`, found `{}`",
+            "argument 1 in call to builtin `make` requires `slice`, `chan`, or `map`, found `{}`",
             allocated_type.render()
         )),
     }
@@ -193,6 +202,19 @@ fn validate_delete_builtin(argument_types: &[Type]) -> Result<Type, String> {
     }
 
     Ok(Type::Void)
+}
+
+fn validate_close_builtin(argument_types: &[Type]) -> Result<Type, String> {
+    validate_exact_arity("close", 1, argument_types.len())?;
+    let channel_type = &argument_types[0];
+    if matches!(channel_type, Type::Chan(_)) {
+        Ok(Type::Void)
+    } else {
+        Err(format!(
+            "argument 1 in call to builtin `close` requires `chan`, found `{}`",
+            channel_type.render()
+        ))
+    }
 }
 
 fn validate_exact_arity(name: &str, expected: usize, actual: usize) -> Result<(), String> {
@@ -231,6 +253,17 @@ fn validate_make_slice_call(
     argument_types: &[Type],
 ) -> Result<Type, String> {
     validate_make_arity(argument_types.len())?;
+    validate_make_integer_arguments(argument_types)?;
+    Ok(allocated_type.clone())
+}
+
+fn validate_make_chan_call(allocated_type: &Type, argument_types: &[Type]) -> Result<Type, String> {
+    if argument_types.len() > 1 {
+        return Err(format!(
+            "builtin `make` expects 1 or 2 arguments including the type for channels, found {}",
+            argument_types.len() + 1
+        ));
+    }
     validate_make_integer_arguments(argument_types)?;
     Ok(allocated_type.clone())
 }
@@ -288,11 +321,29 @@ mod tests {
     }
 
     #[test]
+    fn len_accepts_channel_arguments() {
+        let result =
+            validate_builtin_call(BuiltinFunction::Len, &[Type::Chan(Box::new(Type::Int))])
+                .expect("len should accept channels");
+
+        assert_eq!(result, Type::Int);
+    }
+
+    #[test]
     fn cap_rejects_non_slice_arguments() {
         let error = validate_builtin_call(BuiltinFunction::Cap, &[Type::String])
             .expect_err("cap should reject strings in the current subset");
 
         assert!(error.contains("requires `slice`"));
+    }
+
+    #[test]
+    fn cap_accepts_channel_arguments() {
+        let result =
+            validate_builtin_call(BuiltinFunction::Cap, &[Type::Chan(Box::new(Type::Int))])
+                .expect("cap should accept channels");
+
+        assert_eq!(result, Type::Int);
     }
 
     #[test]
@@ -339,7 +390,7 @@ mod tests {
             .expect_err("make should reject non-slice type arguments");
 
         assert!(error.contains("argument 1"));
-        assert!(error.contains("requires `slice` or `map`"));
+        assert!(error.contains("requires `slice`, `chan`, or `map`"));
     }
 
     #[test]
@@ -372,6 +423,14 @@ mod tests {
     }
 
     #[test]
+    fn make_accepts_channel_type_argument() {
+        let result = validate_make_call(&Type::Chan(Box::new(Type::Int)), &[Type::Int])
+            .expect("make should accept channel types");
+
+        assert_eq!(result, Type::Chan(Box::new(Type::Int)));
+    }
+
+    #[test]
     fn delete_accepts_map_and_matching_key() {
         let result = validate_builtin_call(
             BuiltinFunction::Delete,
@@ -394,5 +453,23 @@ mod tests {
             .expect_err("delete should reject non-map targets");
 
         assert!(error.contains("argument 1 in call to builtin `delete` requires `map`"));
+    }
+
+    #[test]
+    fn close_accepts_channel_argument() {
+        let result =
+            validate_builtin_call(BuiltinFunction::Close, &[Type::Chan(Box::new(Type::Int))])
+                .expect("close should accept channels");
+
+        assert_eq!(result, Type::Void);
+    }
+
+    #[test]
+    fn close_rejects_non_channel_argument() {
+        let error =
+            validate_builtin_call(BuiltinFunction::Close, &[Type::Slice(Box::new(Type::Int))])
+                .expect_err("close should reject non-channels");
+
+        assert!(error.contains("requires `chan`"));
     }
 }

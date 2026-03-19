@@ -146,6 +146,12 @@ fn run_executes_compound_assignments() {
 }
 
 #[test]
+fn run_executes_channels() {
+    let output = run_cli(&["run", "examples/channels.go"]).expect("program should run");
+    assert_eq!(output, "true\n0 2 true true\n2 4 7 0\n");
+}
+
+#[test]
 fn dump_bytecode_shows_stack_machine_instructions() {
     let output = run_cli(&["dump-bytecode", "examples/arithmetic.go"])
         .expect("bytecode should be generated");
@@ -302,6 +308,16 @@ fn dump_tokens_show_compound_assignment_tokens() {
 }
 
 #[test]
+fn dump_tokens_show_channel_tokens() {
+    let output =
+        run_cli(&["dump-tokens", "examples/channels.go"]).expect("tokens should be rendered");
+
+    assert!(output.contains("chan"));
+    assert!(output.contains("<-"));
+    assert!(output.contains("identifier(close)"));
+}
+
+#[test]
 fn dump_bytecode_shows_short_declarations_and_inc_dec_lowering() {
     let output = run_cli(&["dump-bytecode", "examples/simple_statements.go"])
         .expect("bytecode should be generated");
@@ -319,6 +335,18 @@ fn dump_bytecode_shows_compound_assignment_lowering() {
     assert!(output.contains("compound$target"));
     assert!(output.contains("concat"));
     assert!(output.contains("divide"));
+}
+
+#[test]
+fn dump_bytecode_shows_channel_lowering() {
+    let output =
+        run_cli(&["dump-bytecode", "examples/channels.go"]).expect("bytecode should be generated");
+
+    assert!(output.contains("push-nil-chan"));
+    assert!(output.contains("make-chan int buffer=explicit"));
+    assert!(output.contains("send"));
+    assert!(output.contains("receive int"));
+    assert!(output.contains("call-builtin close 1"));
 }
 
 #[test]
@@ -375,6 +403,16 @@ fn dump_ast_renders_compound_assignments() {
     assert!(output.contains("for i := 0; (i < len(values)); i += 1 {"));
     assert!(output.contains("words[\"lang\"] += \"pher\""));
     assert!(output.contains("if probe += len(values); (probe > 2) {"));
+}
+
+#[test]
+fn dump_ast_renders_channels() {
+    let output = run_cli(&["dump-ast", "examples/channels.go"]).expect("ast should be rendered");
+
+    assert!(output.contains("var ready chan int"));
+    assert!(output.contains("ready <- 4"));
+    assert!(output.contains("var first = <-ready"));
+    assert!(output.contains("close(ready)"));
 }
 
 #[test]

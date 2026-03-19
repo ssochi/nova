@@ -100,6 +100,9 @@ impl<'a> FunctionCompiler<'a> {
             CheckedStatement::Assign { target, value } => {
                 self.compile_assignment(target, value, "assignment")?
             }
+            CheckedStatement::Send { channel, value } => {
+                self.compile_send_statement(channel, value)?
+            }
             CheckedStatement::CompoundAssign {
                 target,
                 operator,
@@ -360,6 +363,7 @@ impl<'a> FunctionCompiler<'a> {
                     ));
                 }
                 Type::Slice(_) => self.instructions.push(Instruction::PushNilSlice),
+                Type::Chan(_) => self.instructions.push(Instruction::PushNilChan),
                 Type::Map { .. } => self.instructions.push(Instruction::PushNilMap),
                 Type::Void => {
                     return Err(CompileError::new(
@@ -403,6 +407,19 @@ impl<'a> FunctionCompiler<'a> {
                     has_capacity: capacity.is_some(),
                 });
             }
+            CheckedExpressionKind::MakeChan {
+                element_type,
+                buffer,
+            } => {
+                if let Some(buffer) = buffer {
+                    self.compile_expression(buffer)?;
+                    self.expect_value(&buffer.ty, "make expression")?;
+                }
+                self.instructions.push(Instruction::MakeChan {
+                    element_type: lower_value_type(element_type)?,
+                    has_buffer: buffer.is_some(),
+                });
+            }
             CheckedExpressionKind::MakeMap { map_type, hint } => {
                 if let Some(hint) = hint {
                     self.compile_expression(hint)?;
@@ -417,6 +434,12 @@ impl<'a> FunctionCompiler<'a> {
                 self.compile_expression(value)?;
                 self.expect_value(&value.ty, "conversion expression")?;
                 self.instructions.push(Instruction::Convert(*conversion));
+            }
+            CheckedExpressionKind::Receive { channel } => {
+                self.compile_expression(channel)?;
+                self.expect_value(&channel.ty, "receive expression")?;
+                self.instructions
+                    .push(Instruction::Receive(lower_value_type(&expression.ty)?));
             }
             CheckedExpressionKind::Local { slot, .. } => {
                 self.instructions.push(Instruction::LoadLocal(*slot));
@@ -790,6 +813,7 @@ fn lower_value_type(ty: &Type) -> Result<ValueType, CompileError> {
             "runtime value types do not support untyped `nil`",
         )),
         Type::Slice(element) => Ok(ValueType::Slice(Box::new(lower_value_type(element)?))),
+        Type::Chan(element) => Ok(ValueType::Chan(Box::new(lower_value_type(element)?))),
         Type::Map { key, value } => Ok(ValueType::Map {
             key: Box::new(lower_value_type(key)?),
             value: Box::new(lower_value_type(value)?),

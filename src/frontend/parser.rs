@@ -185,11 +185,11 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_multiplicative_expression(&mut self) -> Result<Expression, ParseError> {
-        let mut expression = self.parse_postfix_expression()?;
+        let mut expression = self.parse_unary_expression()?;
 
         while let Some(operator) = self.match_binary_operator(&[TokenKind::Star, TokenKind::Slash])
         {
-            let right = self.parse_postfix_expression()?;
+            let right = self.parse_unary_expression()?;
             expression = Expression::Binary {
                 left: Box::new(expression),
                 operator,
@@ -198,6 +198,16 @@ impl<'a> Parser<'a> {
         }
 
         Ok(expression)
+    }
+
+    fn parse_unary_expression(&mut self) -> Result<Expression, ParseError> {
+        if self.match_kind(&TokenKind::LeftArrow) {
+            return Ok(Expression::Receive {
+                channel: Box::new(self.parse_unary_expression()?),
+            });
+        }
+
+        self.parse_postfix_expression()
     }
 
     fn parse_postfix_expression(&mut self) -> Result<Expression, ParseError> {
@@ -297,7 +307,7 @@ impl<'a> Parser<'a> {
             TokenKind::LeftBracket if self.peek_kind() == Some(&TokenKind::RightBracket) => {
                 self.parse_type_prefixed_expression()
             }
-            TokenKind::Map => self.parse_type_prefixed_expression(),
+            TokenKind::Map | TokenKind::Chan => self.parse_type_prefixed_expression(),
             TokenKind::LeftParen => {
                 self.advance();
                 let expression = self.parse_expression()?;
@@ -325,6 +335,10 @@ impl<'a> Parser<'a> {
     ) -> Result<Expression, ParseError> {
         match type_ref {
             TypeRef::Slice(element_type) => self.parse_slice_literal_with_type(*element_type),
+            TypeRef::Chan(element_type) => Err(ParseError::new(format!(
+                "composite literal requires `slice` or `map` type, found `chan {}`",
+                element_type.render()
+            ))),
             TypeRef::Map { key, value } => self.parse_map_literal_with_type(*key, *value),
             TypeRef::Named(name) => Err(ParseError::new(format!(
                 "composite literal requires `slice` or `map` type, found `{name}`"
@@ -469,6 +483,10 @@ impl<'a> Parser<'a> {
             return Ok(TypeRef::Slice(Box::new(self.parse_type_ref()?)));
         }
 
+        if self.match_kind(&TokenKind::Chan) {
+            return Ok(TypeRef::Chan(Box::new(self.parse_type_ref()?)));
+        }
+
         if self.match_kind(&TokenKind::Map) {
             self.expect(TokenKind::LeftBracket)?;
             let key = self.parse_type_ref()?;
@@ -485,6 +503,7 @@ impl<'a> Parser<'a> {
 
     fn check_type_start(&self) -> bool {
         self.check(&TokenKind::LeftBracket)
+            || self.check(&TokenKind::Chan)
             || self.check(&TokenKind::Map)
             || matches!(self.current_token().kind, TokenKind::Identifier(_))
     }

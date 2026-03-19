@@ -11,7 +11,10 @@ use crate::builtin::BuiltinFunction;
 use crate::bytecode::instruction::{Instruction, Program, SequenceKind, ValueType};
 use crate::conversion::ConversionKind;
 use crate::package::PackageFunction;
-use crate::runtime::value::{MapKey, MapValue, SliceValue, StringValue, Value};
+use crate::runtime::value::{
+    ChannelCloseError, ChannelReceiveError, ChannelReceiveResult, ChannelSendError, ChannelValue,
+    MapKey, MapValue, SliceValue, StringValue, Value,
+};
 
 mod support;
 
@@ -99,6 +102,7 @@ impl VirtualMachine {
                     self.stack.push(Value::String(StringValue::from(value)))
                 }
                 Instruction::PushNilSlice => self.stack.push(Value::Slice(SliceValue::nil())),
+                Instruction::PushNilChan => self.stack.push(Value::Chan(ChannelValue::nil())),
                 Instruction::PushNilMap => self.stack.push(Value::Map(MapValue::nil())),
                 Instruction::BuildSlice(count) => {
                     let mut elements = Vec::with_capacity(count);
@@ -116,6 +120,10 @@ impl VirtualMachine {
                     element_type,
                     has_capacity,
                 } => self.make_slice(&element_type, has_capacity)?,
+                Instruction::MakeChan {
+                    element_type,
+                    has_buffer,
+                } => self.make_chan(&element_type, has_buffer)?,
                 Instruction::MakeMap { map_type, has_hint } => {
                     self.make_map(&map_type, has_hint)?
                 }
@@ -181,11 +189,13 @@ impl VirtualMachine {
                     has_low,
                     has_high,
                 } => self.slice_value(target_kind, has_low, has_high)?,
+                Instruction::Receive(element_type) => self.receive(&element_type)?,
                 Instruction::IndexMap(map_type) => self.index_map(&map_type)?,
                 Instruction::LookupMap(map_type) => self.lookup_map(&map_type)?,
                 Instruction::MapKeys(key_type) => self.map_keys(&key_type)?,
                 Instruction::SetIndex => self.set_slice_index()?,
                 Instruction::SetMapIndex => self.set_map_index()?,
+                Instruction::Send => self.send()?,
                 Instruction::Jump(target) => {
                     self.frames[frame_index].pc = target;
                     advance_pc = false;
@@ -336,10 +346,11 @@ impl VirtualMachine {
                 let value = match argument {
                     Value::String(value) => value.len() as i64,
                     Value::Slice(slice) => slice.len() as i64,
+                    Value::Chan(channel) => channel.len() as i64,
                     Value::Map(map) => map.len() as i64,
                     _ => {
                         return Err(RuntimeError::new(
-                            "builtin `len` expected a string, slice, or map argument",
+                            "builtin `len` expected a string, slice, chan, or map argument",
                         ));
                     }
                 };
@@ -349,8 +360,11 @@ impl VirtualMachine {
                 let [argument] = expect_exact_builtin_arguments(arguments, 1, "cap")?;
                 let value = match argument {
                     Value::Slice(slice) => slice.capacity() as i64,
+                    Value::Chan(channel) => channel.capacity() as i64,
                     _ => {
-                        return Err(RuntimeError::new("builtin `cap` expected a slice argument"));
+                        return Err(RuntimeError::new(
+                            "builtin `cap` expected a slice or chan argument",
+                        ));
                     }
                 };
                 self.stack.push(Value::Integer(value));
@@ -412,13 +426,28 @@ impl VirtualMachine {
                     Value::Byte(value) => MapKey::Byte(value),
                     Value::Boolean(value) => MapKey::Boolean(value),
                     Value::String(value) => MapKey::String(value),
-                    Value::Slice(_) | Value::Map(_) => {
+                    Value::Slice(_) | Value::Chan(_) | Value::Map(_) => {
                         return Err(RuntimeError::new(
                             "builtin `delete` expected a comparable scalar key as argument 2",
                         ));
                     }
                 };
                 map.remove(&key);
+            }
+            BuiltinFunction::Close => {
+                let [target] = expect_exact_builtin_arguments(arguments, 1, "close")?;
+                let channel = match target {
+                    Value::Chan(channel) => channel,
+                    _ => {
+                        return Err(RuntimeError::new(
+                            "builtin `close` expected a chan as argument 1",
+                        ));
+                    }
+                };
+                channel.close().map_err(|error| match error {
+                    ChannelCloseError::Nil => RuntimeError::new("close of nil channel"),
+                    ChannelCloseError::Closed => RuntimeError::new("close of closed channel"),
+                })?;
             }
         }
 
@@ -617,6 +646,22 @@ impl VirtualMachine {
         Ok(())
     }
 
+    fn send(&mut self) -> Result<(), RuntimeError> {
+        let value = self.pop_value()?;
+        let target = self.pop_value()?;
+        let channel = match target {
+            Value::Chan(channel) => channel,
+            _ => return Err(RuntimeError::new("send target is not a channel")),
+        };
+        channel.send(value).map_err(|error| match error {
+            ChannelSendError::Nil => RuntimeError::new("send on nil channel would block"),
+            ChannelSendError::Closed => RuntimeError::new("send on closed channel"),
+            ChannelSendError::WouldBlock => {
+                RuntimeError::new("send would block in the current single-threaded VM")
+            }
+        })
+    }
+
     fn make_slice(
         &mut self,
         element_type: &ValueType,
@@ -652,6 +697,27 @@ impl VirtualMachine {
                 length,
                 capacity,
             )));
+        Ok(())
+    }
+
+    fn make_chan(
+        &mut self,
+        element_type: &ValueType,
+        has_buffer: bool,
+    ) -> Result<(), RuntimeError> {
+        let buffer = if has_buffer { self.pop_integer()? } else { 0 };
+        if buffer < 0 {
+            return Err(RuntimeError::new(format!(
+                "builtin `make` buffer size must be non-negative, found {buffer}"
+            )));
+        }
+        let buffer = usize::try_from(buffer).map_err(|_| {
+            RuntimeError::new("builtin `make` buffer size could not convert to runtime size")
+        })?;
+
+        let _ = zero_value_for_type(element_type);
+        self.stack
+            .push(Value::Chan(ChannelValue::with_capacity(buffer)));
         Ok(())
     }
 
@@ -728,6 +794,28 @@ impl VirtualMachine {
         Ok(())
     }
 
+    fn receive(&mut self, element_type: &ValueType) -> Result<(), RuntimeError> {
+        let target = self.pop_value()?;
+        let channel = match target {
+            Value::Chan(channel) => channel,
+            _ => return Err(RuntimeError::new("receive target is not a channel")),
+        };
+        let value = match channel.receive() {
+            Ok(ChannelReceiveResult::Value(value)) => value,
+            Ok(ChannelReceiveResult::ClosedEmpty) => zero_value_for_type(element_type),
+            Err(ChannelReceiveError::Nil) => {
+                return Err(RuntimeError::new("receive from nil channel would block"));
+            }
+            Err(ChannelReceiveError::WouldBlock) => {
+                return Err(RuntimeError::new(
+                    "receive would block in the current single-threaded VM",
+                ));
+            }
+        };
+        self.stack.push(value);
+        Ok(())
+    }
+
     fn index_map(&mut self, map_type: &ValueType) -> Result<(), RuntimeError> {
         let (value, _) = self.read_map(map_type)?;
         self.stack.push(value);
@@ -786,6 +874,7 @@ impl VirtualMachine {
             | Value::Boolean(_)
             | Value::String(_)
             | Value::Slice(_)
+            | Value::Chan(_)
             | Value::Map(_) => Err(RuntimeError::new("expected integer value on the stack")),
         }
     }
@@ -797,6 +886,7 @@ impl VirtualMachine {
             | Value::Byte(_)
             | Value::String(_)
             | Value::Slice(_)
+            | Value::Chan(_)
             | Value::Map(_) => Err(RuntimeError::new("expected boolean value on the stack")),
         }
     }
@@ -808,6 +898,7 @@ impl VirtualMachine {
             | Value::Byte(_)
             | Value::Boolean(_)
             | Value::Slice(_)
+            | Value::Chan(_)
             | Value::Map(_) => Err(RuntimeError::new("expected string value on the stack")),
         }
     }
@@ -818,7 +909,7 @@ impl VirtualMachine {
             Value::Byte(value) => Ok(MapKey::Byte(value)),
             Value::Boolean(value) => Ok(MapKey::Boolean(value)),
             Value::String(value) => Ok(MapKey::String(value)),
-            Value::Slice(_) | Value::Map(_) => Err(RuntimeError::new(
+            Value::Slice(_) | Value::Chan(_) | Value::Map(_) => Err(RuntimeError::new(
                 "map index key is not a comparable scalar value",
             )),
         }

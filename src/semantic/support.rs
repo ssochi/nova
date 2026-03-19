@@ -15,6 +15,7 @@ pub fn resolve_type_ref(type_ref: &TypeRef) -> Option<Type> {
             _ => None,
         },
         TypeRef::Slice(element) => Some(Type::Slice(Box::new(resolve_type_ref(element)?))),
+        TypeRef::Chan(element) => Some(Type::Chan(Box::new(resolve_type_ref(element)?))),
         TypeRef::Map { key, value } => Some(Type::Map {
             key: Box::new(resolve_type_ref(key)?),
             value: Box::new(resolve_type_ref(value)?),
@@ -100,6 +101,7 @@ pub fn coerce_nil_equality_operands(
 pub fn validate_runtime_type(ty: &Type, context: &str) -> Result<(), SemanticError> {
     match ty {
         Type::Slice(element) => validate_runtime_type(element, context),
+        Type::Chan(element) => validate_runtime_type(element, context),
         Type::Map { key, value } => {
             validate_runtime_type(key, context)?;
             validate_runtime_type(value, context)?;

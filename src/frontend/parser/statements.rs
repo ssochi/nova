@@ -560,6 +560,13 @@ impl<'a> Parser<'a> {
             let value = self.parse_expression()?;
             return Ok(Statement::Assign { target, value });
         }
+        if self.match_kind(&TokenKind::LeftArrow) {
+            let value = self.parse_expression()?;
+            return Ok(Statement::Send {
+                channel: expression,
+                value,
+            });
+        }
         if let Some(operator) = self.match_compound_assign_operator() {
             let target = assignment_target_from_expression(expression)?;
             let value = self.parse_expression()?;

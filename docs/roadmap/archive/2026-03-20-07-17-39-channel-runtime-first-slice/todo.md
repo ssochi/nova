@@ -1,0 +1,5 @@
+- [done] Write the compatibility note for the staged channel slice and open the active plan in roadmap indexes.
+- [done] Implement frontend, semantic, bytecode, and runtime support for `chan`, send, receive, `make`, `len` / `cap`, and `close`.
+- [done] Add examples plus parser, semantic, runtime, and CLI coverage for staged channels.
+- [done] Run serial validation commands and record verification plus experience evidence.
+- [done] Synchronize milestone, roadmap, design, tech, report, and BOOT documentation; then archive the completed plan.

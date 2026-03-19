@@ -76,6 +76,19 @@ impl<'a> FunctionCompiler<'a> {
         Ok(())
     }
 
+    pub(super) fn compile_send_statement(
+        &mut self,
+        channel: &CheckedExpression,
+        value: &CheckedExpression,
+    ) -> Result<(), CompileError> {
+        self.compile_expression(channel)?;
+        self.expect_value(&channel.ty, "send statement")?;
+        self.compile_expression(value)?;
+        self.expect_value(&value.ty, "send statement")?;
+        self.instructions.push(Instruction::Send);
+        Ok(())
+    }
+
     pub(super) fn compile_for_post_statement(
         &mut self,
         post: &CheckedForPostStatement,

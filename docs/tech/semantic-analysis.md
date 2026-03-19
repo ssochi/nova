@@ -25,6 +25,7 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 - Model explicit conversion syntax separately from ordinary calls because `T(x)` uses a type in callee position rather than a runtime function value.
 - Model explicit `nil` as a dedicated untyped checked expression and coerce it centrally when typed slice/map context is available.
 - Model `byte` explicitly so string indexing and `[]byte` paths do not collapse into ad hoc `int` behavior.
+- Model `chan` explicitly so send statements, receive expressions, and nil/equality behavior remain visible in the checked layer instead of being hidden inside builtin dispatch.
 - Validate the builtin `copy` special case for `[]byte` <- `string` centrally instead of hiding it in the runtime.
 - Validate staged map key comparability centrally so unsupported key types fail during semantic analysis before reaching the VM.
 - Validate staged comma-ok map lookup statements centrally, including map-only right-hand sides, typed `=` assignments, same-block `:=` freshness rules, and blank-identifier handling.
@@ -36,7 +37,9 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 - Validate explicit `++` / `--` centrally so they remain statement-only and only apply to assignable `int` / `byte` targets.
 - Validate unlabeled `break` / `continue` centrally against the nearest enclosing modeled control-flow target instead of leaving invalid jumps to bytecode lowering.
 - Validate builtin `delete(map, key)` centrally so map mutation rules stay aligned with map indexing and assignment typing.
-- Validate `slice/map == nil` and `slice/map != nil` centrally while continuing to reject broader composite equality.
+- Validate builtin `close(chan)` centrally so channel-closing rules stay aligned with channel typing instead of leaking into runtime-only checks.
+- Validate `slice/map/chan == nil` and `slice/map/chan != nil` centrally while continuing to reject broader composite equality beyond the currently modeled channel identity case.
+- Validate staged send statements and receive expressions centrally so channel typing, nil coercion, and the current runtime limits are explicit before lowering.
 - Validate staged `range` loops over `slice` and `map`, including no-binding, `:=`, and `=` forms, nil zero-iteration behavior, and typed iteration-variable assignments.
 - Validate loop conditions, classic-clause scoping, and loop bodies as scoped blocks.
 - Ensure non-void functions do not fall through on any reachable path in the supported subset.
@@ -65,17 +68,19 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 
 ## Current Limits
 
-- Supported concrete runtime types are limited to `int`, `byte`, `bool`, `string`, `[]T`, `map[K]V`, and `void`; semantic analysis also carries a dedicated untyped `nil` marker until typed slice/map context resolves it.
+- Supported concrete runtime types are limited to `int`, `byte`, `bool`, `string`, `[]T`, `chan T`, `map[K]V`, and `void`; semantic analysis also carries a dedicated untyped `nil` marker until typed slice/map/channel context resolves it.
 - Package loading is still single-file and does not model imports.
 - Loop support is staged but broader: infinite `for`, condition-only `for`, classic `for init; condition; post`, single-expression short declarations in `for` init, staged compound assignments, explicit `++` / `--`, unlabeled `break`, unlabeled `continue`, and `range` over `slice` / `map` are supported.
 - Termination analysis remains conservative: infinite or literal-`true` loops only count as non-fallthrough when no modeled `break` can escape the loop, and terminating `switch` clauses fail that classification when a clause can `break`.
 - Builtin coverage is still intentionally small, and conversions are now deliberately modeled outside the builtin table.
 - Slice support is still staged: simple slice expressions on `[]T` and `string` are supported, while full slice expressions remain deferred.
 - Map support is still staged: explicit `nil`, map literals, duplicate constant literal-key diagnostics, single-result indexing, statement-scoped comma-ok lookups, `len`, nil-map zero values, `make`, `delete`, index assignment, `nil` equality, and staged `range` loops are supported, while general tuple expressions, broader constant folding, and richer lookup contexts remain deferred.
-- Explicit `nil` still needs typed slice/map context; `var value = nil`, `nil == nil`, and broader nilable-type work remain deferred.
+- Channel support is now staged: bidirectional `chan T`, `make`, `len`, `cap`, builtin `close`, send statements, receive expressions, `nil` equality, and same-type channel equality are supported, while directions, channel `range`, comma-ok receive, and scheduler-aware blocking semantics remain deferred.
+- Explicit `nil` still needs typed slice/map/channel context; `var value = nil`, `nil == nil`, and broader nilable-type work remain deferred.
 - General conversion syntax beyond the narrow `[]byte(string)` / `string([]byte)` pair is still deferred.
 - Range support is still staged: only `slice` and `map` are iterable, assignment-form left sides are identifier-only, and string/channel/integer/function ranges remain deferred.
 - Statement-header support is still staged: `if` and expression `switch` support header simple statements, and that support is limited to expression statements, assignments, staged compound assignments, `var` declarations, single-expression short declarations, explicit `++` / `--`, and staged comma-ok `map` lookups.
+- Send statements remain ordinary statements only in the current slice; they are not yet part of the staged header or `for` post-statement subset.
 - Short declarations are still staged: the general form is intentionally limited to one named binding plus one expression, while the existing explicit comma-ok map lookup path continues to cover the current two-binding lookup case.
 - Compound assignments are still staged: `+=`, `-=`, `*=`, and `/=` are supported in explicit statement positions, while modulo, bitwise, and shift assignment operators remain deferred with their wider expression support.
 - Switch support is still staged: only expression and tagless `switch` are supported, with no type switches, `fallthrough`, labels, or broader constant-expression duplicate detection.

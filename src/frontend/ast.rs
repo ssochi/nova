@@ -81,6 +81,7 @@ impl Parameter {
 pub enum TypeRef {
     Named(String),
     Slice(Box<TypeRef>),
+    Chan(Box<TypeRef>),
     Map {
         key: Box<TypeRef>,
         value: Box<TypeRef>,
@@ -92,6 +93,7 @@ impl TypeRef {
         match self {
             TypeRef::Named(name) => name.clone(),
             TypeRef::Slice(element) => format!("[]{}", element.render()),
+            TypeRef::Chan(element) => format!("chan {}", element.render()),
             TypeRef::Map { key, value } => {
                 format!("map[{}]{}", key.render(), value.render())
             }
@@ -117,6 +119,10 @@ pub enum Statement {
     },
     Assign {
         target: AssignmentTarget,
+        value: Expression,
+    },
+    Send {
+        channel: Expression,
         value: Expression,
     },
     CompoundAssign {
@@ -287,6 +293,12 @@ impl Statement {
                     value.render()
                 )
             }
+            Statement::Send { channel, value } => format!(
+                "{}{} <- {}",
+                indent_str(indent),
+                channel.render(),
+                value.render()
+            ),
             Statement::CompoundAssign {
                 target,
                 operator,
@@ -527,6 +539,9 @@ pub enum Expression {
         target: Box<Expression>,
         member: String,
     },
+    Receive {
+        channel: Box<Expression>,
+    },
     Make {
         type_ref: TypeRef,
         arguments: Vec<Expression>,
@@ -606,6 +621,7 @@ impl Expression {
             Expression::Selector { target, member } => {
                 format!("{}.{}", target.render(), member)
             }
+            Expression::Receive { channel } => format!("<-{}", channel.render()),
             Expression::Make {
                 type_ref,
                 arguments,

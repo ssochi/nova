@@ -235,6 +235,40 @@ fn analyze_compound_assignments() {
 }
 
 #[test]
+fn analyze_channels_first_slice() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tvar ready chan int\n\tprintln(ready == nil)\n\tready = make(chan int, 2)\n\tvar alias chan int = ready\n\tready <- 4\n\tvar first = <-ready\n\tclose(ready)\n\tprintln(len(ready), cap(ready), alias == ready, first, <-ready)\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let program = analyze_package(&ast).expect("analysis should succeed");
+
+    assert_eq!(program.functions.len(), 1);
+}
+
+#[test]
+fn reject_channel_send_type_mismatch() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tvar ready = make(chan int, 1)\n\tready <- \"oops\"\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let error = analyze_package(&ast).expect_err("analysis should reject channel send mismatch");
+
+    assert!(
+        error
+            .to_string()
+            .contains("send statement requires `int`, found `string`")
+    );
+}
+
+#[test]
 fn reject_short_declaration_in_same_scope() {
     let source = SourceFile {
         path: "test.go".into(),

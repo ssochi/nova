@@ -205,6 +205,7 @@ impl<'a> FunctionAnalyzer<'a> {
                 value,
             } => self.analyze_var_decl_statement(name, type_ref.as_ref(), value.as_ref()),
             Statement::Assign { target, value } => self.analyze_assignment_statement(target, value),
+            Statement::Send { channel, value } => self.analyze_send_statement(channel, value),
             Statement::CompoundAssign {
                 target,
                 operator,
@@ -363,6 +364,26 @@ impl<'a> FunctionAnalyzer<'a> {
             ));
         }
         Ok(CheckedStatement::Expr(expression))
+    }
+
+    pub(super) fn analyze_send_statement(
+        &mut self,
+        channel: &crate::frontend::ast::Expression,
+        value: &crate::frontend::ast::Expression,
+    ) -> Result<CheckedStatement, SemanticError> {
+        let channel = self.analyze_expression(channel)?;
+        let element_type = channel.ty.channel_element_type().cloned().ok_or_else(|| {
+            SemanticError::new(format!(
+                "send statement requires `chan` target, found `{}`",
+                channel.ty.render()
+            ))
+        })?;
+        let value = coerce_expression_to_type(
+            &element_type,
+            self.analyze_expression(value)?,
+            "send statement",
+        )?;
+        Ok(CheckedStatement::Send { channel, value })
     }
 
     pub(super) fn analyze_compound_assign_statement(

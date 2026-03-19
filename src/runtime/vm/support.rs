@@ -2,7 +2,7 @@ use std::convert::TryFrom;
 
 use crate::bytecode::instruction::ValueType;
 use crate::package::PackageFunction;
-use crate::runtime::value::{MapValue, SliceValue, StringValue, Value};
+use crate::runtime::value::{ChannelValue, MapValue, SliceValue, StringValue, Value};
 use crate::runtime::vm::RuntimeError;
 
 pub(super) fn render_builtin_arguments(arguments: &[Value]) -> String {
@@ -139,6 +139,7 @@ pub(super) fn runtime_type_name(value: &Value) -> &'static str {
         Value::Boolean(_) => "bool",
         Value::String(_) => "string",
         Value::Slice(_) => "slice",
+        Value::Chan(_) => "chan",
         Value::Map(_) => "map",
     }
 }
@@ -150,6 +151,7 @@ pub(super) fn zero_value_for_type(value_type: &ValueType) -> Value {
         ValueType::Bool => Value::Boolean(false),
         ValueType::String => Value::String(StringValue::empty()),
         ValueType::Slice(_) => Value::Slice(SliceValue::nil()),
+        ValueType::Chan(_) => Value::Chan(ChannelValue::nil()),
         ValueType::Map { .. } => Value::Map(MapValue::nil()),
     }
 }

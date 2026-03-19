@@ -119,6 +119,21 @@ impl<'a> FunctionAnalyzer<'a> {
                     },
                 })
             }
+            Expression::Receive { channel } => {
+                let channel = self.analyze_expression(channel)?;
+                let element_type = channel.ty.channel_element_type().cloned().ok_or_else(|| {
+                    SemanticError::new(format!(
+                        "receive expression requires `chan` target, found `{}`",
+                        channel.ty.render()
+                    ))
+                })?;
+                Ok(CheckedExpression {
+                    ty: element_type,
+                    kind: CheckedExpressionKind::Receive {
+                        channel: Box::new(channel),
+                    },
+                })
+            }
             Expression::Selector { .. } => Err(SemanticError::new(
                 "selector expressions are only supported as imported package call targets",
             )),
@@ -269,6 +284,13 @@ impl<'a> FunctionAnalyzer<'a> {
                     },
                 })
             }
+            Type::Chan(element_type) => Ok(CheckedExpression {
+                ty: result_type.clone(),
+                kind: CheckedExpressionKind::MakeChan {
+                    element_type: element_type.as_ref().clone(),
+                    buffer: checked_arguments.into_iter().next().map(Box::new),
+                },
+            }),
             Type::Map { .. } => Ok(CheckedExpression {
                 ty: result_type.clone(),
                 kind: CheckedExpressionKind::MakeMap {

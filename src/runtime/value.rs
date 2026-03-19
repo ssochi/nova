@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
+use std::collections::VecDeque;
 use std::fmt;
 use std::rc::Rc;
 
@@ -10,6 +11,7 @@ pub enum Value {
     Boolean(bool),
     String(StringValue),
     Slice(SliceValue),
+    Chan(ChannelValue),
     Map(MapValue),
 }
 
@@ -36,6 +38,7 @@ impl fmt::Display for Value {
                     .collect::<Vec<_>>()
                     .join(" ")
             ),
+            Value::Chan(channel) => write!(f, "{channel}"),
             Value::Map(map) => write!(f, "{map}"),
         }
     }
@@ -49,6 +52,7 @@ impl PartialEq for Value {
             (Value::Boolean(left), Value::Boolean(right)) => left == right,
             (Value::String(left), Value::String(right)) => left == right,
             (Value::Slice(left), Value::Slice(right)) => left == right,
+            (Value::Chan(left), Value::Chan(right)) => left == right,
             (Value::Map(left), Value::Map(right)) => left == right,
             _ => false,
         }
@@ -328,6 +332,140 @@ impl PartialEq for SliceValue {
 
 impl Eq for SliceValue {}
 
+#[derive(Clone, Debug)]
+pub struct ChannelValue {
+    state: Rc<RefCell<ChannelState>>,
+    is_nil: bool,
+}
+
+#[derive(Clone, Debug)]
+struct ChannelState {
+    buffer: VecDeque<Value>,
+    capacity: usize,
+    closed: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChannelSendError {
+    Nil,
+    Closed,
+    WouldBlock,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChannelReceiveError {
+    Nil,
+    WouldBlock,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ChannelReceiveResult {
+    Value(Value),
+    ClosedEmpty,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChannelCloseError {
+    Nil,
+    Closed,
+}
+
+impl ChannelValue {
+    pub fn nil() -> Self {
+        Self {
+            state: Rc::new(RefCell::new(ChannelState {
+                buffer: VecDeque::new(),
+                capacity: 0,
+                closed: false,
+            })),
+            is_nil: true,
+        }
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            state: Rc::new(RefCell::new(ChannelState {
+                buffer: VecDeque::new(),
+                capacity,
+                closed: false,
+            })),
+            is_nil: false,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.state.borrow().buffer.len()
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.state.borrow().capacity
+    }
+
+    pub fn send(&self, value: Value) -> Result<(), ChannelSendError> {
+        if self.is_nil {
+            return Err(ChannelSendError::Nil);
+        }
+        let mut state = self.state.borrow_mut();
+        if state.closed {
+            return Err(ChannelSendError::Closed);
+        }
+        if state.buffer.len() == state.capacity {
+            return Err(ChannelSendError::WouldBlock);
+        }
+        state.buffer.push_back(value);
+        Ok(())
+    }
+
+    pub fn receive(&self) -> Result<ChannelReceiveResult, ChannelReceiveError> {
+        if self.is_nil {
+            return Err(ChannelReceiveError::Nil);
+        }
+        let mut state = self.state.borrow_mut();
+        if let Some(value) = state.buffer.pop_front() {
+            return Ok(ChannelReceiveResult::Value(value));
+        }
+        if state.closed {
+            Ok(ChannelReceiveResult::ClosedEmpty)
+        } else {
+            Err(ChannelReceiveError::WouldBlock)
+        }
+    }
+
+    pub fn close(&self) -> Result<(), ChannelCloseError> {
+        if self.is_nil {
+            return Err(ChannelCloseError::Nil);
+        }
+        let mut state = self.state.borrow_mut();
+        if state.closed {
+            return Err(ChannelCloseError::Closed);
+        }
+        state.closed = true;
+        Ok(())
+    }
+}
+
+impl fmt::Display for ChannelValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let state = self.state.borrow();
+        write!(
+            f,
+            "chan(len={} cap={} closed={})",
+            state.buffer.len(),
+            state.capacity,
+            state.closed
+        )
+    }
+}
+
+impl PartialEq for ChannelValue {
+    fn eq(&self, other: &Self) -> bool {
+        (self.is_nil && other.is_nil)
+            || (!self.is_nil && !other.is_nil && Rc::ptr_eq(&self.state, &other.state))
+    }
+}
+
+impl Eq for ChannelValue {}
+
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MapKey {
     Integer(i64),
@@ -442,7 +580,10 @@ impl Eq for MapValue {}
 
 #[cfg(test)]
 mod tests {
-    use super::{MapKey, MapValue, SliceValue, StringValue, Value};
+    use super::{
+        ChannelCloseError, ChannelReceiveError, ChannelReceiveResult, ChannelSendError,
+        ChannelValue, MapKey, MapValue, SliceValue, StringValue, Value,
+    };
 
     #[test]
     fn byte_oriented_strings_support_byte_access_and_slicing() {
@@ -623,6 +764,45 @@ mod tests {
                 ),
                 (MapKey::String(StringValue::from("nova")), Value::Integer(3)),
             ]
+        );
+    }
+
+    #[test]
+    fn channels_track_capacity_close_and_identity() {
+        let nil_channel = ChannelValue::nil();
+        assert_eq!(nil_channel.len(), 0);
+        assert_eq!(nil_channel.capacity(), 0);
+        assert_eq!(
+            nil_channel.send(Value::Integer(1)),
+            Err(ChannelSendError::Nil)
+        );
+        assert_eq!(nil_channel.receive(), Err(ChannelReceiveError::Nil));
+        assert_eq!(nil_channel.close(), Err(ChannelCloseError::Nil));
+
+        let channel = ChannelValue::with_capacity(2);
+        let alias = channel.clone();
+        assert_eq!(channel, alias);
+        assert!(channel.send(Value::Integer(3)).is_ok());
+        assert!(channel.send(Value::Integer(5)).is_ok());
+        assert_eq!(
+            channel.send(Value::Integer(7)),
+            Err(ChannelSendError::WouldBlock)
+        );
+        assert_eq!(channel.len(), 2);
+        assert_eq!(
+            alias.receive(),
+            Ok(ChannelReceiveResult::Value(Value::Integer(3)))
+        );
+        assert!(alias.close().is_ok());
+        assert_eq!(channel.close(), Err(ChannelCloseError::Closed));
+        assert_eq!(
+            channel.receive(),
+            Ok(ChannelReceiveResult::Value(Value::Integer(5)))
+        );
+        assert_eq!(channel.receive(), Ok(ChannelReceiveResult::ClosedEmpty));
+        assert_eq!(
+            channel.send(Value::Integer(9)),
+            Err(ChannelSendError::Closed)
         );
     }
 

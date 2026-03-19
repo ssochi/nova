@@ -46,7 +46,7 @@ Operational clarifications:
 11. If a source file is already near the 1000-line limit, split tests or helpers into submodules in the same iteration instead of letting feature work push the file further over the limit.
 12. When introducing a new composite runtime category such as `map` or `chan`, model nil-vs-allocated state explicitly and keep `dump-bytecode` readable with dedicated instructions instead of generic runtime fallbacks.
 13. When introducing typed composite literals such as `map[K]V{...}`, keep them explicit in the AST, checked model, and bytecode instead of silently lowering them into synthetic `make` plus mutation during parsing or semantic analysis.
-14. When exposing source-level `nil`, keep untyped `nil` explicit in the checked layer and only resolve it where slice/map type context already exists; do not erase that distinction inside parsing or generic runtime values.
+14. When exposing source-level `nil`, keep untyped `nil` explicit in the checked layer and only resolve it where slice/map/chan type context already exists; do not erase that distinction inside parsing or generic runtime values.
 15. When extending `range`, keep the staged surface explicit in the AST and bytecode; the current baseline is `slice/map` with omitted bindings, `:=`, or `=` over identifiers / `_`, plus deterministic map traversal through explicit lowering.
 16. Do not add string `range` until rune semantics are modeled deliberately; byte-oriented string indexing is not enough to claim Go-compatible string iteration.
 17. When extending comma-ok `map` lookups, keep them explicit as statement-scoped AST / checked / bytecode forms; do not hide them inside generic tuple expressions before the broader multi-result model exists.
@@ -58,6 +58,9 @@ Operational clarifications:
 23. When extending short variable declarations, keep them explicit in the AST and checked model instead of collapsing them into plain assignment; do not imply a broader multi-binding model until tuple / multi-result support exists.
 24. When extending `++` / `--`, keep them statement-only across parsing, semantic analysis, and lowering; do not treat them as expressions just to reuse arithmetic code paths.
 25. When extending compound assignments, keep them explicit in the AST / checked / bytecode pipeline and preserve single-evaluation behavior for index targets instead of rewriting them into plain assignment too early.
+26. When extending `chan`, keep send statements and receive expressions explicit in the AST / checked / bytecode pipeline instead of disguising them as fake builtins, and model nil-vs-allocated state explicitly from the first slice.
+27. Until goroutines or a scheduler exist, model would-block channel operations as explicit runtime errors and document that limit instead of implying concurrency the VM does not execute.
+28. Do not add channel `range` or comma-ok receive until the broader blocking and multi-result design has been planned deliberately.
 
 If no task is explicitly specified, you must proactively choose the most worthwhile piece of work to advance, with the following priorities:
 1. **Obvious gaps in functionality, core experience, or core flow** (search the web more, do research, refer to relevant experience from similar high-quality projects, and established methodologies)

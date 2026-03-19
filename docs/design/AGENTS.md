@@ -46,3 +46,4 @@ This directory stores feature and subsystem designs. It describes intent, scope 
 - `map-runtime-groundwork.md`: design baseline for staged `map[K]V` support with explicit make/index/assignment execution paths
 - `explicit-nil-comparisons.md`: design baseline for explicit `nil` expressions and `slice/map` nil comparisons
 - `simple-statements.md`: design baseline for staged short declarations plus explicit `++` / `--` as simple statements
+- `channels-first-slice.md`: design baseline for staged buffered `chan` support, explicit send/receive syntax, and first-pass close behavior

@@ -726,3 +726,71 @@ fn parse_compound_assignments() {
         _ => panic!("expected for statement"),
     }
 }
+
+#[test]
+fn parse_channel_types_and_send_receive() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tvar ready chan int\n\tready = make(chan int, 2)\n\tready <- 4\n\tvar first = <-ready\n\tclose(ready)\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let function = &ast.functions[0];
+
+    match &function.body.statements[0] {
+        Statement::VarDecl {
+            type_ref, value, ..
+        } => {
+            assert_eq!(
+                type_ref,
+                &Some(TypeRef::Chan(Box::new(TypeRef::Named("int".into()))))
+            );
+            assert!(value.is_none());
+        }
+        _ => panic!("expected typed channel declaration"),
+    }
+
+    match &function.body.statements[1] {
+        Statement::Assign { value, .. } => match value {
+            Expression::Make {
+                type_ref,
+                arguments,
+            } => {
+                assert_eq!(
+                    type_ref,
+                    &TypeRef::Chan(Box::new(TypeRef::Named("int".into())))
+                );
+                assert_eq!(arguments, &vec![Expression::Integer(2)]);
+            }
+            _ => panic!("expected channel make expression"),
+        },
+        _ => panic!("expected channel assignment"),
+    }
+
+    assert!(matches!(
+        &function.body.statements[2],
+        Statement::Send {
+            channel: Expression::Identifier(name),
+            value: Expression::Integer(4),
+        } if name == "ready"
+    ));
+
+    match &function.body.statements[3] {
+        Statement::VarDecl { value, .. } => match value.as_ref() {
+            Some(Expression::Receive { channel }) => {
+                assert_eq!(channel.as_ref(), &Expression::Identifier("ready".into()));
+            }
+            _ => panic!("expected receive expression"),
+        },
+        _ => panic!("expected receive declaration"),
+    }
+
+    assert!(matches!(
+        &function.body.statements[4],
+        Statement::Expr(Expression::Call { callee, arguments })
+            if callee.as_ref() == &Expression::Identifier("close".into())
+                && arguments == &vec![Expression::Identifier("ready".into())]
+    ));
+}

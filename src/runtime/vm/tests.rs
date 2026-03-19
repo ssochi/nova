@@ -573,3 +573,96 @@ fn execute_lookup_map_reports_value_and_presence() {
 
     assert_eq!(output, "0 false\n3 true\n");
 }
+
+#[test]
+fn execute_channels_send_receive_and_close() {
+    let program = Program {
+        package_name: "main".to_string(),
+        entry_function: "main".to_string(),
+        entry_function_index: 0,
+        functions: vec![CompiledFunction {
+            name: "main".to_string(),
+            parameter_count: 0,
+            returns_value: false,
+            local_names: vec!["ready".to_string()],
+            instructions: vec![
+                Instruction::PushNilChan,
+                Instruction::StoreLocal(0),
+                Instruction::LoadLocal(0),
+                Instruction::CallBuiltin(BuiltinFunction::Len, 1),
+                Instruction::LoadLocal(0),
+                Instruction::CallBuiltin(BuiltinFunction::Cap, 1),
+                Instruction::CallBuiltin(BuiltinFunction::Println, 2),
+                Instruction::PushInt(2),
+                Instruction::MakeChan {
+                    element_type: ValueType::Int,
+                    has_buffer: true,
+                },
+                Instruction::StoreLocal(0),
+                Instruction::LoadLocal(0),
+                Instruction::PushInt(4),
+                Instruction::Send,
+                Instruction::LoadLocal(0),
+                Instruction::PushInt(7),
+                Instruction::Send,
+                Instruction::LoadLocal(0),
+                Instruction::Receive(ValueType::Int),
+                Instruction::LoadLocal(0),
+                Instruction::CallBuiltin(BuiltinFunction::Close, 1),
+                Instruction::LoadLocal(0),
+                Instruction::Receive(ValueType::Int),
+                Instruction::LoadLocal(0),
+                Instruction::Receive(ValueType::Int),
+                Instruction::CallBuiltin(BuiltinFunction::Println, 3),
+                Instruction::Return,
+            ],
+        }],
+    };
+
+    let output = VirtualMachine::new()
+        .execute(&program)
+        .expect("channel program should execute")
+        .render_output();
+
+    assert_eq!(output, "0 0\n4 7 0\n");
+}
+
+#[test]
+fn execute_channel_send_reports_blocking_error() {
+    let program = Program {
+        package_name: "main".to_string(),
+        entry_function: "main".to_string(),
+        entry_function_index: 0,
+        functions: vec![CompiledFunction {
+            name: "main".to_string(),
+            parameter_count: 0,
+            returns_value: false,
+            local_names: vec!["ready".to_string()],
+            instructions: vec![
+                Instruction::PushInt(1),
+                Instruction::MakeChan {
+                    element_type: ValueType::Int,
+                    has_buffer: true,
+                },
+                Instruction::StoreLocal(0),
+                Instruction::LoadLocal(0),
+                Instruction::PushInt(4),
+                Instruction::Send,
+                Instruction::LoadLocal(0),
+                Instruction::PushInt(7),
+                Instruction::Send,
+                Instruction::Return,
+            ],
+        }],
+    };
+
+    let error = VirtualMachine::new()
+        .execute(&program)
+        .expect_err("full buffered channel should report a blocking error");
+
+    assert!(
+        error
+            .to_string()
+            .contains("send would block in the current single-threaded VM")
+    );
+}

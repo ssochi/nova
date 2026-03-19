@@ -41,7 +41,7 @@ Describe the concrete execution pipeline shipped in the bootstrap milestone, inc
 - Execution additionally requires the configured package and entry function to exist, and the entry function must be `func main()`.
 - Local variables must be declared before assignment or use, with nested block scopes mapped to fixed slots during analysis.
 - Builtin calls, user-defined function calls, and metadata-backed `fmt` / `strings` package seams are supported.
-- Current builtin coverage includes `print`, `println`, `len`, `cap`, `append`, `copy`, `delete`, and typed `make` handling.
+- Current builtin coverage includes `print`, `println`, `len`, `cap`, `append`, `copy`, `delete`, `close`, and typed `make` handling.
 - Current imported package coverage is `fmt.Print`, `fmt.Println`, `fmt.Sprint`, `strings.Join`, `strings.Contains`, `strings.HasPrefix`, and `strings.Repeat`.
 - Branch and loop conditions must produce boolean values, staged control-flow headers run before condition or clause dispatch, and expression-switch tags are evaluated once before clause comparison.
 - The current branch model supports `if`, `else`, explicit `else if`, and staged expression `switch` lowering with header scopes chosen during semantic analysis.
@@ -50,11 +50,11 @@ Describe the concrete execution pipeline shipped in the bootstrap milestone, inc
 - Loop and `switch` control transfer now share an explicit lowering-time control-flow stack so unlabeled `break` / `continue` patch to readable jump targets.
 - Index-target inc/dec lowering now caches target / index evaluation into hidden locals so bytecode preserves single-evaluation behavior while keeping `dump-bytecode` readable.
 - Index-target compound assignments now reuse the same hidden-local strategy so `x[i] op= y` lowers with single-evaluation behavior instead of recomputing the target and index.
-- Strings, slices, and maps are now first-class runtime values with dedicated bytecode instructions and builtin interoperability.
+- Strings, slices, channels, and maps are now first-class runtime values with dedicated bytecode instructions and builtin interoperability.
 
 ## Near-Term Extension Path
 
-1. Add the next runtime category or service seam, most likely the first `chan` slice or broader package-backed runtime helpers.
-2. Decide whether the next control-flow slice should move into labels / `fallthrough`, or return fully to runtime expansion with channels now that compound assignments are in place.
+1. Decide whether the next `M3` slice should deepen channel semantics with scheduler-adjacent groundwork or return to broader package-backed standard-library helpers.
+2. Do not add channel `range` or comma-ok receive opportunistically; pair them with the multi-result and blocking-model design they actually need.
 3. Keep package-backed services growing without collapsing into ad hoc dispatch tables spread across the VM.
 4. Separate bytecode IR from runtime-specific instruction encoding if the VM grows significantly.

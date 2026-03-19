@@ -57,3 +57,4 @@ This directory stores validation evidence that "proves the change holds."
 - `2026-03-20-explicit-nil-comparisons.md`: validates explicit `nil` expressions, typed nil coercion, and `slice/map` nil comparisons across the full CLI and VM stack
 - `2026-03-20-simple-statements-incdec.md`: validates staged short declarations and explicit `++` / `--` across the full CLI and VM stack
 - `2026-03-20-compound-assignments.md`: validates staged compound assignments across parsing, semantic analysis, bytecode lowering, VM execution, and CLI inspection
+- `2026-03-20-channel-runtime-first-slice.md`: validates staged `chan` support, explicit send/receive lowering, builtin `close`, and buffered runtime behavior across the full CLI and VM stack

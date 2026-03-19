@@ -122,6 +122,9 @@ impl<'a> Lexer<'a> {
                     self.push_double(TokenKind::StarAssign, &mut tokens)
                 }
                 '*' => self.push_simple(TokenKind::Star, &mut tokens),
+                '<' if self.peek_next() == Some('-') => {
+                    self.push_double(TokenKind::LeftArrow, &mut tokens)
+                }
                 '<' if self.peek_next() == Some('=') => {
                     self.push_double(TokenKind::LessEqual, &mut tokens)
                 }
@@ -264,6 +267,7 @@ impl<'a> Lexer<'a> {
             "continue" => TokenKind::Continue,
             "return" => TokenKind::Return,
             "map" => TokenKind::Map,
+            "chan" => TokenKind::Chan,
             "nil" => TokenKind::Nil,
             "true" => TokenKind::Bool(true),
             "false" => TokenKind::Bool(false),

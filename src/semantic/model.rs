@@ -39,6 +39,10 @@ pub enum CheckedStatement {
         target: CheckedAssignmentTarget,
         value: CheckedExpression,
     },
+    Send {
+        channel: CheckedExpression,
+        value: CheckedExpression,
+    },
     CompoundAssign {
         target: CheckedAssignmentTarget,
         operator: CheckedCompoundAssignOperator,
@@ -244,6 +248,10 @@ pub enum CheckedExpressionKind {
         length: Box<CheckedExpression>,
         capacity: Option<Box<CheckedExpression>>,
     },
+    MakeChan {
+        element_type: Type,
+        buffer: Option<Box<CheckedExpression>>,
+    },
     MakeMap {
         map_type: Type,
         hint: Option<Box<CheckedExpression>>,
@@ -251,6 +259,9 @@ pub enum CheckedExpressionKind {
     Conversion {
         conversion: ConversionKind,
         value: Box<CheckedExpression>,
+    },
+    Receive {
+        channel: Box<CheckedExpression>,
     },
     Binary {
         left: Box<CheckedExpression>,
@@ -293,6 +304,7 @@ pub enum Type {
     String,
     UntypedNil,
     Slice(Box<Type>),
+    Chan(Box<Type>),
     Map { key: Box<Type>, value: Box<Type> },
     Void,
 }
@@ -306,6 +318,7 @@ impl Type {
             Type::String => "string".to_string(),
             Type::UntypedNil => "nil".to_string(),
             Type::Slice(element) => format!("[]{}", element.render()),
+            Type::Chan(element) => format!("chan {}", element.render()),
             Type::Map { key, value } => format!("map[{}]{}", key.render(), value.render()),
             Type::Void => "void".to_string(),
         }
@@ -329,12 +342,22 @@ impl Type {
         }
     }
 
+    pub fn channel_element_type(&self) -> Option<&Type> {
+        match self {
+            Type::Chan(element) => Some(element.as_ref()),
+            _ => None,
+        }
+    }
+
     pub fn supports_equality(&self) -> bool {
-        matches!(self, Type::Int | Type::Byte | Type::Bool | Type::String)
+        matches!(
+            self,
+            Type::Int | Type::Byte | Type::Bool | Type::String | Type::Chan(_)
+        )
     }
 
     pub fn supports_nil(&self) -> bool {
-        matches!(self, Type::Slice(_) | Type::Map { .. })
+        matches!(self, Type::Slice(_) | Type::Chan(_) | Type::Map { .. })
     }
 
     pub fn is_byte_slice(&self) -> bool {

@@ -9,6 +9,7 @@ pub enum ValueType {
     Bool,
     String,
     Slice(Box<ValueType>),
+    Chan(Box<ValueType>),
     Map {
         key: Box<ValueType>,
         value: Box<ValueType>,
@@ -23,6 +24,7 @@ impl ValueType {
             ValueType::Bool => "bool".to_string(),
             ValueType::String => "string".to_string(),
             ValueType::Slice(element) => format!("[]{}", element.render()),
+            ValueType::Chan(element) => format!("chan {}", element.render()),
             ValueType::Map { key, value } => format!("map[{}]{}", key.render(), value.render()),
         }
     }
@@ -109,6 +111,7 @@ pub enum Instruction {
     PushBool(bool),
     PushString(String),
     PushNilSlice,
+    PushNilChan,
     PushNilMap,
     BuildSlice(usize),
     BuildMap {
@@ -118,6 +121,10 @@ pub enum Instruction {
     MakeSlice {
         element_type: ValueType,
         has_capacity: bool,
+    },
+    MakeChan {
+        element_type: ValueType,
+        has_buffer: bool,
     },
     MakeMap {
         map_type: ValueType,
@@ -143,11 +150,13 @@ pub enum Instruction {
         has_low: bool,
         has_high: bool,
     },
+    Receive(ValueType),
     IndexMap(ValueType),
     LookupMap(ValueType),
     MapKeys(ValueType),
     SetIndex,
     SetMapIndex,
+    Send,
     Jump(usize),
     JumpIfFalse(usize),
     Pop,
@@ -167,6 +176,7 @@ impl Instruction {
                 format!("push-string {}", render_string_literal(value))
             }
             Instruction::PushNilSlice => "push-nil-slice".to_string(),
+            Instruction::PushNilChan => "push-nil-chan".to_string(),
             Instruction::PushNilMap => "push-nil-map".to_string(),
             Instruction::BuildSlice(count) => format!("build-slice {count}"),
             Instruction::BuildMap {
@@ -181,6 +191,16 @@ impl Instruction {
                     "make-slice {} cap={}",
                     element_type.render(),
                     if *has_capacity { "explicit" } else { "len" }
+                )
+            }
+            Instruction::MakeChan {
+                element_type,
+                has_buffer,
+            } => {
+                format!(
+                    "make-chan {} buffer={}",
+                    element_type.render(),
+                    if *has_buffer { "explicit" } else { "none" }
                 )
             }
             Instruction::MakeMap { map_type, has_hint } => {
@@ -217,11 +237,13 @@ impl Instruction {
                     has_high
                 )
             }
+            Instruction::Receive(element_type) => format!("receive {}", element_type.render()),
             Instruction::IndexMap(map_type) => format!("index-map {}", map_type.render()),
             Instruction::LookupMap(map_type) => format!("lookup-map {}", map_type.render()),
             Instruction::MapKeys(key_type) => format!("map-keys {}", key_type.render()),
             Instruction::SetIndex => "set-index".to_string(),
             Instruction::SetMapIndex => "set-map-index".to_string(),
+            Instruction::Send => "send".to_string(),
             Instruction::Jump(target) => format!("jump {target}"),
             Instruction::JumpIfFalse(target) => format!("jump-if-false {target}"),
             Instruction::Pop => "pop".to_string(),

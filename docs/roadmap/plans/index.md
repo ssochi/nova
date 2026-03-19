@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-07-17-39-channel-runtime-first-slice`
+- Opened `2026-03-20-07-17-39-channel-runtime-first-slice` for the first staged `chan` runtime slice under `M3`
 - Completed and archived `2026-03-20-06-56-53-compound-assignments`
 - Opened `2026-03-20-06-56-53-compound-assignments` for staged compound assignments under `M3`
 - Completed and archived `2026-03-20-06-34-01-simple-statements-incdec`

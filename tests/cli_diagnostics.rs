@@ -128,7 +128,7 @@ fn check_rejects_invalid_len_argument_type() {
 
     let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
     assert!(error.contains(
-        "argument 1 in call to builtin `len` requires `string`, `slice`, or `map`, found `int`"
+        "argument 1 in call to builtin `len` requires `string`, `slice`, `chan`, or `map`, found `int`"
     ));
 
     cleanup_temp_source(path);
@@ -317,7 +317,9 @@ fn check_rejects_invalid_cap_argument_type() {
     );
 
     let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
-    assert!(error.contains("argument 1 in call to builtin `cap` requires `slice`, found `string`"));
+    assert!(error.contains(
+        "argument 1 in call to builtin `cap` requires `slice` or `chan`, found `string`"
+    ));
 
     cleanup_temp_source(path);
 }
@@ -462,11 +464,9 @@ fn check_rejects_make_with_non_slice_type_argument() {
     );
 
     let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
-    assert!(
-        error.contains(
-            "argument 1 in call to builtin `make` requires `slice` or `map`, found `int`"
-        )
-    );
+    assert!(error.contains(
+        "argument 1 in call to builtin `make` requires `slice`, `chan`, or `map`, found `int`"
+    ));
 
     cleanup_temp_source(path);
 }
@@ -651,6 +651,32 @@ fn run_rejects_nil_map_assignment() {
 
     let error = run_cli(&["run", path.to_str().unwrap()]).expect_err("run should fail");
     assert!(error.contains("assignment to entry in nil map"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_channel_send_type_mismatch() {
+    let path = write_temp_source(
+        "check-bad-channel-send",
+        "package main\n\nfunc main() {\n\tvar ready = make(chan int, 1)\n\tready <- \"oops\"\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("send statement requires `int`, found `string`"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_close_on_non_channel() {
+    let path = write_temp_source(
+        "check-bad-close-target",
+        "package main\n\nfunc main() {\n\tclose([]int{1})\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("argument 1 in call to builtin `close` requires `chan`, found `[]int`"));
 
     cleanup_temp_source(path);
 }
