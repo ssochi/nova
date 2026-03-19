@@ -77,6 +77,10 @@ pub enum Statement {
         then_block: Block,
         else_block: Option<Block>,
     },
+    For {
+        condition: Expression,
+        body: Block,
+    },
     Return(Option<Expression>),
 }
 
@@ -113,6 +117,18 @@ impl Statement {
                     }
                     lines.push(format!("{}}}", indent_str(indent)));
                 }
+                lines.join("\n")
+            }
+            Statement::For { condition, body } => {
+                let mut lines = vec![format!(
+                    "{}for {} {{",
+                    indent_str(indent),
+                    condition.render()
+                )];
+                for statement in &body.statements {
+                    lines.push(statement.render(indent + 1));
+                }
+                lines.push(format!("{}}}", indent_str(indent)));
                 lines.join("\n")
             }
             Statement::Return(Some(expression)) => {

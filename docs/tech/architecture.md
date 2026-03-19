@@ -48,7 +48,7 @@ Define the current top-level architecture of `nova-go` so future rounds can exte
 
 ## Current Execution Surface
 
-- `check`: lex + parse validation
+- `check`: lex + parse + package-level semantic validation
 - `dump-tokens`: token inspection
 - `dump-ast`: AST inspection
 - `dump-bytecode`: bytecode inspection
@@ -56,7 +56,7 @@ Define the current top-level architecture of `nova-go` so future rounds can exte
 
 ## Near-Term Evolution
 
-- Add looping control flow and richer path analysis on top of the semantic layer.
+- Expand the runtime and semantic surface for richer values, builtins, and standard-library-oriented execution.
 - Expand the VM with more value categories and runtime data structures.
 - Keep backend work behind a later stable IR boundary instead of coupling it to the current VM instruction set.
 
@@ -64,6 +64,7 @@ Define the current top-level architecture of `nova-go` so future rounds can exte
 
 - `docs/design/bootstrap-vm-execution.md`
 - `docs/design/semantic-functions-branches.md`
+- `docs/design/for-loop-control-flow.md`
 - `docs/tech/semantic-analysis.md`
 - `docs/tech/vm-execution-pipeline.md`
 - `docs/roadmap/milestones/M2-frontend-expansion.md`

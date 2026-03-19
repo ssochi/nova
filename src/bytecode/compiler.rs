@@ -114,6 +114,15 @@ impl<'a> FunctionCompiler<'a> {
                     self.patch_jump(jump_to_else, Instruction::JumpIfFalse(end));
                 }
             }
+            CheckedStatement::For { condition, body } => {
+                let loop_start = self.instructions.len();
+                self.compile_expression(condition)?;
+                let jump_to_end = self.push_instruction(Instruction::JumpIfFalse(usize::MAX));
+                self.compile_block(body)?;
+                self.instructions.push(Instruction::Jump(loop_start));
+                let loop_end = self.instructions.len();
+                self.patch_jump(jump_to_end, Instruction::JumpIfFalse(loop_end));
+            }
             CheckedStatement::Return(value) => {
                 if let Some(expression) = value {
                     self.compile_expression(expression)?;

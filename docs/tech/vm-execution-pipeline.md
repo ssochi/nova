@@ -41,11 +41,12 @@ Describe the concrete execution pipeline shipped in the bootstrap milestone, inc
 - Local variables must be declared before assignment or use, with nested block scopes mapped to fixed slots during analysis.
 - Builtin calls and user-defined function calls are both supported.
 - `println` is still the only builtin wired into the VM.
-- Branch conditions must produce boolean values.
+- Branch and loop conditions must produce boolean values.
+- Condition-only `for` loops are lowered into the existing jump instruction set.
 
 ## Near-Term Extension Path
 
-1. Add looping control flow and path analysis for `for`.
-2. Add richer values and runtime data structures beyond integers and booleans.
-3. Expand builtin coverage and lay runtime groundwork for standard library support.
+1. Add richer values and runtime data structures beyond integers and booleans.
+2. Expand builtin coverage and lay runtime groundwork for standard library support.
+3. Add broader control-flow forms such as `break`, `continue`, and richer `for` syntax.
 4. Separate bytecode IR from runtime-specific instruction encoding if the VM grows significantly.

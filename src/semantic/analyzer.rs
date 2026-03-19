@@ -302,6 +302,12 @@ impl<'a> FunctionAnalyzer<'a> {
                     else_block,
                 })
             }
+            Statement::For { condition, body } => {
+                let condition = self.analyze_expression(condition)?;
+                expect_type(Type::Bool, condition.ty, "for condition")?;
+                let body = self.analyze_block(body, true)?;
+                Ok(CheckedStatement::For { condition, body })
+            }
             Statement::Return(value) => {
                 let expected = self.registry.signature(self.function_index).return_type;
                 match (expected, value) {
@@ -567,14 +573,14 @@ fn expect_same_type(left: Type, right: Type, context: &str) -> Result<(), Semant
 
 fn block_guarantees_return(block: &CheckedBlock) -> bool {
     for statement in &block.statements {
-        if statement_guarantees_return(statement) {
+        if statement_guarantees_termination(statement) {
             return true;
         }
     }
     false
 }
 
-fn statement_guarantees_return(statement: &CheckedStatement) -> bool {
+fn statement_guarantees_termination(statement: &CheckedStatement) -> bool {
     match statement {
         CheckedStatement::Return(_) => true,
         CheckedStatement::If {
@@ -582,6 +588,11 @@ fn statement_guarantees_return(statement: &CheckedStatement) -> bool {
             else_block: Some(else_block),
             ..
         } => block_guarantees_return(then_block) && block_guarantees_return(else_block),
+        CheckedStatement::For { condition, .. } => expression_is_compile_time_true(condition),
         _ => false,
     }
+}
+
+fn expression_is_compile_time_true(expression: &CheckedExpression) -> bool {
+    matches!(expression.kind, CheckedExpressionKind::Bool(true))
 }

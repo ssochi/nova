@@ -6,8 +6,11 @@
 4. 支持所有内置函数和标准库.
 5. 目标是可以编译一个复杂的golang开源项目,并正常运行.
 6. 要求代码优雅,分层设计,单个文件不要大于1000行.
-
+7. 每完成五个里程碑执行一次质量巡检,并创建代码和文档质量优化的里程碑
 ## Project Scope (what not to do)
 
+
+## 备注
+1. 每次完成迭代,需要提交全部代码.
 
 ## Documentation Architecture (keep updating, not limited to the existing architecture)

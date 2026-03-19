@@ -32,6 +32,12 @@ fn run_executes_multi_function_branches() {
 }
 
 #[test]
+fn run_executes_loops() {
+    let output = run_cli(&["run", "examples/loops.go"]).expect("program should run");
+    assert_eq!(output, "10 4\n");
+}
+
+#[test]
 fn dump_bytecode_shows_stack_machine_instructions() {
     let output = run_cli(&["dump-bytecode", "examples/arithmetic.go"])
         .expect("bytecode should be generated");
@@ -50,6 +56,25 @@ fn dump_bytecode_shows_function_calls_and_branch_jumps() {
     assert!(output.contains("jump-if-false"));
     assert!(output.contains("greater"));
     assert_eq!(output.matches("jump-if-false").count(), 2);
+}
+
+#[test]
+fn dump_ast_renders_loops() {
+    let output = run_cli(&["dump-ast", "examples/loops.go"]).expect("ast should be rendered");
+
+    assert!(output.contains("for (current > 0) {"));
+    assert!(output.contains("for true {"));
+}
+
+#[test]
+fn dump_bytecode_shows_loop_jumps() {
+    let output = run_cli(&["dump-bytecode", "examples/loops.go"])
+        .expect("bytecode should be generated");
+
+    assert!(output.contains("function 0: sumDown"));
+    assert!(output.contains("function 1: climbPast"));
+    assert!(output.matches("jump-if-false").count() >= 2);
+    assert!(output.contains("jump 2"));
 }
 
 #[test]
@@ -92,6 +117,19 @@ fn check_rejects_non_boolean_if_condition() {
 }
 
 #[test]
+fn check_rejects_non_boolean_for_condition() {
+    let path = write_temp_source(
+        "check-bad-for",
+        "package main\n\nfunc main() {\n\tfor 1 {\n\t\tprintln(1)\n\t}\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("for condition requires `bool`, found `int`"));
+
+    let _ = fs::remove_file(path);
+}
+
+#[test]
 fn run_rejects_missing_return_on_value_function() {
     let path = write_temp_source(
         "check-missing-return",
@@ -99,6 +137,19 @@ fn run_rejects_missing_return_on_value_function() {
     );
 
     let error = run_cli(&["run", path.to_str().unwrap()]).expect_err("run should fail");
+    assert!(error.contains("must return a `int` on every path"));
+
+    let _ = fs::remove_file(path);
+}
+
+#[test]
+fn check_rejects_value_function_with_only_conditional_loop_return() {
+    let path = write_temp_source(
+        "check-loop-missing-return",
+        "package main\n\nfunc helper(value int) int {\n\tfor value > 0 {\n\t\treturn value\n\t}\n}\n\nfunc main() {\n\tprintln(helper(1))\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
     assert!(error.contains("must return a `int` on every path"));
 
     let _ = fs::remove_file(path);

@@ -151,6 +151,12 @@ impl<'a> Parser<'a> {
             });
         }
 
+        if self.match_kind(&TokenKind::For) {
+            let condition = self.parse_expression()?;
+            let body = self.parse_block()?;
+            return Ok(Statement::For { condition, body });
+        }
+
         let expression = self.parse_expression()?;
         Ok(Statement::Expr(expression))
     }

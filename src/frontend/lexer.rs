@@ -167,6 +167,7 @@ impl<'a> Lexer<'a> {
             "var" => TokenKind::Var,
             "if" => TokenKind::If,
             "else" => TokenKind::Else,
+            "for" => TokenKind::For,
             "return" => TokenKind::Return,
             "true" => TokenKind::Bool(true),
             "false" => TokenKind::Bool(false),

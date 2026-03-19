@@ -1,7 +1,7 @@
 # M2: Frontend and VM Expansion
 
-- Status: `in_progress`
-- Current Main Plan: none yet
+- Status: `completed`
+- Current Main Plan: `2026-03-19-23-57-06-for-loops-path-analysis`
 
 ## Goals
 
@@ -26,14 +26,15 @@
 ## Related Plans
 
 - `2026-03-19-23-37-05-semantic-functions-branches`
+- `2026-03-19-23-57-06-for-loops-path-analysis` (`completed`)
 
 ## Current Risks
 
-- Scope can expand quickly if type-system work is mixed into the first control-flow push.
-- Parser growth without semantic layering would increase coupling.
-- The remaining control-flow gap is now concentrated in loops; delaying it too long would leave return-path analysis incomplete.
+- Loop control flow is now present, but the supported form is intentionally narrow compared with real Go.
+- Diagnostics still stop at message strings without source spans or excerpts.
+- Runtime values and builtins remain minimal, which now shifts the main project risk into milestone `M3`.
 
 ## Next-Round Recommendations
 
-- Open the next `M2` plan around looping control flow and semantic path analysis.
-- Tighten diagnostics and bytecode inspection ergonomics once `for` support exists.
+- Move to milestone `M3-standard-library-and-runtime-model`.
+- Prioritize runtime value expansion and builtin contract centralization before backend-facing work.

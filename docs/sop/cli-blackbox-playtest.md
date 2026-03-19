@@ -17,6 +17,7 @@ Use this SOP when a milestone is declared complete or when a CLI-facing change n
    - `cargo run -- run examples/hello.go`
    - `cargo run -- dump-bytecode examples/hello.go`
    - `cargo run -- run <broken-source>`
+   - Run the commands serially when using `cargo run -- ...`; parallel cargo invocations add lock noise that pollutes the observed CLI output.
 3. Observe and record:
    - command
    - actual output
@@ -34,6 +35,7 @@ Use this SOP when a milestone is declared complete or when a CLI-facing change n
 ## Common Mistakes
 
 - Replacing the real CLI with direct library calls
+- Running multiple `cargo run -- ...` commands in parallel and mistaking cargo lock output for user-facing CLI behavior
 - Recording only pass/fail without noting user-facing clarity
 - Declaring a milestone complete without exercising an error path
 

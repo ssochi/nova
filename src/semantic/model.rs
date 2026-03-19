@@ -37,6 +37,10 @@ pub enum CheckedStatement {
         then_block: CheckedBlock,
         else_block: Option<CheckedBlock>,
     },
+    For {
+        condition: CheckedExpression,
+        body: CheckedBlock,
+    },
     Return(Option<CheckedExpression>),
 }
 

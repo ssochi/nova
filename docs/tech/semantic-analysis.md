@@ -18,7 +18,8 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 - Validate package-level structure independently from runtime entrypoint rules.
 - Track block scopes and map variables to stable local slots.
 - Infer the type of each supported expression and reject incompatible assignments, returns, and branch conditions.
-- Ensure non-void functions return on every reachable path currently expressible in the supported subset.
+- Validate loop conditions and model loop bodies as scoped blocks.
+- Ensure non-void functions do not fall through on any reachable path in the supported subset.
 
 ## Data Model
 
@@ -46,4 +47,5 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 
 - Supported types are limited to `int`, `bool`, and `void`.
 - Package loading is still single-file and does not model imports.
-- Return-path analysis only covers the currently supported control-flow forms.
+- Loop support is limited to `for <condition> { ... }`.
+- Termination analysis only treats the literal `for true { ... }` as definitely non-fallthrough because `break` and `continue` do not exist yet.

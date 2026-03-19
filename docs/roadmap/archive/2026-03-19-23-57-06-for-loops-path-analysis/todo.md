@@ -1,0 +1,6 @@
+- [done] Register the new active `M2` plan for loop control flow and path analysis.
+- [done] Add frontend support for condition-only `for` loops and AST rendering.
+- [done] Extend semantic analysis and checked-program modeling for loops.
+- [done] Lower loops into bytecode and verify VM execution.
+- [done] Add examples, automated tests, and CLI validation evidence.
+- [done] Synchronize roadmap, design, tech, verification, and handoff docs.

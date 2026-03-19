@@ -2,14 +2,12 @@
 
 ## Current Milestone
 
-- `M2-frontend-expansion`: `in_progress`
-  - Goal: introduce semantic analysis, user-defined functions, and control flow on top of the bootstrap VM pipeline
+- `M3-standard-library-and-runtime-model`: `in_progress`
+  - Goal: expand types, runtime data structures, builtin coverage, and the path toward standard library support
   - Current Main Plan: none yet
 
 ## Planned Milestones
 
-- `M3-standard-library-and-runtime-model`
-  - Goal: expand types, runtime data structures, builtin coverage, and the path toward standard library support
 - `M4-backend-bridge`
   - Goal: keep the VM path while introducing a stable backend-oriented IR and compilation bridge
 
