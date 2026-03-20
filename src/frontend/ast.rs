@@ -1,3 +1,6 @@
+use super::signature::render_result_decl_list;
+pub use super::signature::{ParameterDecl, ResultDecl, TypeRef};
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SourceFileAst {
     pub package_name: String,
@@ -59,7 +62,7 @@ impl ImportSpec {
 pub struct FunctionDecl {
     pub name: String,
     pub parameters: Vec<ParameterDecl>,
-    pub return_types: Vec<TypeRef>,
+    pub results: Vec<ResultDecl>,
     pub body: Block,
 }
 
@@ -71,62 +74,19 @@ impl FunctionDecl {
             .map(ParameterDecl::render)
             .collect::<Vec<_>>()
             .join(", ");
-        let return_types = render_result_type_list(&self.return_types);
+        let results = render_result_decl_list(&self.results);
         let mut lines = vec![format!(
             "{}func {}({}){} {{",
             indent_str(indent),
             self.name,
             parameters,
-            return_types
+            results
         )];
         for statement in &self.body.statements {
             lines.push(statement.render(indent + 1));
         }
         lines.push(format!("{}}}", indent_str(indent)));
         lines.join("\n")
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ParameterDecl {
-    pub names: Vec<String>,
-    pub type_ref: TypeRef,
-    pub variadic: bool,
-}
-
-impl ParameterDecl {
-    fn render(&self) -> String {
-        let prefix = if self.variadic { "..." } else { "" };
-        format!(
-            "{} {}{}",
-            self.names.join(", "),
-            prefix,
-            self.type_ref.render()
-        )
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TypeRef {
-    Named(String),
-    Slice(Box<TypeRef>),
-    Chan(Box<TypeRef>),
-    Map {
-        key: Box<TypeRef>,
-        value: Box<TypeRef>,
-    },
-}
-
-impl TypeRef {
-    pub fn render(&self) -> String {
-        match self {
-            TypeRef::Named(name) => name.clone(),
-            TypeRef::Slice(element) => format!("[]{}", element.render()),
-            TypeRef::Chan(element) => format!("chan {}", element.render()),
-            TypeRef::Map { key, value } => {
-                format!("map[{}]{}", key.render(), value.render())
-            }
-        }
     }
 }
 
@@ -933,21 +893,6 @@ fn render_map_lookup_statement(
         target.render(),
         key.render()
     )
-}
-
-fn render_result_type_list(result_types: &[TypeRef]) -> String {
-    match result_types {
-        [] => String::new(),
-        [result_type] => format!(" {}", result_type.render()),
-        _ => format!(
-            " ({})",
-            result_types
-                .iter()
-                .map(TypeRef::render)
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-    }
 }
 
 fn render_binding_list(bindings: &[Binding]) -> String {

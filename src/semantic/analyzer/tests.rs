@@ -677,6 +677,48 @@ fn analyze_grouped_parameter_names() {
 }
 
 #[test]
+fn analyze_named_result_locals_and_bare_return() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc classify(value int) (sign string, abs int) {\n\tsign = \"non-negative\"\n\tabs = value\n\tif value < 0 {\n\t\tsign = \"negative\"\n\t\tabs = 0 - value\n\t\treturn\n\t}\n\treturn\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let program = analyze_package(&ast).expect("analysis should succeed");
+
+    assert_eq!(
+        program.functions[0].return_types,
+        vec![Type::String, Type::Int]
+    );
+    assert_eq!(
+        program.functions[0].local_names,
+        vec!["value", "sign", "abs"]
+    );
+    assert_eq!(program.functions[0].result_locals.len(), 2);
+}
+
+#[test]
+fn analyze_blank_named_result_slot() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc blankLabel(flag bool) (_ int, label string) {\n\tlabel = \"cold\"\n\treturn\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let program = analyze_package(&ast).expect("analysis should succeed");
+
+    assert_eq!(
+        program.functions[0].local_names,
+        vec!["flag", "result$0", "label"]
+    );
+    assert_eq!(program.functions[0].result_locals.len(), 2);
+}
+
+#[test]
 fn reject_duplicate_grouped_parameter_name() {
     let source = SourceFile {
         path: "test.go".into(),
@@ -691,6 +733,25 @@ fn reject_duplicate_grouped_parameter_name() {
         error
             .to_string()
             .contains("parameter `left` is already defined in function `pair`")
+    );
+}
+
+#[test]
+fn reject_bare_return_when_result_parameter_is_shadowed() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc shadow() (err string) {\n\tif true {\n\t\terr := \"inner\"\n\t\treturn\n\t}\n\treturn\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let error = analyze_package(&ast).expect_err("analysis should reject shadowed bare return");
+
+    assert!(
+        error
+            .to_string()
+            .contains("result parameter `err` not in scope at return")
     );
 }
 

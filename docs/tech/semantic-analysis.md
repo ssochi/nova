@@ -35,6 +35,8 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 - Validate staged multi-result returns, assignment-like usage, and single-call-argument forwarding centrally so broader package seams can reuse the same non-tuple result model.
 - Validate staged variadic function declarations and explicit final-argument `...` calls centrally so user-defined helpers and `append` spread behavior stay explicit instead of disappearing into generic flat argument lists.
 - Preserve grouped input parameter declarations such as `func f(a, b int)` at the frontend layer while flattening them centrally into the ordered parameter-slot model used by semantic analysis and lowering.
+- Preserve explicit result declarations such as `func f() (left, right string, ok bool)` at the frontend layer while flattening them centrally into ordered result-slot metadata used by semantic analysis and lowering.
+- Model named result parameters as function-entry local slots with explicit zero-value initialization metadata, and validate bare `return` against the active scope stack so shadowed result names fail before lowering.
 - Validate staged compound assignments centrally so they remain explicit, reuse assignable-target checking, keep operator support aligned with the modeled runtime surface, and preserve single-evaluation index semantics during lowering.
 - Validate staged classic `for` clauses centrally, including dedicated init scope, optional condition / post handling, and the current post-statement subset.
 - Validate explicit `++` / `--` centrally so they remain statement-only and only apply to assignable `int` / `byte` targets.
@@ -58,6 +60,7 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
   - parameter count
   - optional variadic element type for the final parameter
   - return type list
+  - explicit result-local initialization metadata for named-result functions
   - linear local-slot name list
   - checked body
 - `CheckedExpression`
@@ -82,9 +85,10 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 - Termination analysis remains conservative: infinite or literal-`true` loops only count as non-fallthrough when no modeled `break` can escape the loop, and terminating `switch` clauses fail that classification when a clause can `break`.
 - Builtin coverage is still intentionally small, and conversions are now deliberately modeled outside the builtin table.
 - Function and package calls now support zero, one, or multiple results explicitly, but those results are still not first-class tuple expressions.
+- User-defined functions now also support grouped named result declarations plus bare `return`; named result slots are initialized explicitly at function entry, while mixed named/unnamed result lists remain invalid.
 - Call forwarding is still staged: a multi-result call may feed another call only when it is the entire argument list by itself, while prefixed forms such as `f(1, pair())` remain invalid single-value contexts.
 - User-defined functions now also support staged final variadic parameters, and calls may use explicit final `...` spreading only for the fixed-prefix-plus-spread shape required by real Go; broader package-backed variadic slice forwarding still remains deferred.
-- User-defined functions now also support grouped input parameter-name shorthand such as `func f(a, b int)`; grouped declarations preserve source readability in `dump-ast` but flatten into ordinary ordered parameter slots before checked-program construction.
+- User-defined functions now also support grouped input parameter-name shorthand such as `func f(a, b int)` plus grouped named result declarations such as `func f() (left, right string)`; grouped declarations preserve source readability in `dump-ast` but flatten into ordinary ordered parameter/result slots before checked-program construction.
 - Slice support is still staged: simple slice expressions on `[]T` and `string` are supported, while full slice expressions remain deferred.
 - Map support is still staged: explicit `nil`, map literals, duplicate constant literal-key diagnostics, single-result indexing, statement-scoped comma-ok lookups, `len`, nil-map zero values, `make`, `delete`, index assignment, `nil` equality, and staged `range` loops are supported, while general tuple expressions, broader constant folding, and richer lookup contexts remain deferred.
 - Channel support is now staged: bidirectional `chan T`, `make`, `len`, `cap`, builtin `close`, send statements, receive expressions, `nil` equality, and same-type channel equality are supported, while directions, channel `range`, comma-ok receive, and scheduler-aware blocking semantics remain deferred.

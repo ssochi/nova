@@ -38,6 +38,7 @@ Describe the concrete execution pipeline shipped in the bootstrap milestone, inc
 
 - Package analysis validates duplicate function names, variable scopes, call arity, and zero/one/multi-result return compatibility.
 - Package analysis also flattens grouped input parameter declarations such as `func f(a, b int)` into the ordered parameter-slot metadata used by lowering and the VM.
+- Package analysis also flattens explicit result declarations such as `func f() (left, right string)` into ordered result-slot metadata while keeping named result bindings visible to semantic scope checks.
 - Package analysis also validates supported import paths and selector calls to imported package members.
 - Execution additionally requires the configured package and entry function to exist, and the entry function must be `func main()`.
 - Local variables must be declared before assignment or use, with nested block scopes mapped to fixed slots during analysis.
@@ -45,7 +46,9 @@ Describe the concrete execution pipeline shipped in the bootstrap milestone, inc
 - Current builtin coverage includes `print`, `println`, `len`, `cap`, `append`, `copy`, `delete`, `close`, and typed `make` handling.
 - Current imported package coverage is `fmt.Print`, `fmt.Println`, `fmt.Sprint`, `strings.Compare`, `strings.Clone`, `strings.Join`, `strings.Contains`, `strings.HasPrefix`, `strings.HasSuffix`, `strings.Index`, `strings.LastIndex`, `strings.IndexByte`, `strings.LastIndexByte`, `strings.Cut`, `strings.CutPrefix`, `strings.CutSuffix`, `strings.TrimPrefix`, `strings.TrimSuffix`, `strings.Repeat`, `bytes.Compare`, `bytes.Clone`, `bytes.Equal`, `bytes.Contains`, `bytes.HasPrefix`, `bytes.HasSuffix`, `bytes.Index`, `bytes.LastIndex`, `bytes.IndexByte`, `bytes.LastIndexByte`, `bytes.Cut`, `bytes.CutPrefix`, `bytes.CutSuffix`, `bytes.TrimPrefix`, `bytes.TrimSuffix`, `bytes.Join`, and `bytes.Repeat`.
 - Compiled-function metadata now records explicit result lists instead of a boolean `returns_value` flag, so the VM can return zero, one, or several values through the same stack-frame path.
+- Bytecode lowering now also emits explicit zero-value stores for named result locals at function entry, because VM local-slot defaults are not type-aware.
 - The current multi-result model is explicit rather than tuple-based: staged `return`, multi-binding `:=` / `=`, single-call-argument forwarding, and package seams can consume multi-result calls, while unsupported single-value contexts still fail during semantic analysis.
+- Bare `return` now lowers through explicit reads of tracked result locals, and semantic analysis rejects bare returns whose named result bindings are shadowed out of scope.
 - Runtime dispatch inside `src/runtime/vm/` is now split between `builtins.rs`, `packages.rs`, and `support.rs` so package growth does not keep accumulating in one VM file.
 - Branch and loop conditions must produce boolean values, staged control-flow headers run before condition or clause dispatch, and expression-switch tags are evaluated once before clause comparison.
 - The current branch model supports `if`, `else`, explicit `else if`, and staged expression `switch` lowering with header scopes chosen during semantic analysis.

@@ -7,7 +7,8 @@ use crate::semantic::builtins::resolve_builtin;
 use crate::semantic::model::Type;
 use crate::semantic::packages::resolve_import_path;
 use crate::semantic::support::{
-    flatten_function_parameters, is_supported_named_type, resolve_type_ref, validate_runtime_type,
+    flatten_function_parameters, flatten_function_results, is_supported_named_type,
+    resolve_type_ref, validate_runtime_type,
 };
 
 pub(super) struct FunctionRegistry {
@@ -57,14 +58,13 @@ impl FunctionRegistry {
                 })
                 .collect::<Result<Vec<_>, SemanticError>>()?;
 
-            let return_types = function
-                .return_types
+            let return_types = flatten_function_results(function)
                 .iter()
-                .map(|type_ref| {
-                    let ty = resolve_type_ref(type_ref).ok_or_else(|| {
+                .map(|result| {
+                    let ty = resolve_type_ref(&result.type_ref).ok_or_else(|| {
                         SemanticError::new(format!(
                             "unsupported return type `{}` in function `{}`",
-                            type_ref.render(),
+                            result.type_ref.render(),
                             function.name
                         ))
                     })?;

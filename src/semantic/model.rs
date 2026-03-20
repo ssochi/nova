@@ -15,8 +15,15 @@ pub struct CheckedFunction {
     pub parameter_count: usize,
     pub variadic_element_type: Option<Type>,
     pub return_types: Vec<Type>,
+    pub result_locals: Vec<CheckedResultLocal>,
     pub local_names: Vec<String>,
     pub body: CheckedBlock,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CheckedResultLocal {
+    pub slot: usize,
+    pub ty: Type,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

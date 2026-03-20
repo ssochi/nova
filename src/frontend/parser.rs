@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::frontend::ast::{
     AssignmentTarget, BinaryOperator, Block, CallArgument, Expression, FunctionDecl, ImportDecl,
-    ImportSpec, MapLiteralEntry, ParameterDecl, SourceFileAst, TypeRef,
+    ImportSpec, MapLiteralEntry, ParameterDecl, ResultDecl, SourceFileAst, TypeRef,
 };
 use crate::frontend::token::{Token, TokenKind};
 
@@ -109,8 +109,8 @@ impl<'a> Parser<'a> {
         self.expect(TokenKind::LeftParen)?;
         let parameters = self.parse_parameter_list()?;
         self.expect(TokenKind::RightParen)?;
-        let return_types = if self.check_type_start() || self.check(&TokenKind::LeftParen) {
-            self.parse_result_types()?
+        let results = if self.check_type_start() || self.check(&TokenKind::LeftParen) {
+            self.parse_result_declarations()?
         } else {
             Vec::new()
         };
@@ -118,26 +118,69 @@ impl<'a> Parser<'a> {
         Ok(FunctionDecl {
             name,
             parameters,
-            return_types,
+            results,
             body,
         })
     }
 
-    fn parse_result_types(&mut self) -> Result<Vec<TypeRef>, ParseError> {
+    fn parse_result_declarations(&mut self) -> Result<Vec<ResultDecl>, ParseError> {
         if self.match_kind(&TokenKind::LeftParen) {
             if self.check(&TokenKind::RightParen) {
                 return Err(self.error_at_current("function result list cannot be empty"));
             }
 
-            let mut result_types = vec![self.parse_type_ref()?];
+            let mut results = vec![self.parse_result_declaration()?];
             while self.match_kind(&TokenKind::Comma) {
-                result_types.push(self.parse_type_ref()?);
+                results.push(self.parse_result_declaration()?);
             }
             self.expect(TokenKind::RightParen)?;
-            return Ok(result_types);
+            self.validate_result_declaration_list(&results)?;
+            return Ok(results);
         }
 
-        Ok(vec![self.parse_type_ref()?])
+        Ok(vec![ResultDecl {
+            names: Vec::new(),
+            type_ref: self.parse_type_ref()?,
+        }])
+    }
+
+    fn parse_result_declaration(&mut self) -> Result<ResultDecl, ParseError> {
+        if matches!(self.current_kind(), Some(TokenKind::Identifier(_))) {
+            let checkpoint = self.index;
+            if let Ok(result) = self.try_parse_named_result_declaration() {
+                return Ok(result);
+            }
+            self.index = checkpoint;
+        }
+
+        Ok(ResultDecl {
+            names: Vec::new(),
+            type_ref: self.parse_type_ref()?,
+        })
+    }
+
+    fn try_parse_named_result_declaration(&mut self) -> Result<ResultDecl, ParseError> {
+        let mut names = vec![self.expect_identifier()?];
+        while self.match_kind(&TokenKind::Comma) {
+            names.push(self.expect_identifier()?);
+        }
+        if !self.check_type_start() {
+            return Err(self.error_at_current("named result declaration requires a type"));
+        }
+
+        Ok(ResultDecl {
+            names,
+            type_ref: self.parse_type_ref()?,
+        })
+    }
+
+    fn validate_result_declaration_list(&self, results: &[ResultDecl]) -> Result<(), ParseError> {
+        let has_named = results.iter().any(|result| !result.names.is_empty());
+        let has_unnamed = results.iter().any(|result| result.names.is_empty());
+        if has_named && has_unnamed {
+            return Err(ParseError::new("mixed named and unnamed parameters"));
+        }
+        Ok(())
     }
 
     fn parse_parameter_list(&mut self) -> Result<Vec<ParameterDecl>, ParseError> {
@@ -747,3 +790,5 @@ fn assignment_target_from_expression(
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_named_results;

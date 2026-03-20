@@ -1,7 +1,7 @@
 use super::parse_source_file;
 use crate::frontend::ast::{
     AssignmentTarget, Binding, BindingMode, CallArgument, ElseBranch, Expression, ForPostStatement,
-    HeaderStatement, ImportDecl, Statement, SwitchClause, TypeRef,
+    HeaderStatement, ImportDecl, ResultDecl, Statement, SwitchClause, TypeRef,
 };
 use crate::frontend::lexer::lex;
 use crate::source::SourceFile;
@@ -818,11 +818,20 @@ fn parse_multi_result_functions_and_bindings() {
     let ast = parse_source_file(&tokens).expect("parsing should succeed");
 
     assert_eq!(
-        ast.functions[0].return_types,
+        ast.functions[0].results,
         vec![
-            TypeRef::Named("string".to_string()),
-            TypeRef::Named("string".to_string()),
-            TypeRef::Named("bool".to_string())
+            ResultDecl {
+                names: Vec::new(),
+                type_ref: TypeRef::Named("string".to_string()),
+            },
+            ResultDecl {
+                names: Vec::new(),
+                type_ref: TypeRef::Named("string".to_string()),
+            },
+            ResultDecl {
+                names: Vec::new(),
+                type_ref: TypeRef::Named("bool".to_string()),
+            }
         ]
     );
     assert!(matches!(

@@ -67,6 +67,7 @@ impl<'a> FunctionCompiler<'a> {
     }
 
     fn compile(mut self) -> Result<CompiledFunction, CompileError> {
+        self.initialize_result_locals()?;
         self.compile_block(&self.function.body)?;
         if !matches!(self.instructions.last(), Some(Instruction::Return)) {
             self.instructions.push(Instruction::Return);
@@ -85,6 +86,17 @@ impl<'a> FunctionCompiler<'a> {
             local_names: self.local_names,
             instructions: self.instructions,
         })
+    }
+
+    fn initialize_result_locals(&mut self) -> Result<(), CompileError> {
+        for result in &self.function.result_locals {
+            self.compile_expression(&CheckedExpression {
+                ty: result.ty.clone(),
+                kind: CheckedExpressionKind::ZeroValue,
+            })?;
+            self.instructions.push(Instruction::StoreLocal(result.slot));
+        }
+        Ok(())
     }
 
     fn compile_block(&mut self, block: &CheckedBlock) -> Result<(), CompileError> {

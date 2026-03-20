@@ -1,0 +1,6 @@
+- [done] Open the plan, sync roadmap indexes, and pin the iteration scope to named result parameters under `M3`
+- [done] Write research and design notes for grouped named results and bare-return semantics
+- [done] Implement frontend and semantic support while preserving readable inspection surfaces
+- [done] Add focused parser, semantic, and CLI coverage plus an example program
+- [done] Run formatting, tests, CLI validation, and file-size checks
+- [done] Archive the completed plan, refresh roadmap context, and commit the full working tree

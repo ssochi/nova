@@ -12,6 +12,12 @@ pub struct FlattenedParameter {
     pub variadic: bool,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FlattenedResult {
+    pub name: Option<String>,
+    pub type_ref: TypeRef,
+}
+
 pub fn flatten_function_parameters(function: &FunctionDecl) -> Vec<FlattenedParameter> {
     let mut parameters = Vec::new();
     for declaration in &function.parameters {
@@ -24,6 +30,27 @@ pub fn flatten_function_parameters(function: &FunctionDecl) -> Vec<FlattenedPara
         }
     }
     parameters
+}
+
+pub fn flatten_function_results(function: &FunctionDecl) -> Vec<FlattenedResult> {
+    let mut results = Vec::new();
+    for declaration in &function.results {
+        if declaration.names.is_empty() {
+            results.push(FlattenedResult {
+                name: None,
+                type_ref: declaration.type_ref.clone(),
+            });
+            continue;
+        }
+
+        for name in &declaration.names {
+            results.push(FlattenedResult {
+                name: Some(name.clone()),
+                type_ref: declaration.type_ref.clone(),
+            });
+        }
+    }
+    results
 }
 
 pub fn resolve_type_ref(type_ref: &TypeRef) -> Option<Type> {

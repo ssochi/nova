@@ -8,13 +8,14 @@ use crate::frontend::ast::{
 };
 use crate::semantic::model::{
     CheckedAssignmentTarget, CheckedBinding, CheckedBlock, CheckedCompoundAssignOperator,
-    CheckedExpression, CheckedFunction, CheckedIncDecOperator, CheckedProgram, CheckedStatement,
-    CheckedValueSource, Type,
+    CheckedExpression, CheckedFunction, CheckedIncDecOperator, CheckedProgram, CheckedResultLocal,
+    CheckedStatement, CheckedValueSource, Type,
 };
 use crate::semantic::registry::{FunctionRegistry, ImportRegistry};
 use crate::semantic::support::{
     block_guarantees_return, coerce_expression_to_type, expect_type, flatten_function_parameters,
-    render_type_list, resolve_type_ref, validate_runtime_type, zero_value_expression,
+    flatten_function_results, render_type_list, resolve_type_ref, validate_runtime_type,
+    zero_value_expression,
 };
 
 mod expressions;
@@ -22,6 +23,7 @@ mod ifs;
 mod lookup;
 mod loops;
 mod range;
+mod returns;
 mod switches;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -106,6 +108,8 @@ struct FunctionAnalyzer<'a> {
     scopes: Vec<HashMap<String, LocalBinding>>,
     control_flow_stack: Vec<ControlFlowContext>,
     local_names: Vec<String>,
+    local_types: Vec<Type>,
+    result_locals: Vec<ResultLocal>,
 }
 
 impl<'a> FunctionAnalyzer<'a> {
@@ -117,6 +121,7 @@ impl<'a> FunctionAnalyzer<'a> {
     ) -> Self {
         let mut scopes = vec![HashMap::new()];
         let mut local_names = Vec::new();
+        let mut local_types = Vec::new();
         for parameter in flatten_function_parameters(function) {
             let parameter_type = resolve_type_ref(&parameter.type_ref)
                 .expect("function registry only keeps validated type names");
@@ -126,8 +131,47 @@ impl<'a> FunctionAnalyzer<'a> {
                 parameter_type
             };
             let slot = local_names.len();
-            scopes[0].insert(parameter.name.clone(), LocalBinding { slot, ty });
+            scopes[0].insert(
+                parameter.name.clone(),
+                LocalBinding {
+                    slot,
+                    ty: ty.clone(),
+                },
+            );
             local_names.push(parameter.name);
+            local_types.push(ty);
+        }
+
+        let mut result_locals = Vec::new();
+        for (index, result) in flatten_function_results(function).into_iter().enumerate() {
+            let Some(name) = result.name else {
+                continue;
+            };
+            let ty = resolve_type_ref(&result.type_ref)
+                .expect("function registry only keeps validated result type names");
+            let slot = local_names.len();
+            let (binding_name, visible_name) = if name == "_" {
+                (format!("result${index}"), None)
+            } else {
+                (name.clone(), Some(name.clone()))
+            };
+            if let Some(visible_name) = &visible_name {
+                scopes[0].insert(
+                    visible_name.clone(),
+                    LocalBinding {
+                        slot,
+                        ty: ty.clone(),
+                    },
+                );
+            }
+            local_names.push(binding_name.clone());
+            local_types.push(ty.clone());
+            result_locals.push(ResultLocal {
+                slot,
+                ty,
+                name: visible_name,
+                local_name: binding_name,
+            });
         }
 
         Self {
@@ -138,11 +182,13 @@ impl<'a> FunctionAnalyzer<'a> {
             scopes,
             control_flow_stack: Vec::new(),
             local_names,
+            local_types,
+            result_locals,
         }
     }
 
     fn analyze(mut self) -> Result<CheckedFunction, SemanticError> {
-        self.ensure_unique_parameters()?;
+        self.ensure_unique_signature_names()?;
         let body = self.analyze_block(&self.function.body, false)?;
         let signature = self.registry.signature(self.function_index);
 
@@ -159,18 +205,40 @@ impl<'a> FunctionAnalyzer<'a> {
             parameter_count: flatten_function_parameters(self.function).len(),
             variadic_element_type: signature.variadic_element_type.clone(),
             return_types: signature.return_types.clone(),
+            result_locals: self
+                .result_locals
+                .iter()
+                .map(|result| CheckedResultLocal {
+                    slot: result.slot,
+                    ty: result.ty.clone(),
+                })
+                .collect(),
             local_names: self.local_names,
             body,
         })
     }
 
-    fn ensure_unique_parameters(&self) -> Result<(), SemanticError> {
+    fn ensure_unique_signature_names(&self) -> Result<(), SemanticError> {
         let mut seen = HashMap::new();
         for parameter in flatten_function_parameters(self.function) {
             if seen.insert(parameter.name.clone(), ()).is_some() {
                 return Err(SemanticError::new(format!(
                     "parameter `{}` is already defined in function `{}`",
                     parameter.name, self.function.name
+                )));
+            }
+        }
+        for result in flatten_function_results(self.function) {
+            let Some(name) = result.name else {
+                continue;
+            };
+            if name == "_" {
+                continue;
+            }
+            if seen.insert(name.clone(), ()).is_some() {
+                return Err(SemanticError::new(format!(
+                    "result parameter `{}` is already defined in function `{}`",
+                    name, self.function.name
                 )));
             }
         }
@@ -393,38 +461,6 @@ impl<'a> FunctionAnalyzer<'a> {
             "send statement",
         )?;
         Ok(CheckedStatement::Send { channel, value })
-    }
-
-    pub(super) fn analyze_return_statement(
-        &mut self,
-        values: &[crate::frontend::ast::Expression],
-    ) -> Result<CheckedStatement, SemanticError> {
-        let expected = self
-            .registry
-            .signature(self.function_index)
-            .return_types
-            .clone();
-        if expected.is_empty() && values.is_empty() {
-            return Ok(CheckedStatement::Return(CheckedValueSource::Expressions(
-                Vec::new(),
-            )));
-        }
-        if expected.is_empty() {
-            return Err(SemanticError::new(format!(
-                "function `{}` does not return a value",
-                self.function.name
-            )));
-        }
-        if values.is_empty() {
-            return Err(SemanticError::new(format!(
-                "function `{}` must return a `{}` value",
-                self.function.name,
-                render_type_list(&expected)
-            )));
-        }
-
-        let values = self.analyze_typed_value_source(values, &expected, "return statement")?;
-        Ok(CheckedStatement::Return(values))
     }
 
     pub(super) fn analyze_compound_assign_statement(
@@ -741,19 +777,22 @@ impl<'a> FunctionAnalyzer<'a> {
     }
 
     fn local_type(&self, slot: usize) -> &Type {
-        self.scopes
-            .iter()
-            .flat_map(|scope| scope.values())
-            .find(|binding| binding.slot == slot)
-            .map(|binding| &binding.ty)
+        self.local_types
+            .get(slot)
             .expect("local slot should resolve to a tracked type")
     }
 
     fn allocate_local(&mut self, name: String, ty: Type) -> usize {
         let slot = self.local_names.len();
-        self.current_scope_mut()
-            .insert(name.clone(), LocalBinding { slot, ty });
+        self.current_scope_mut().insert(
+            name.clone(),
+            LocalBinding {
+                slot,
+                ty: ty.clone(),
+            },
+        );
         self.local_names.push(name);
+        self.local_types.push(ty);
         slot
     }
 
@@ -884,6 +923,14 @@ fn render_inc_dec_operator(operator: IncDecOperator) -> &'static str {
 struct LocalBinding {
     slot: usize,
     ty: Type,
+}
+
+#[derive(Clone)]
+struct ResultLocal {
+    slot: usize,
+    ty: Type,
+    name: Option<String>,
+    local_name: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
