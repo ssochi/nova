@@ -1,9 +1,9 @@
 use std::convert::TryFrom;
 
 use super::support::{
-    execute_bytes_package_function, expect_byte_package_argument, expect_exact_package_arguments,
-    expect_integer_package_argument, expect_string_package_argument,
-    expect_string_slice_package_argument, render_package_arguments,
+    compare_byte_sequences, execute_bytes_package_function, expect_byte_package_argument,
+    expect_exact_package_arguments, expect_integer_package_argument,
+    expect_string_package_argument, expect_string_slice_package_argument, render_package_arguments,
 };
 use super::{RuntimeError, VirtualMachine};
 use crate::package::PackageFunction;
@@ -32,6 +32,15 @@ impl VirtualMachine {
                     .push(Value::String(StringValue::from(render_package_arguments(
                         &arguments, "",
                     ))));
+            }
+            PackageFunction::StringsCompare => {
+                let [left, right] = expect_exact_package_arguments(function, arguments, 2)?;
+                let left = expect_string_package_argument(function, 1, left)?;
+                let right = expect_string_package_argument(function, 2, right)?;
+                self.stack.push(Value::Integer(compare_byte_sequences(
+                    left.as_bytes(),
+                    right.as_bytes(),
+                )));
             }
             PackageFunction::StringsContains => {
                 let [haystack, needle] = expect_exact_package_arguments(function, arguments, 2)?;
@@ -157,7 +166,8 @@ impl VirtualMachine {
                 })?;
                 self.stack.push(Value::String(value.repeat(repeat_count)));
             }
-            PackageFunction::BytesEqual
+            PackageFunction::BytesCompare
+            | PackageFunction::BytesEqual
             | PackageFunction::BytesContains
             | PackageFunction::BytesHasPrefix
             | PackageFunction::BytesHasSuffix

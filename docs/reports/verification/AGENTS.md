@@ -34,6 +34,7 @@ This directory stores validation evidence that "proves the change holds."
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `2026-03-20-strings-bytes-compare-seams.md`: validates staged `strings.Compare` / `bytes.Compare` helpers across the full CLI and VM stack
 - `2026-03-20-strings-bytes-last-index-byte-search.md`: validates staged `strings` / `bytes` last-index and byte-search helpers across the full CLI and VM stack
 - `2026-03-20-strings-bytes-index-trim-seams.md`: validates staged `strings` / `bytes` index, suffix, and trim helpers across the full CLI and VM stack
 - `2026-03-20-variadic-functions-and-ellipsis.md`: validates staged variadic declarations, explicit final-argument `...`, and builtin `append` spread semantics across the full CLI and VM stack

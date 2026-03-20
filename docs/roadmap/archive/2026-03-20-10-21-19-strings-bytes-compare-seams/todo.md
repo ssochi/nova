@@ -1,0 +1,6 @@
+- [done] Re-read startup context, latest archive context, milestone state, active plan state, and applicable docs before selecting the next `M3` slice.
+- [done] Write the research note and design note for staged `strings.Compare` / `bytes.Compare`.
+- [done] Implement package metadata, semantic contracts, and VM/runtime dispatch for the selected helpers.
+- [done] Add example coverage plus focused unit and CLI tests in layered files.
+- [done] Run formatting, automated tests, and serial CLI validation commands.
+- [done] Update reports, tech docs, roadmap state, archive the plan if complete, and commit all changes.

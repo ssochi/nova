@@ -3,6 +3,17 @@ use crate::package::PackageFunction;
 use crate::semantic::model::Type;
 
 #[test]
+fn strings_compare_reports_integer_contract() {
+    let result = validate_package_call(
+        PackageFunction::StringsCompare,
+        &[Type::String, Type::String],
+    )
+    .expect("strings.Compare should accept two strings");
+
+    assert_eq!(result, vec![Type::Int]);
+}
+
+#[test]
 fn join_accepts_string_slices() {
     let result = validate_package_call(
         PackageFunction::StringsJoin,
@@ -73,6 +84,20 @@ fn bytes_join_accepts_nested_byte_slices() {
     .expect("bytes.Join should accept [][]byte and []byte");
 
     assert_eq!(result, vec![Type::Slice(Box::new(Type::Byte))]);
+}
+
+#[test]
+fn bytes_compare_reports_integer_contract() {
+    let result = validate_package_call(
+        PackageFunction::BytesCompare,
+        &[
+            Type::Slice(Box::new(Type::Byte)),
+            Type::Slice(Box::new(Type::Byte)),
+        ],
+    )
+    .expect("bytes.Compare should accept two []byte values");
+
+    assert_eq!(result, vec![Type::Int]);
 }
 
 #[test]

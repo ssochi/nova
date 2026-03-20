@@ -8,6 +8,7 @@
 
 ## File Index
 
+- `AGENTS.md`: this directory convention
 - `architecture.md`: framework structure description
 - `semantic-analysis.md`: checked-program boundary and semantic analysis responsibilities
 - `vm-execution-pipeline.md`: bootstrap execution pipeline reference

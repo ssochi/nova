@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::convert::TryFrom;
 
 use crate::bytecode::instruction::ValueType;
@@ -206,6 +207,12 @@ pub(super) fn execute_bytes_package_function(
     arguments: Vec<Value>,
 ) -> Result<Vec<Value>, RuntimeError> {
     match function {
+        PackageFunction::BytesCompare => {
+            let [left, right] = expect_exact_package_arguments(function, arguments, 2)?;
+            let left = expect_byte_slice_package_argument(function, 1, left)?;
+            let right = expect_byte_slice_package_argument(function, 2, right)?;
+            Ok(vec![Value::Integer(compare_byte_sequences(&left, &right))])
+        }
         PackageFunction::BytesEqual => {
             let [left, right] = expect_exact_package_arguments(function, arguments, 2)?;
             let left = expect_byte_slice_package_argument(function, 1, left)?;
@@ -478,6 +485,14 @@ pub(super) fn slice_bounds_error_message(low: usize, high: usize) -> String {
     format!("slice bounds [{low}:{high}] are out of range")
 }
 
+pub(super) fn compare_byte_sequences(left: &[u8], right: &[u8]) -> i64 {
+    match left.cmp(right) {
+        Ordering::Less => -1,
+        Ordering::Equal => 0,
+        Ordering::Greater => 1,
+    }
+}
+
 fn join_byte_slices(elements: &[Vec<u8>], separator: &[u8]) -> Vec<u8> {
     if elements.is_empty() {
         return Vec::new();
@@ -507,7 +522,21 @@ fn last_subslice_index(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::last_subslice_index;
+    use super::{compare_byte_sequences, last_subslice_index};
+
+    #[test]
+    fn compare_byte_sequences_matches_go_style_lexicographic_results() {
+        assert_eq!(compare_byte_sequences(b"go", b"go"), 0);
+        assert_eq!(compare_byte_sequences(b"go", b"vm"), -1);
+        assert_eq!(compare_byte_sequences(b"vm", b"go"), 1);
+    }
+
+    #[test]
+    fn compare_byte_sequences_treats_empty_inputs_equally() {
+        assert_eq!(compare_byte_sequences(b"", b""), 0);
+        assert_eq!(compare_byte_sequences(b"", b"go"), -1);
+        assert_eq!(compare_byte_sequences(b"vm", b""), 1);
+    }
 
     #[test]
     fn last_subslice_index_matches_go_style_empty_and_missing_cases() {

@@ -81,6 +81,7 @@ Describe the current runtime value categories and builtin execution model introd
   - `fmt.Print(...value) -> void`
   - `fmt.Println(...value) -> void`
   - `fmt.Sprint(...value) -> string`
+  - `strings.Compare(string, string) -> int`
   - `strings.Contains(string, string) -> bool`
   - `strings.HasPrefix(string, string) -> bool`
   - `strings.HasSuffix(string, string) -> bool`
@@ -92,6 +93,7 @@ Describe the current runtime value categories and builtin execution model introd
   - `strings.TrimSuffix(string, string) -> string`
   - `strings.Join([]string, string) -> string`
   - `strings.Repeat(string, int) -> string`
+  - `bytes.Compare([]byte, []byte) -> int`
   - `bytes.Equal([]byte, []byte) -> bool`
   - `bytes.Contains([]byte, []byte) -> bool`
   - `bytes.HasPrefix([]byte, []byte) -> bool`
@@ -151,10 +153,12 @@ Describe the current runtime value categories and builtin execution model introd
 - `fmt.Sprint` returns a runtime string value without mutating the output buffer
 - `fmt` formatting is intentionally approximate and does not yet support format verbs
 - `strings` package functions now operate on the byte-oriented runtime string representation instead of converting through Rust-only string semantics
+- `strings.Compare` now performs lexicographic byte-oriented comparison and returns `-1`, `0`, or `1`
 - `strings.Index` / `strings.LastIndex` return the first or last byte offset match and `-1` on misses, while `strings.IndexByte` / `strings.LastIndexByte` search single bytes directly through the byte-oriented string representation
 - `strings.HasSuffix`, `strings.TrimPrefix`, and `strings.TrimSuffix` reuse the same byte-oriented representation without pretending rune-aware semantics
 - `strings.Join` currently requires a runtime `[]string` value and returns a joined string
 - `strings.Repeat` maps negative-count or repeated-size overflow failures into runtime errors because the VM does not model Go panic yet
+- `bytes.Compare` now performs lexicographic byte-slice comparison and treats nil and empty slices as equal through the staged byte-slice extraction path
 - `bytes.Equal`, `bytes.Contains`, `bytes.HasPrefix`, `bytes.HasSuffix`, `bytes.Index`, and `bytes.LastIndex` operate on the byte-slice view of runtime `[]byte` values
 - `bytes.IndexByte` and `bytes.LastIndexByte` search a runtime `[]byte` value for a single byte without widening into rune semantics
 - `bytes.TrimPrefix` and `bytes.TrimSuffix` preserve the staged nil-vs-empty distinction and return shared slice views on matches instead of eagerly copying

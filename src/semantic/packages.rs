@@ -26,7 +26,12 @@ const FMT_FUNCTIONS: [PackageFunctionContract; 3] = [
     },
 ];
 
-const STRINGS_FUNCTIONS: [PackageFunctionContract; 14] = [
+const STRINGS_FUNCTIONS: [PackageFunctionContract; 15] = [
+    PackageFunctionContract {
+        function: PackageFunction::StringsCompare,
+        member_name: "Compare",
+        validator: validate_strings_compare,
+    },
     PackageFunctionContract {
         function: PackageFunction::StringsContains,
         member_name: "Contains",
@@ -99,7 +104,12 @@ const STRINGS_FUNCTIONS: [PackageFunctionContract; 14] = [
     },
 ];
 
-const BYTES_FUNCTIONS: [PackageFunctionContract; 15] = [
+const BYTES_FUNCTIONS: [PackageFunctionContract; 16] = [
+    PackageFunctionContract {
+        function: PackageFunction::BytesCompare,
+        member_name: "Compare",
+        validator: validate_bytes_compare,
+    },
     PackageFunctionContract {
         function: PackageFunction::BytesEqual,
         member_name: "Equal",
@@ -209,7 +219,8 @@ pub fn expected_argument_types(function: PackageFunction) -> Option<Vec<Type>> {
         PackageFunction::FmtPrint | PackageFunction::FmtPrintln | PackageFunction::FmtSprint => {
             None
         }
-        PackageFunction::StringsContains
+        PackageFunction::StringsCompare
+        | PackageFunction::StringsContains
         | PackageFunction::StringsHasPrefix
         | PackageFunction::StringsHasSuffix
         | PackageFunction::StringsCut
@@ -228,7 +239,8 @@ pub fn expected_argument_types(function: PackageFunction) -> Option<Vec<Type>> {
             Some(vec![Type::Slice(Box::new(Type::String)), Type::String])
         }
         PackageFunction::StringsRepeat => Some(vec![Type::String, Type::Int]),
-        PackageFunction::BytesEqual
+        PackageFunction::BytesCompare
+        | PackageFunction::BytesEqual
         | PackageFunction::BytesContains
         | PackageFunction::BytesHasPrefix
         | PackageFunction::BytesHasSuffix
@@ -282,6 +294,23 @@ fn validate_variadic_any_value(argument_types: &[Type]) -> Result<Vec<Type>, Str
 fn validate_fmt_sprint(argument_types: &[Type]) -> Result<Vec<Type>, String> {
     validate_variadic_any_value(argument_types)?;
     Ok(vec![Type::String])
+}
+
+fn validate_strings_compare(argument_types: &[Type]) -> Result<Vec<Type>, String> {
+    validate_exact_package_arity(PackageFunction::StringsCompare, 2, argument_types.len())?;
+    expect_package_argument_type(
+        PackageFunction::StringsCompare,
+        1,
+        &Type::String,
+        &argument_types[0],
+    )?;
+    expect_package_argument_type(
+        PackageFunction::StringsCompare,
+        2,
+        &Type::String,
+        &argument_types[1],
+    )?;
+    Ok(vec![Type::Int])
 }
 
 fn validate_strings_contains(argument_types: &[Type]) -> Result<Vec<Type>, String> {
@@ -525,6 +554,24 @@ fn validate_strings_repeat(argument_types: &[Type]) -> Result<Vec<Type>, String>
         &argument_types[1],
     )?;
     Ok(vec![Type::String])
+}
+
+fn validate_bytes_compare(argument_types: &[Type]) -> Result<Vec<Type>, String> {
+    validate_exact_package_arity(PackageFunction::BytesCompare, 2, argument_types.len())?;
+    let byte_slice = byte_slice_type();
+    expect_package_argument_type(
+        PackageFunction::BytesCompare,
+        1,
+        &byte_slice,
+        &argument_types[0],
+    )?;
+    expect_package_argument_type(
+        PackageFunction::BytesCompare,
+        2,
+        &byte_slice,
+        &argument_types[1],
+    )?;
+    Ok(vec![Type::Int])
 }
 
 fn validate_bytes_equal(argument_types: &[Type]) -> Result<Vec<Type>, String> {

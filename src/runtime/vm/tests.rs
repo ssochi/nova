@@ -42,6 +42,42 @@ fn execute_builds_and_indexes_slices() {
 }
 
 #[test]
+fn execute_compare_package_functions() {
+    let program = Program {
+        package_name: "main".to_string(),
+        entry_function: "main".to_string(),
+        entry_function_index: 0,
+        functions: vec![CompiledFunction {
+            name: "main".to_string(),
+            parameter_count: 0,
+            variadic_element_type: None,
+            return_types: Vec::new(),
+            local_names: vec![],
+            instructions: vec![
+                Instruction::PushString("go".to_string()),
+                Instruction::PushString("go".to_string()),
+                Instruction::CallPackage(PackageFunction::StringsCompare, 2),
+                Instruction::CallBuiltin(BuiltinFunction::Println, 1),
+                Instruction::PushNilSlice,
+                Instruction::PushByte(b'g'),
+                Instruction::PushByte(b'o'),
+                Instruction::BuildSlice(2),
+                Instruction::CallPackage(PackageFunction::BytesCompare, 2),
+                Instruction::CallBuiltin(BuiltinFunction::Println, 1),
+                Instruction::Return,
+            ],
+        }],
+    };
+
+    let output = VirtualMachine::new()
+        .execute(&program)
+        .expect("compare package functions should execute")
+        .render_output();
+
+    assert_eq!(output, "0\n-1\n");
+}
+
+#[test]
 fn execute_strings_package_functions() {
     let program = Program {
         package_name: "main".to_string(),

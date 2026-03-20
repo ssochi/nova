@@ -33,6 +33,7 @@ This directory stores research notes that inform roadmap choices and implementat
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `2026-03-20-strings-bytes-compare-seams.md`: official behavior baseline for staged `strings.Compare` / `bytes.Compare` package helpers
 - `2026-03-20-strings-bytes-last-index-byte-search.md`: official behavior baseline for staged `strings` / `bytes` last-index and byte-search helpers
 - `2026-03-20-strings-bytes-index-trim-seams.md`: official behavior baseline for the staged `strings` / `bytes` index, suffix, and trim package helpers
 - `2026-03-20-variadic-functions-and-ellipsis.md`: official behavior baseline for staged variadic function declarations, final-argument `...` calls, and `append(slice, values...)`

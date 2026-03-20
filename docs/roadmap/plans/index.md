@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-10-21-19-strings-bytes-compare-seams`
+- Opened `2026-03-20-10-21-19-strings-bytes-compare-seams` for staged `strings.Compare` / `bytes.Compare` package seams under `M3`
 - Completed and archived `2026-03-20-10-08-16-strings-bytes-last-index-byte-search`
 - Opened `2026-03-20-10-08-16-strings-bytes-last-index-byte-search` for staged `strings` / `bytes` last-index and byte-search package seams under `M3`
 - Completed and archived `2026-03-20-09-49-02-strings-bytes-index-trim`
