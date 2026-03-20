@@ -791,4 +791,6 @@ fn assignment_target_from_expression(
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_defer;
+#[cfg(test)]
 mod tests_named_results;

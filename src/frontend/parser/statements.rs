@@ -56,7 +56,24 @@ impl<'a> Parser<'a> {
             return Ok(Statement::Continue);
         }
 
+        if self.match_kind(&TokenKind::Defer) {
+            return self.parse_defer_statement();
+        }
+
         self.parse_expression_statement()
+    }
+
+    fn parse_defer_statement(&mut self) -> Result<Statement, ParseError> {
+        if self.check(&TokenKind::LeftParen) {
+            return Err(self.error_at_current("expression in defer must not be parenthesized"));
+        }
+
+        let expression = self.parse_expression()?;
+        if !matches!(expression, Expression::Call { .. }) {
+            return Err(ParseError::new("defer requires a function call"));
+        }
+
+        Ok(Statement::Defer(expression))
     }
 
     fn parse_for_statement(&mut self) -> Result<Statement, ParseError> {

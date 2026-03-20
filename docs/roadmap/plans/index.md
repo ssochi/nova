@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-11-58-27-defer-first-slice`
+- Opened `2026-03-20-11-58-27-defer-first-slice` for the first staged `defer` statement slice under `M3`
 - Completed and archived `2026-03-20-11-23-19-named-result-parameters`
 - Opened `2026-03-20-11-23-19-named-result-parameters` for grouped named result declarations, result-slot initialization, and bare `return` under `M3`
 - Completed and archived `2026-03-20-11-02-46-grouped-parameter-shorthand`

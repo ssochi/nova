@@ -34,6 +34,7 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 - Validate staged short declarations centrally so they remain explicit, support the current same-block redeclaration rules when at least one named binding is new, and keep multi-binding result flow separate from plain assignment targets.
 - Validate staged multi-result returns, assignment-like usage, and single-call-argument forwarding centrally so broader package seams can reuse the same non-tuple result model.
 - Validate staged variadic function declarations and explicit final-argument `...` calls centrally so user-defined helpers and `append` spread behavior stay explicit instead of disappearing into generic flat argument lists.
+- Validate staged `defer` statements centrally so supported direct-call targets reuse the existing call-contract path while builtin statement-context restrictions stay explicit before lowering.
 - Preserve grouped input parameter declarations such as `func f(a, b int)` at the frontend layer while flattening them centrally into the ordered parameter-slot model used by semantic analysis and lowering.
 - Preserve explicit result declarations such as `func f() (left, right string, ok bool)` at the frontend layer while flattening them centrally into ordered result-slot metadata used by semantic analysis and lowering.
 - Model named result parameters as function-entry local slots with explicit zero-value initialization metadata, and validate bare `return` against the active scope stack so shadowed result names fail before lowering.
@@ -70,6 +71,7 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
   - explicit expression list or explicit multi-result call source used by staged `return`, `:=`, and `=` forms
 - `CheckedCall`
   - explicit ordinary-arguments vs expanded-call-argument vs explicit spread-argument source so call forwarding and `...` do not disappear into flat expression lists too early
+  - reused directly by staged `defer` statements so deferred calls do not fork into a second call-contract model
 
 ## Driver Contract
 
@@ -86,6 +88,7 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 - Builtin coverage is still intentionally small, and conversions are now deliberately modeled outside the builtin table.
 - Function and package calls now support zero, one, or multiple results explicitly, but those results are still not first-class tuple expressions.
 - User-defined functions now also support grouped named result declarations plus bare `return`; named result slots are initialized explicitly at function entry, while mixed named/unnamed result lists remain invalid.
+- `defer` is now supported for the current direct-call subset: builtins permitted in statement context, imported package members, and user-defined function names. Parenthesized defer expressions, arbitrary non-call operands, closures, methods, and panic/recover-aware unwinding remain deferred.
 - Call forwarding is still staged: a multi-result call may feed another call only when it is the entire argument list by itself, while prefixed forms such as `f(1, pair())` remain invalid single-value contexts.
 - User-defined functions now also support staged final variadic parameters, and calls may use explicit final `...` spreading only for the fixed-prefix-plus-spread shape required by real Go; broader package-backed variadic slice forwarding still remains deferred.
 - User-defined functions now also support grouped input parameter-name shorthand such as `func f(a, b int)` plus grouped named result declarations such as `func f() (left, right string)`; grouped declarations preserve source readability in `dump-ast` but flatten into ordinary ordered parameter/result slots before checked-program construction.

@@ -80,6 +80,7 @@ pub enum CheckedStatement {
         operator: CheckedIncDecOperator,
         operand_type: Type,
     },
+    Defer(CheckedCall),
     Break,
     Continue,
     Return(CheckedValueSource),

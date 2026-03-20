@@ -34,6 +34,7 @@ This directory stores experience validation reports close to the real user path.
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `2026-03-20-defer-first-slice-playtest.md`: records the CLI walkthrough for staged `defer` statements and explicit defer bytecode
 - `2026-03-20-named-result-parameters-playtest.md`: records the CLI walkthrough for grouped named result declarations, blank result identifiers, and bare `return`
 - `2026-03-20-grouped-parameter-shorthand-playtest.md`: records the CLI walkthrough for grouped input parameter declarations and grouped-prefix variadic signatures
 - `2026-03-20-builtin-clear-and-runtime-file-split-playtest.md`: records the CLI walkthrough for builtin `clear(slice|map)` plus runtime file-size governance

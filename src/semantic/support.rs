@@ -227,6 +227,7 @@ fn statement_guarantees_termination(statement: &CheckedStatement) -> bool {
         }
         CheckedStatement::For(for_statement) => for_statement_guarantees_termination(for_statement),
         CheckedStatement::RangeFor { .. } => false,
+        CheckedStatement::Defer(_) => false,
         CheckedStatement::Break | CheckedStatement::Continue => false,
         _ => false,
     }

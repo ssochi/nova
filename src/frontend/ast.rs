@@ -143,6 +143,7 @@ pub enum Statement {
         target: AssignmentTarget,
         operator: IncDecOperator,
     },
+    Defer(Expression),
     Break,
     Continue,
     Return(Vec<Expression>),
@@ -362,6 +363,9 @@ impl Statement {
                 target.render(),
                 operator.render()
             ),
+            Statement::Defer(expression) => {
+                format!("{}defer {}", indent_str(indent), expression.render())
+            }
             Statement::Break => format!("{}break", indent_str(indent)),
             Statement::Continue => format!("{}continue", indent_str(indent)),
             Statement::Return(values) if values.is_empty() => {

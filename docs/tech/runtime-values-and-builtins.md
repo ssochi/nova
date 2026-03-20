@@ -69,6 +69,7 @@ Describe the current runtime value categories and builtin execution model introd
 - `copy` validates destination and source slice types centrally before lowering, including the `[]byte` <- `string` special case
 - `append` validates a slice first argument and matching appended element types before lowering
 - `append` also validates explicit spread calls separately so `append(values, more...)`, typed `nil...`, and the narrow `append([]byte, string...)` rule stay explicit instead of weakening ordinary element checks
+- Builtins used by staged `defer` must also pass the real Go-style statement-context filter; currently `print`, `println`, `copy`, `delete`, `close`, and `clear` are allowed while result-producing builtins such as `len`, `cap`, `append`, and `make` remain invalid in deferred statement context
 
 ## Package Contract Model
 
@@ -122,6 +123,7 @@ Describe the current runtime value categories and builtin execution model introd
 - Bytecode now also uses `push-nil-slice` / `push-nil-chan` / `push-nil-map` for typed zero-value declarations, `build-slice <count>` for slice literals, `build-map <type> <count>` for map literals, `make-slice <type>`, `make-chan <type>`, and `make-map <type>` for allocation, `send` / `receive <type>` for channel operations, `index <slice|string>` and `index-map <type>` for element reads, `lookup-map <type>` for comma-ok reads, `slice <slice|string>` for window creation, and `set-index` / `set-map-index` for indexed writes
 - Bytecode now also uses `convert string->[]byte` and `convert []byte->string` for the narrow explicit conversion surface
 - Bytecode now also records optional variadic function metadata plus explicit `call-function-spread` / `call-builtin-spread` instructions so `dump-bytecode` keeps variadic behavior readable
+- Bytecode now also records explicit `defer-builtin`, `defer-package`, `defer-function`, and `defer-function-spread` instructions so deferred execution stays visible instead of disappearing into synthetic tail blocks
 - Explicit source-level `nil` is resolved in semantic analysis into typed nil-slice, nil-chan, or nil-map zero values before lowering
 - Staged `range` loops now lower by evaluating the source once, storing explicit hidden range locals, iterating slices through index/len loops, and iterating maps through a dedicated `map-keys` instruction plus key-slice traversal
 - Equality still reuses the generic value comparison path because runtime values are tagged; slice/map equality is only exposed through the explicit `nil` coercion path, while channel equality compares shared runtime identity plus nil
@@ -134,7 +136,9 @@ Describe the current runtime value categories and builtin execution model introd
 - `append` now reuses existing backing storage when spare capacity is available; otherwise it allocates a fresh slice value
 - `clear(slice)` mutates the visible slice window in place, zeroing each element without changing the slice length, capacity, or nil state
 - User-defined variadic calls materialize the tail arguments into a runtime slice local on function entry, and zero-tail calls produce a nil slice local
+- VM call frames now keep an explicit deferred-call stack plus pending return values, so staged `defer` evaluates arguments immediately, executes deferred calls in LIFO order, and drains them before frame removal
 - `call-function-spread` expands a final slice value into the variadic tail for user-defined calls, while `call-builtin-spread append` expands either a matching slice or the narrow `string` source for `[]byte`
+- Deferred user-defined calls currently discard all return values through frame metadata instead of pushing them back onto the caller stack
 - `make([]T, len[, cap])` lowers into dedicated allocation bytecode instead of a generic runtime builtin call because its first argument is a type
 - `make(chan T[, size])` also lowers into dedicated allocation bytecode so buffer size and nil-channel behavior stay explicit in `dump-bytecode`
 - `make(map[K]V[, hint])` also lowers into dedicated allocation bytecode so hint handling and nil-vs-empty map state stay explicit

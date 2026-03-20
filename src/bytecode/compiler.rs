@@ -165,6 +165,7 @@ impl<'a> FunctionCompiler<'a> {
                 operator,
                 operand_type,
             } => self.compile_inc_dec_statement(target, *operator, operand_type)?,
+            CheckedStatement::Defer(call) => self.compile_defer_call(call)?,
             CheckedStatement::Break => self.compile_break_statement()?,
             CheckedStatement::Continue => self.compile_continue_statement()?,
             CheckedStatement::Return(values) => {
@@ -523,25 +524,7 @@ impl<'a> FunctionCompiler<'a> {
     }
 
     fn compile_call(&mut self, call: &CheckedCall, context: &str) -> Result<(), CompileError> {
-        match &call.arguments {
-            CheckedCallArguments::Expressions(arguments) => {
-                for argument in arguments {
-                    self.compile_expression(argument)?;
-                    self.expect_value(&argument.ty, context)?;
-                }
-            }
-            CheckedCallArguments::ExpandedCall(expanded_call) => {
-                self.compile_call(expanded_call, context)?;
-            }
-            CheckedCallArguments::Spread { arguments, spread } => {
-                for argument in arguments {
-                    self.compile_expression(argument)?;
-                    self.expect_value(&argument.ty, context)?;
-                }
-                self.compile_expression(spread)?;
-                self.expect_value(&spread.ty, context)?;
-            }
-        }
+        self.compile_call_arguments(call, context)?;
 
         match &call.target {
             CallTarget::Builtin(builtin) => {
@@ -571,6 +554,70 @@ impl<'a> FunctionCompiler<'a> {
                     _ => Instruction::CallFunction(*function_index, call.argument_count()),
                 };
                 self.instructions.push(instruction);
+            }
+        }
+        Ok(())
+    }
+
+    fn compile_defer_call(&mut self, call: &CheckedCall) -> Result<(), CompileError> {
+        self.compile_call_arguments(call, "defer statement")?;
+
+        match &call.target {
+            CallTarget::Builtin(builtin) => {
+                if matches!(call.arguments, CheckedCallArguments::Spread { .. }) {
+                    return Err(CompileError::new(format!(
+                        "builtin `{}` cannot be lowered with explicit `...` in defer",
+                        builtin.render()
+                    )));
+                }
+                self.instructions
+                    .push(Instruction::DeferBuiltin(*builtin, call.argument_count()));
+            }
+            CallTarget::PackageFunction(function) => {
+                if matches!(call.arguments, CheckedCallArguments::Spread { .. }) {
+                    return Err(CompileError::new(format!(
+                        "package function `{}` cannot be lowered with explicit `...` in defer",
+                        function.render()
+                    )));
+                }
+                self.instructions
+                    .push(Instruction::DeferPackage(*function, call.argument_count()));
+            }
+            CallTarget::UserDefined { function_index, .. } => {
+                let instruction = match &call.arguments {
+                    CheckedCallArguments::Spread { arguments, .. } => {
+                        Instruction::DeferFunctionSpread(*function_index, arguments.len())
+                    }
+                    _ => Instruction::DeferFunction(*function_index, call.argument_count()),
+                };
+                self.instructions.push(instruction);
+            }
+        }
+        Ok(())
+    }
+
+    fn compile_call_arguments(
+        &mut self,
+        call: &CheckedCall,
+        context: &str,
+    ) -> Result<(), CompileError> {
+        match &call.arguments {
+            CheckedCallArguments::Expressions(arguments) => {
+                for argument in arguments {
+                    self.compile_expression(argument)?;
+                    self.expect_value(&argument.ty, context)?;
+                }
+            }
+            CheckedCallArguments::ExpandedCall(expanded_call) => {
+                self.compile_call(expanded_call, context)?;
+            }
+            CheckedCallArguments::Spread { arguments, spread } => {
+                for argument in arguments {
+                    self.compile_expression(argument)?;
+                    self.expect_value(&argument.ty, context)?;
+                }
+                self.compile_expression(spread)?;
+                self.expect_value(&spread.ty, context)?;
             }
         }
         Ok(())

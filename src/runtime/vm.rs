@@ -72,6 +72,7 @@ impl VirtualMachine {
         self.frames.push(CallFrame::new(
             program.entry_function_index,
             entry.local_names.len(),
+            ReturnMode::Normal,
         ));
 
         while let Some(frame_index) = self.frames.len().checked_sub(1) {
@@ -212,40 +213,100 @@ impl VirtualMachine {
                 }
                 Instruction::CallFunction(function_index, arity) => {
                     let arguments = self.pop_arguments(arity)?;
-                    self.call_user_function(program, frame_index, function_index, arguments)?;
+                    self.call_user_function(
+                        program,
+                        frame_index,
+                        function_index,
+                        arguments,
+                        ReturnMode::Normal,
+                        true,
+                    )?;
                     advance_pc = false;
                 }
                 Instruction::CallFunctionSpread(function_index, prefix_arity) => {
                     let spread = self.pop_value()?;
                     let mut arguments = self.pop_arguments(prefix_arity)?;
-                    let spread_arguments = match spread {
-                        Value::Slice(slice) => slice.visible_elements(),
-                        _ => {
-                            return Err(RuntimeError::new(
-                                "function call with `...` requires a slice spread argument",
-                            ));
-                        }
-                    };
+                    let spread_arguments = self.expand_user_function_spread_arguments(spread)?;
                     arguments.extend(spread_arguments);
-                    self.call_user_function(program, frame_index, function_index, arguments)?;
+                    self.call_user_function(
+                        program,
+                        frame_index,
+                        function_index,
+                        arguments,
+                        ReturnMode::Normal,
+                        true,
+                    )?;
                     advance_pc = false;
                 }
-                Instruction::Return => {
-                    let mut return_values = Vec::with_capacity(function.return_types.len());
-                    for _ in 0..function.return_types.len() {
-                        return_values.push(self.pop_value()?);
-                    }
-                    return_values.reverse();
-                    self.frames.pop();
-                    for value in return_values {
-                        self.stack.push(value);
-                    }
-                    if self.frames.is_empty() {
-                        return Ok(ExecutionResult {
-                            output: self.output.clone(),
+                Instruction::DeferBuiltin(builtin, arity) => {
+                    let arguments = self.pop_arguments(arity)?;
+                    self.frames[frame_index]
+                        .deferred_calls
+                        .push(DeferredCall::Builtin { builtin, arguments });
+                }
+                Instruction::DeferPackage(function, arity) => {
+                    let arguments = self.pop_arguments(arity)?;
+                    self.frames[frame_index]
+                        .deferred_calls
+                        .push(DeferredCall::Package {
+                            function,
+                            arguments,
                         });
+                }
+                Instruction::DeferFunction(function_index, arity) => {
+                    let arguments = self.pop_arguments(arity)?;
+                    self.frames[frame_index]
+                        .deferred_calls
+                        .push(DeferredCall::UserDefined {
+                            function_index,
+                            arguments,
+                        });
+                }
+                Instruction::DeferFunctionSpread(function_index, prefix_arity) => {
+                    let spread = self.pop_value()?;
+                    let mut arguments = self.pop_arguments(prefix_arity)?;
+                    let spread_arguments = self.expand_user_function_spread_arguments(spread)?;
+                    arguments.extend(spread_arguments);
+                    self.frames[frame_index]
+                        .deferred_calls
+                        .push(DeferredCall::UserDefined {
+                            function_index,
+                            arguments,
+                        });
+                }
+                Instruction::Return => {
+                    if self.frames[frame_index].pending_return_values.is_none() {
+                        let mut return_values = Vec::with_capacity(function.return_types.len());
+                        for _ in 0..function.return_types.len() {
+                            return_values.push(self.pop_value()?);
+                        }
+                        return_values.reverse();
+                        self.frames[frame_index].pending_return_values = Some(return_values);
                     }
 
+                    let deferred_call = self.frames[frame_index].deferred_calls.pop();
+
+                    if let Some(deferred_call) = deferred_call {
+                        self.execute_deferred_call(program, frame_index, deferred_call)?;
+                    } else {
+                        let frame = self
+                            .frames
+                            .pop()
+                            .ok_or_else(|| RuntimeError::new("return with no active call frame"))?;
+                        let return_values = frame
+                            .pending_return_values
+                            .ok_or_else(|| RuntimeError::new("return frame missing values"))?;
+                        if matches!(frame.return_mode, ReturnMode::Normal) {
+                            for value in return_values {
+                                self.stack.push(value);
+                            }
+                        }
+                        if self.frames.is_empty() {
+                            return Ok(ExecutionResult {
+                                output: self.output.clone(),
+                            });
+                        }
+                    }
                     advance_pc = false;
                 }
             }
@@ -337,6 +398,8 @@ impl VirtualMachine {
         caller_frame_index: usize,
         function_index: usize,
         arguments: Vec<Value>,
+        return_mode: ReturnMode,
+        advance_caller_pc: bool,
     ) -> Result<(), RuntimeError> {
         let function = program
             .functions
@@ -365,8 +428,10 @@ impl VirtualMachine {
             )));
         }
 
-        self.frames[caller_frame_index].pc += 1;
-        let mut frame = CallFrame::new(function_index, function.local_names.len());
+        if advance_caller_pc {
+            self.frames[caller_frame_index].pc += 1;
+        }
+        let mut frame = CallFrame::new(function_index, function.local_names.len(), return_mode);
         if function.variadic_element_type.is_some() {
             for (index, argument) in arguments.iter().take(fixed_parameter_count).enumerate() {
                 frame.locals[index] = argument.clone();
@@ -383,6 +448,50 @@ impl VirtualMachine {
         }
         self.frames.push(frame);
         Ok(())
+    }
+
+    fn expand_user_function_spread_arguments(
+        &self,
+        spread: Value,
+    ) -> Result<Vec<Value>, RuntimeError> {
+        match spread {
+            Value::Slice(slice) => Ok(slice.visible_elements()),
+            _ => Err(RuntimeError::new(
+                "function call with `...` requires a slice spread argument",
+            )),
+        }
+    }
+
+    fn execute_deferred_call(
+        &mut self,
+        program: &Program,
+        frame_index: usize,
+        deferred_call: DeferredCall,
+    ) -> Result<(), RuntimeError> {
+        match deferred_call {
+            DeferredCall::Builtin { builtin, arguments } => {
+                let _ = self.execute_builtin_call(builtin, arguments)?;
+                Ok(())
+            }
+            DeferredCall::Package {
+                function,
+                arguments,
+            } => {
+                let _ = self.execute_package_function(function, arguments)?;
+                Ok(())
+            }
+            DeferredCall::UserDefined {
+                function_index,
+                arguments,
+            } => self.call_user_function(
+                program,
+                frame_index,
+                function_index,
+                arguments,
+                ReturnMode::Discard,
+                false,
+            ),
+        }
     }
 
     fn index_value(&mut self, target_kind: SequenceKind) -> Result<(), RuntimeError> {
@@ -778,16 +887,44 @@ struct CallFrame {
     function_index: usize,
     pc: usize,
     locals: Vec<Value>,
+    deferred_calls: Vec<DeferredCall>,
+    pending_return_values: Option<Vec<Value>>,
+    return_mode: ReturnMode,
 }
 
 impl CallFrame {
-    fn new(function_index: usize, local_count: usize) -> Self {
+    fn new(function_index: usize, local_count: usize, return_mode: ReturnMode) -> Self {
         Self {
             function_index,
             pc: 0,
             locals: vec![Value::default(); local_count],
+            deferred_calls: Vec::new(),
+            pending_return_values: None,
+            return_mode,
         }
     }
+}
+
+#[derive(Clone, Debug)]
+enum DeferredCall {
+    Builtin {
+        builtin: crate::builtin::BuiltinFunction,
+        arguments: Vec<Value>,
+    },
+    Package {
+        function: crate::package::PackageFunction,
+        arguments: Vec<Value>,
+    },
+    UserDefined {
+        function_index: usize,
+        arguments: Vec<Value>,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ReturnMode {
+    Normal,
+    Discard,
 }
 
 #[cfg(test)]

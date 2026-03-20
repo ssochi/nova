@@ -18,6 +18,7 @@ use crate::semantic::support::{
     zero_value_expression,
 };
 
+mod defer;
 mod expressions;
 mod ifs;
 mod lookup;
@@ -308,6 +309,7 @@ impl<'a> FunctionAnalyzer<'a> {
             Statement::IncDec { target, operator } => {
                 self.analyze_inc_dec_statement(target, *operator)
             }
+            Statement::Defer(expression) => self.analyze_defer_statement(expression),
             Statement::Break => self.analyze_break_statement(),
             Statement::Continue => self.analyze_continue_statement(),
             Statement::Return(values) => self.analyze_return_statement(values),
@@ -941,3 +943,5 @@ enum ControlFlowContext {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_defer;

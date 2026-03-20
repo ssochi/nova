@@ -149,6 +149,7 @@ fn checked_statement_to_header_statement(
             operand_type,
         },
         CheckedStatement::If(_)
+        | CheckedStatement::Defer(_)
         | CheckedStatement::Send { .. }
         | CheckedStatement::Switch(_)
         | CheckedStatement::For(_)

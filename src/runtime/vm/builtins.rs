@@ -10,14 +10,26 @@ impl VirtualMachine {
         arity: usize,
     ) -> Result<(), RuntimeError> {
         let arguments = self.pop_arguments(arity)?;
+        for value in self.execute_builtin_call(builtin, arguments)? {
+            self.stack.push(value);
+        }
+        Ok(())
+    }
 
+    pub(super) fn execute_builtin_call(
+        &mut self,
+        builtin: BuiltinFunction,
+        arguments: Vec<Value>,
+    ) -> Result<Vec<Value>, RuntimeError> {
         match builtin {
             BuiltinFunction::Print => {
                 self.output.push_str(&render_builtin_arguments(&arguments));
+                Ok(Vec::new())
             }
             BuiltinFunction::Println => {
                 self.output.push_str(&render_builtin_arguments(&arguments));
                 self.output.push('\n');
+                Ok(Vec::new())
             }
             BuiltinFunction::Len => {
                 let [argument] = expect_exact_builtin_arguments(arguments, 1, "len")?;
@@ -32,7 +44,7 @@ impl VirtualMachine {
                         ));
                     }
                 };
-                self.stack.push(Value::Integer(value));
+                Ok(vec![Value::Integer(value)])
             }
             BuiltinFunction::Cap => {
                 let [argument] = expect_exact_builtin_arguments(arguments, 1, "cap")?;
@@ -45,7 +57,7 @@ impl VirtualMachine {
                         ));
                     }
                 };
-                self.stack.push(Value::Integer(value));
+                Ok(vec![Value::Integer(value)])
             }
             BuiltinFunction::Copy => {
                 let [destination, source] = expect_exact_builtin_arguments(arguments, 2, "copy")?;
@@ -66,7 +78,7 @@ impl VirtualMachine {
                         ));
                     }
                 };
-                self.stack.push(Value::Integer(copied as i64));
+                Ok(vec![Value::Integer(copied as i64)])
             }
             BuiltinFunction::Append => {
                 let Some((first, rest)) = arguments.split_first() else {
@@ -82,13 +94,11 @@ impl VirtualMachine {
                         ));
                     }
                 };
-                self.stack.push(Value::Slice(slice.append(rest)));
+                Ok(vec![Value::Slice(slice.append(rest))])
             }
-            BuiltinFunction::Make => {
-                return Err(RuntimeError::new(
-                    "builtin `make` is lowered into dedicated allocation bytecode",
-                ));
-            }
+            BuiltinFunction::Make => Err(RuntimeError::new(
+                "builtin `make` is lowered into dedicated allocation bytecode",
+            )),
             BuiltinFunction::Delete => {
                 let [target, key] = expect_exact_builtin_arguments(arguments, 2, "delete")?;
                 let map = match target {
@@ -111,6 +121,7 @@ impl VirtualMachine {
                     }
                 };
                 map.remove(&key);
+                Ok(Vec::new())
             }
             BuiltinFunction::Close => {
                 let [target] = expect_exact_builtin_arguments(arguments, 1, "close")?;
@@ -126,6 +137,7 @@ impl VirtualMachine {
                     ChannelCloseError::Nil => RuntimeError::new("close of nil channel"),
                     ChannelCloseError::Closed => RuntimeError::new("close of closed channel"),
                 })?;
+                Ok(Vec::new())
             }
             BuiltinFunction::Clear => {
                 let [target] = expect_exact_builtin_arguments(arguments, 1, "clear")?;
@@ -138,10 +150,9 @@ impl VirtualMachine {
                         ));
                     }
                 }
+                Ok(Vec::new())
             }
         }
-
-        Ok(())
     }
 
     pub(super) fn call_builtin_spread(
@@ -151,7 +162,18 @@ impl VirtualMachine {
     ) -> Result<(), RuntimeError> {
         let spread = self.pop_value()?;
         let arguments = self.pop_arguments(prefix_arity)?;
+        for value in self.execute_builtin_spread_call(builtin, arguments, spread)? {
+            self.stack.push(value);
+        }
+        Ok(())
+    }
 
+    pub(super) fn execute_builtin_spread_call(
+        &mut self,
+        builtin: BuiltinFunction,
+        arguments: Vec<Value>,
+        spread: Value,
+    ) -> Result<Vec<Value>, RuntimeError> {
         match builtin {
             BuiltinFunction::Append => {
                 let [target] = expect_exact_builtin_arguments(arguments, 1, "append")?;
@@ -174,8 +196,7 @@ impl VirtualMachine {
                         ));
                     }
                 };
-                self.stack.push(Value::Slice(slice.append(&appended)));
-                Ok(())
+                Ok(vec![Value::Slice(slice.append(&appended))])
             }
             _ => Err(RuntimeError::new(format!(
                 "builtin `{}` does not support explicit `...` arguments",

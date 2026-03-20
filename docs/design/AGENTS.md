@@ -32,6 +32,7 @@ This directory stores feature and subsystem designs. It describes intent, scope 
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `defer-first-slice.md`: design baseline for staged `defer` statements, frame-level deferred-call stacks, and explicit unwind behavior
 - `named-result-parameters.md`: design baseline for grouped named result declarations, function-entry result slots, and bare `return`
 - `grouped-parameter-shorthand.md`: design baseline for grouped input parameter declarations such as `func f(a, b int)`
 - `strings-bytes-compare-seams.md`: design baseline for staged `strings.Compare` / `bytes.Compare` package helpers

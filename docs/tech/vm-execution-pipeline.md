@@ -40,6 +40,7 @@ Describe the concrete execution pipeline shipped in the bootstrap milestone, inc
 - Package analysis also flattens grouped input parameter declarations such as `func f(a, b int)` into the ordered parameter-slot metadata used by lowering and the VM.
 - Package analysis also flattens explicit result declarations such as `func f() (left, right string)` into ordered result-slot metadata while keeping named result bindings visible to semantic scope checks.
 - Package analysis also validates supported import paths and selector calls to imported package members.
+- Package analysis now also validates staged `defer` statements as explicit statement nodes, reusing ordinary call contracts while rejecting parenthesized defer operands and builtins that are not valid in statement context.
 - Execution additionally requires the configured package and entry function to exist, and the entry function must be `func main()`.
 - Local variables must be declared before assignment or use, with nested block scopes mapped to fixed slots during analysis.
 - Builtin calls, user-defined function calls, and metadata-backed `fmt` / `strings` / `bytes` package seams are supported.
@@ -49,7 +50,9 @@ Describe the concrete execution pipeline shipped in the bootstrap milestone, inc
 - Bytecode lowering now also emits explicit zero-value stores for named result locals at function entry, because VM local-slot defaults are not type-aware.
 - The current multi-result model is explicit rather than tuple-based: staged `return`, multi-binding `:=` / `=`, single-call-argument forwarding, and package seams can consume multi-result calls, while unsupported single-value contexts still fail during semantic analysis.
 - Bare `return` now lowers through explicit reads of tracked result locals, and semantic analysis rejects bare returns whose named result bindings are shadowed out of scope.
+- Deferred calls now lower through explicit defer instructions instead of synthetic tail blocks, keeping eager argument capture and LIFO execution visible in `dump-bytecode`.
 - Runtime dispatch inside `src/runtime/vm/` is now split between `builtins.rs`, `packages.rs`, and `support.rs` so package growth does not keep accumulating in one VM file.
+- VM call frames now retain both pending return values and a deferred-call stack so staged `defer` can run before frame removal and future panic-aware unwinding can reuse the same frame hook.
 - Branch and loop conditions must produce boolean values, staged control-flow headers run before condition or clause dispatch, and expression-switch tags are evaluated once before clause comparison.
 - The current branch model supports `if`, `else`, explicit `else if`, and staged expression `switch` lowering with header scopes chosen during semantic analysis.
 - Single-expression short declarations, staged compound assignments, and explicit `++` / `--` are now explicit statement forms that survive semantic analysis and lower directly instead of pretending to be expressions.

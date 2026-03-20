@@ -181,6 +181,10 @@ pub enum Instruction {
     CallPackage(PackageFunction, usize),
     CallFunction(usize, usize),
     CallFunctionSpread(usize, usize),
+    DeferBuiltin(BuiltinFunction, usize),
+    DeferPackage(PackageFunction, usize),
+    DeferFunction(usize, usize),
+    DeferFunctionSpread(usize, usize),
     Return,
 }
 
@@ -277,6 +281,16 @@ impl Instruction {
             Instruction::CallFunction(index, arity) => format!("call-function {index} {arity}"),
             Instruction::CallFunctionSpread(index, prefix_arity) => {
                 format!("call-function-spread {index} {prefix_arity}")
+            }
+            Instruction::DeferBuiltin(builtin, arity) => {
+                format!("defer-builtin {} {arity}", builtin.render())
+            }
+            Instruction::DeferPackage(function, arity) => {
+                format!("defer-package {} {arity}", function.render())
+            }
+            Instruction::DeferFunction(index, arity) => format!("defer-function {index} {arity}"),
+            Instruction::DeferFunctionSpread(index, prefix_arity) => {
+                format!("defer-function-spread {index} {prefix_arity}")
             }
             Instruction::Return => "return".to_string(),
         }

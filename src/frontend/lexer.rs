@@ -277,6 +277,7 @@ impl<'a> Lexer<'a> {
             "range" => TokenKind::Range,
             "break" => TokenKind::Break,
             "continue" => TokenKind::Continue,
+            "defer" => TokenKind::Defer,
             "return" => TokenKind::Return,
             "map" => TokenKind::Map,
             "chan" => TokenKind::Chan,

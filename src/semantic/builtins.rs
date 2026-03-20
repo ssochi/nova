@@ -113,6 +113,18 @@ pub fn validate_append_spread_call(
     ))
 }
 
+pub fn builtin_permits_statement_context(builtin: BuiltinFunction) -> bool {
+    matches!(
+        builtin,
+        BuiltinFunction::Print
+            | BuiltinFunction::Println
+            | BuiltinFunction::Copy
+            | BuiltinFunction::Delete
+            | BuiltinFunction::Close
+            | BuiltinFunction::Clear
+    )
+}
+
 fn builtin_contract(builtin: BuiltinFunction) -> &'static BuiltinContract {
     BUILTIN_CONTRACTS
         .iter()

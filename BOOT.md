@@ -71,6 +71,7 @@ Operational clarifications:
 35. `Clone`-style `strings` / `bytes` helpers also fit the current byte-oriented runtime, but `bytes.Clone` must preserve the real Go rule that nil stays nil while a non-nil empty slice stays non-nil.
 36. When extending mutating builtins over composite values, keep the mutation explicit in the bytecode/runtime path instead of lowering it into hidden loops; for `clear`, preserve nil no-op behavior, keep slice clearing scoped to the visible `len` window, and do not collapse allocated maps into nil.
 37. When extending named result parameters, keep result declarations explicit in the AST and checked layer, initialize named result slots explicitly before the body instead of relying on VM local defaults, and model bare `return` as ordered result-slot reads with semantic shadowing checks.
+38. When extending `defer`, keep it explicit as a statement-scoped AST / checked / bytecode / VM-frame feature; evaluate arguments immediately, execute deferred calls in LIFO order before frame removal, and do not lower the feature into synthetic tail blocks that would block future panic-aware unwinding.
 
 If no task is explicitly specified, you must proactively choose the most worthwhile piece of work to advance, with the following priorities:
 1. **Obvious gaps in functionality, core experience, or core flow** (search the web more, do research, refer to relevant experience from similar high-quality projects, and established methodologies)

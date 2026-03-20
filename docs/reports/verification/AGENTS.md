@@ -34,6 +34,7 @@ This directory stores validation evidence that "proves the change holds."
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `2026-03-20-defer-first-slice.md`: validates staged `defer` statements, eager argument capture, and explicit frame-exit execution across the full CLI and VM stack
 - `2026-03-20-named-result-parameters.md`: validates grouped named result declarations, function-entry result-slot initialization, and bare `return` across the full CLI and VM stack
 - `2026-03-20-grouped-parameter-shorthand.md`: validates grouped input parameter declarations plus grouped-prefix variadic signatures across the full CLI and VM stack
 - `2026-03-20-builtin-clear-and-runtime-file-split.md`: validates builtin `clear(slice|map)` plus runtime file-size governance across the full CLI and VM stack
