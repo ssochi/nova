@@ -75,6 +75,12 @@ impl<'a> FunctionCompiler<'a> {
         Ok(CompiledFunction {
             name: self.function.name.clone(),
             parameter_count: self.function.parameter_count,
+            variadic_element_type: self
+                .function
+                .variadic_element_type
+                .as_ref()
+                .map(lower_value_type)
+                .transpose()?,
             return_types: lower_result_types(&self.function.return_types)?,
             local_names: self.local_names,
             instructions: self.instructions,
@@ -515,22 +521,44 @@ impl<'a> FunctionCompiler<'a> {
             CheckedCallArguments::ExpandedCall(expanded_call) => {
                 self.compile_call(expanded_call, context)?;
             }
+            CheckedCallArguments::Spread { arguments, spread } => {
+                for argument in arguments {
+                    self.compile_expression(argument)?;
+                    self.expect_value(&argument.ty, context)?;
+                }
+                self.compile_expression(spread)?;
+                self.expect_value(&spread.ty, context)?;
+            }
         }
 
         match &call.target {
             CallTarget::Builtin(builtin) => {
-                self.instructions
-                    .push(Instruction::CallBuiltin(*builtin, call.argument_count()));
+                let instruction = match &call.arguments {
+                    CheckedCallArguments::Spread { arguments, .. } => {
+                        Instruction::CallBuiltinSpread(*builtin, arguments.len())
+                    }
+                    _ => Instruction::CallBuiltin(*builtin, call.argument_count()),
+                };
+                self.instructions.push(instruction);
             }
             CallTarget::PackageFunction(function) => {
+                if matches!(call.arguments, CheckedCallArguments::Spread { .. }) {
+                    return Err(CompileError::new(format!(
+                        "package function `{}` cannot be lowered with explicit `...` arguments",
+                        function.render()
+                    )));
+                }
                 self.instructions
                     .push(Instruction::CallPackage(*function, call.argument_count()));
             }
             CallTarget::UserDefined { function_index, .. } => {
-                self.instructions.push(Instruction::CallFunction(
-                    *function_index,
-                    call.argument_count(),
-                ));
+                let instruction = match &call.arguments {
+                    CheckedCallArguments::Spread { arguments, .. } => {
+                        Instruction::CallFunctionSpread(*function_index, arguments.len())
+                    }
+                    _ => Instruction::CallFunction(*function_index, call.argument_count()),
+                };
+                self.instructions.push(instruction);
             }
         }
         Ok(())

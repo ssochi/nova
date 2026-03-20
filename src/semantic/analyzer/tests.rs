@@ -639,6 +639,22 @@ fn analyze_call_argument_forwarding_and_cut_variants() {
 }
 
 #[test]
+fn analyze_variadic_functions_and_append_spread() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc total(prefix int, values ...int) int {\n\tif values == nil {\n\t\treturn prefix\n\t}\n\tvar sum = prefix\n\tfor _, value := range values {\n\t\tsum = sum + value\n\t}\n\treturn sum\n}\n\nfunc main() {\n\tvar values = []int{2, 3}\n\tvar bytes = []byte(\"go\")\n\tprintln(total(1))\n\tprintln(total(1, 2, 3))\n\tprintln(total(1, values...))\n\tbytes = append(bytes, []byte(\"-nova\")...)\n\tbytes = append(bytes, \"!\"...)\n\tprintln(string(bytes))\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let program = analyze_package(&ast).expect("analysis should succeed");
+
+    assert_eq!(program.functions.len(), 2);
+    assert_eq!(program.functions[0].variadic_element_type, Some(Type::Int));
+}
+
+#[test]
 fn reject_break_outside_breakable_statement() {
     let source = SourceFile {
         path: "test.go".into(),
@@ -650,6 +666,44 @@ fn reject_break_outside_breakable_statement() {
     let error = analyze_package(&ast).expect_err("analysis should reject top-level break");
 
     assert!(error.to_string().contains("`break` requires an enclosing"));
+}
+
+#[test]
+fn reject_spread_call_to_non_variadic_function() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc fixed(values []int) {}\n\nfunc main() {\n\tvar values = []int{1, 2}\n\tfixed(values...)\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let error = analyze_package(&ast).expect_err("analysis should reject spread call");
+
+    assert!(
+        error
+            .to_string()
+            .contains("function `fixed` does not support explicit `...` arguments")
+    );
+}
+
+#[test]
+fn reject_spread_call_with_non_fixed_prefix_shape() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc total(values ...int) int {\n\treturn len(values)\n}\n\nfunc main() {\n\tvar values = []int{1, 2}\n\tprintln(total(1, values...))\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let error = analyze_package(&ast).expect_err("analysis should reject mixed prefix and spread");
+
+    assert!(
+        error
+            .to_string()
+            .contains("requires 0 fixed arguments before the spread value")
+    );
 }
 
 #[test]

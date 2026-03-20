@@ -1,9 +1,12 @@
 use std::collections::HashSet;
 
+use crate::builtin::BuiltinFunction;
 use crate::conversion::ConversionKind;
-use crate::frontend::ast::{BinaryOperator, Expression, TypeRef};
+use crate::frontend::ast::{BinaryOperator, CallArgument, Expression, TypeRef};
 use crate::semantic::analyzer::{FunctionAnalyzer, SemanticError};
-use crate::semantic::builtins::{resolve_builtin, validate_builtin_call, validate_make_call};
+use crate::semantic::builtins::{
+    resolve_builtin, validate_append_spread_call, validate_builtin_call, validate_make_call,
+};
 use crate::semantic::model::{
     CallTarget, CheckedBinaryOperator, CheckedCall, CheckedCallArguments, CheckedExpression,
     CheckedExpressionKind, CheckedMapLiteralEntry, Type,
@@ -174,6 +177,12 @@ impl<'a> FunctionAnalyzer<'a> {
         let Expression::Call { callee, arguments } = expression else {
             return Ok(None);
         };
+        if arguments
+            .iter()
+            .any(|argument| matches!(argument, CallArgument::Spread(_)))
+        {
+            return Ok(None);
+        }
         let call = self.analyze_call(callee, arguments)?;
         if call.result_types.len() > 1 {
             Ok(Some(call))
@@ -185,7 +194,7 @@ impl<'a> FunctionAnalyzer<'a> {
     fn analyze_call_expression(
         &mut self,
         callee: &Expression,
-        arguments: &[Expression],
+        arguments: &[CallArgument],
     ) -> Result<CheckedExpression, SemanticError> {
         let call = self.analyze_call(callee, arguments)?;
         if call.result_types.len() != 1 {
@@ -204,7 +213,7 @@ impl<'a> FunctionAnalyzer<'a> {
     pub(super) fn analyze_call(
         &mut self,
         callee: &Expression,
-        arguments: &[Expression],
+        arguments: &[CallArgument],
     ) -> Result<CheckedCall, SemanticError> {
         let checked_arguments = self.analyze_call_arguments(arguments)?;
         match callee {
@@ -224,14 +233,7 @@ impl<'a> FunctionAnalyzer<'a> {
         checked_arguments: CheckedCallArguments,
     ) -> Result<CheckedCall, SemanticError> {
         if let Some(builtin) = resolve_builtin(callee) {
-            let argument_types = checked_call_argument_types(&checked_arguments);
-            let result_types =
-                validate_builtin_call(builtin, &argument_types).map_err(SemanticError::new)?;
-            return Ok(CheckedCall {
-                target: CallTarget::Builtin(builtin),
-                arguments: checked_arguments,
-                result_types,
-            });
+            return self.analyze_builtin_call(builtin, checked_arguments);
         }
 
         let function_index = self
@@ -242,6 +244,7 @@ impl<'a> FunctionAnalyzer<'a> {
         let checked_arguments = self.coerce_user_defined_call_arguments(
             callee,
             &signature.parameters,
+            signature.variadic_element_type.as_ref(),
             checked_arguments,
         )?;
 
@@ -337,6 +340,12 @@ impl<'a> FunctionAnalyzer<'a> {
                     package_name
                 ))
             })?;
+        if matches!(checked_arguments, CheckedCallArguments::Spread { .. }) {
+            return Err(SemanticError::new(format!(
+                "package function `{}` does not support explicit `...` arguments in the current subset",
+                package_function.render()
+            )));
+        }
         let checked_arguments =
             self.coerce_package_call_arguments(package_function, checked_arguments)?;
         let argument_types = checked_call_argument_types(&checked_arguments);
@@ -351,17 +360,39 @@ impl<'a> FunctionAnalyzer<'a> {
 
     fn analyze_call_arguments(
         &mut self,
-        arguments: &[Expression],
+        arguments: &[CallArgument],
     ) -> Result<CheckedCallArguments, SemanticError> {
-        if let [argument] = arguments {
+        if let [CallArgument::Expression(argument)] = arguments {
             if let Some(call) = self.try_analyze_multi_result_call(argument)? {
                 return Ok(CheckedCallArguments::ExpandedCall(Box::new(call)));
             }
         }
 
+        if let Some(CallArgument::Spread(spread)) = arguments.last() {
+            let checked_arguments = arguments[..arguments.len() - 1]
+                .iter()
+                .map(|argument| match argument {
+                    CallArgument::Expression(argument) => self.analyze_expression(argument),
+                    CallArgument::Spread(_) => Err(SemanticError::new(
+                        "spread argument must be the final call argument",
+                    )),
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let spread = self.analyze_expression(spread)?;
+            return Ok(CheckedCallArguments::Spread {
+                arguments: checked_arguments,
+                spread: Box::new(spread),
+            });
+        }
+
         let checked_arguments = arguments
             .iter()
-            .map(|argument| self.analyze_expression(argument))
+            .map(|argument| match argument {
+                CallArgument::Expression(argument) => self.analyze_expression(argument),
+                CallArgument::Spread(_) => Err(SemanticError::new(
+                    "spread argument must be the final call argument",
+                )),
+            })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(CheckedCallArguments::Expressions(checked_arguments))
     }
@@ -370,10 +401,43 @@ impl<'a> FunctionAnalyzer<'a> {
         &mut self,
         callee: &str,
         expected_arguments: &[Type],
+        variadic_element_type: Option<&Type>,
         checked_arguments: CheckedCallArguments,
     ) -> Result<CheckedCallArguments, SemanticError> {
         match checked_arguments {
             CheckedCallArguments::Expressions(arguments) => {
+                if let Some(variadic_element_type) = variadic_element_type {
+                    let fixed_count = expected_arguments.len() - 1;
+                    if arguments.len() < fixed_count {
+                        return Err(SemanticError::new(format!(
+                            "function `{callee}` expects at least {} arguments, found {}",
+                            fixed_count,
+                            arguments.len()
+                        )));
+                    }
+                    let mut coerced_arguments = Vec::with_capacity(arguments.len());
+                    for (index, (argument, expected)) in arguments
+                        .iter()
+                        .take(fixed_count)
+                        .cloned()
+                        .zip(expected_arguments.iter().take(fixed_count))
+                        .enumerate()
+                    {
+                        coerced_arguments.push(coerce_expression_to_type(
+                            expected,
+                            argument,
+                            &format!("argument {} in call to `{callee}`", index + 1),
+                        )?);
+                    }
+                    for (index, argument) in arguments.into_iter().enumerate().skip(fixed_count) {
+                        coerced_arguments.push(coerce_expression_to_type(
+                            variadic_element_type,
+                            argument,
+                            &format!("argument {} in call to `{callee}`", index + 1),
+                        )?);
+                    }
+                    return Ok(CheckedCallArguments::Expressions(coerced_arguments));
+                }
                 if arguments.len() != expected_arguments.len() {
                     return Err(SemanticError::new(format!(
                         "function `{callee}` expects {} arguments, found {}",
@@ -396,6 +460,37 @@ impl<'a> FunctionAnalyzer<'a> {
                 Ok(CheckedCallArguments::Expressions(arguments))
             }
             CheckedCallArguments::ExpandedCall(call) => {
+                if let Some(variadic_element_type) = variadic_element_type {
+                    let fixed_count = expected_arguments.len() - 1;
+                    if call.result_types.len() < fixed_count {
+                        return Err(SemanticError::new(format!(
+                            "function `{callee}` expects at least {} arguments, found {}",
+                            fixed_count,
+                            call.result_types.len()
+                        )));
+                    }
+                    for (index, (actual, expected)) in call
+                        .result_types
+                        .iter()
+                        .take(fixed_count)
+                        .zip(expected_arguments.iter().take(fixed_count))
+                        .enumerate()
+                    {
+                        expect_type(
+                            expected,
+                            actual,
+                            &format!("argument {} in call to `{callee}`", index + 1),
+                        )?;
+                    }
+                    for (index, actual) in call.result_types.iter().enumerate().skip(fixed_count) {
+                        expect_type(
+                            variadic_element_type,
+                            actual,
+                            &format!("argument {} in call to `{callee}`", index + 1),
+                        )?;
+                    }
+                    return Ok(CheckedCallArguments::ExpandedCall(call));
+                }
                 if call.result_types.len() != expected_arguments.len() {
                     return Err(SemanticError::new(format!(
                         "function `{callee}` expects {} arguments, found {}",
@@ -416,6 +511,42 @@ impl<'a> FunctionAnalyzer<'a> {
                     )?;
                 }
                 Ok(CheckedCallArguments::ExpandedCall(call))
+            }
+            CheckedCallArguments::Spread { arguments, spread } => {
+                let Some(variadic_element_type) = variadic_element_type else {
+                    return Err(SemanticError::new(format!(
+                        "function `{callee}` does not support explicit `...` arguments"
+                    )));
+                };
+                let fixed_count = expected_arguments.len() - 1;
+                if arguments.len() != fixed_count {
+                    return Err(SemanticError::new(format!(
+                        "function `{callee}` with `...` requires {} fixed arguments before the spread value, found {}",
+                        fixed_count,
+                        arguments.len()
+                    )));
+                }
+                let arguments = arguments
+                    .into_iter()
+                    .zip(expected_arguments.iter().take(fixed_count))
+                    .enumerate()
+                    .map(|(index, (argument, expected))| {
+                        coerce_expression_to_type(
+                            expected,
+                            argument,
+                            &format!("argument {} in call to `{callee}`", index + 1),
+                        )
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                let spread = coerce_expression_to_type(
+                    &Type::Slice(Box::new(variadic_element_type.clone())),
+                    *spread,
+                    &format!("spread argument in call to `{callee}`"),
+                )?;
+                Ok(CheckedCallArguments::Spread {
+                    arguments,
+                    spread: Box::new(spread),
+                })
             }
         }
     }
@@ -451,7 +582,57 @@ impl<'a> FunctionAnalyzer<'a> {
             CheckedCallArguments::ExpandedCall(call) => {
                 Ok(CheckedCallArguments::ExpandedCall(call))
             }
+            CheckedCallArguments::Spread { arguments, spread } => {
+                Ok(CheckedCallArguments::Spread { arguments, spread })
+            }
         }
+    }
+
+    fn analyze_builtin_call(
+        &mut self,
+        builtin: BuiltinFunction,
+        checked_arguments: CheckedCallArguments,
+    ) -> Result<CheckedCall, SemanticError> {
+        let result_types = match &checked_arguments {
+            CheckedCallArguments::Expressions(_) | CheckedCallArguments::ExpandedCall(_) => {
+                validate_builtin_call(builtin, &checked_call_argument_types(&checked_arguments))
+                    .map_err(SemanticError::new)?
+            }
+            CheckedCallArguments::Spread { arguments, spread } => {
+                if builtin != BuiltinFunction::Append {
+                    return Err(SemanticError::new(format!(
+                        "builtin `{}` does not support explicit `...` arguments",
+                        builtin.render()
+                    )));
+                }
+                validate_append_spread_call(
+                    &arguments
+                        .iter()
+                        .map(|argument| argument.ty.clone())
+                        .collect::<Vec<_>>(),
+                    &coerce_append_spread_argument(arguments, spread.as_ref())?.ty,
+                )
+                .map_err(SemanticError::new)?
+            }
+        };
+
+        if let CheckedCallArguments::Spread { arguments, spread } = checked_arguments {
+            let spread = coerce_append_spread_argument(&arguments, spread.as_ref())?;
+            return Ok(CheckedCall {
+                target: CallTarget::Builtin(builtin),
+                arguments: CheckedCallArguments::Spread {
+                    arguments,
+                    spread: Box::new(spread),
+                },
+                result_types,
+            });
+        }
+
+        Ok(CheckedCall {
+            target: CallTarget::Builtin(builtin),
+            arguments: checked_arguments,
+            result_types,
+        })
     }
 
     fn analyze_conversion_expression(
@@ -695,7 +876,37 @@ fn checked_call_argument_types(arguments: &CheckedCallArguments) -> Vec<Type> {
             .map(|argument| argument.ty.clone())
             .collect(),
         CheckedCallArguments::ExpandedCall(call) => call.result_types.clone(),
+        CheckedCallArguments::Spread { arguments, spread } => arguments
+            .iter()
+            .map(|argument| argument.ty.clone())
+            .chain(std::iter::once(spread.ty.clone()))
+            .collect(),
     }
+}
+
+fn coerce_append_spread_argument(
+    arguments: &[CheckedExpression],
+    spread: &CheckedExpression,
+) -> Result<CheckedExpression, SemanticError> {
+    let Some(target) = arguments.first() else {
+        return Err(SemanticError::new(
+            "builtin `append` with `...` requires a destination slice argument",
+        ));
+    };
+    let Some(element_type) = target.ty.slice_element_type().cloned() else {
+        return Err(SemanticError::new(format!(
+            "argument 1 in call to builtin `append` requires `slice`, found `{}`",
+            target.ty.render()
+        )));
+    };
+    if element_type == Type::Byte && spread.ty == Type::String {
+        return Ok(spread.clone());
+    }
+    coerce_expression_to_type(
+        &Type::Slice(Box::new(element_type)),
+        spread.clone(),
+        "spread argument in call to builtin `append`",
+    )
 }
 
 fn render_call_target(target: &CallTarget) -> String {

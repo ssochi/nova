@@ -64,6 +64,7 @@ pub struct Program {
 pub struct CompiledFunction {
     pub name: String,
     pub parameter_count: usize,
+    pub variadic_element_type: Option<ValueType>,
     pub return_types: Vec<ValueType>,
     pub local_names: Vec<String>,
     pub instructions: Vec<Instruction>,
@@ -78,11 +79,21 @@ impl Program {
         ];
 
         for (function_index, function) in self.functions.iter().enumerate() {
+            let parameter_description = match &function.variadic_element_type {
+                Some(element_type) => {
+                    format!(
+                        "{} + ...{}",
+                        function.parameter_count - 1,
+                        element_type.render()
+                    )
+                }
+                None => function.parameter_count.to_string(),
+            };
             lines.push(format!(
                 "function {}: {} (params={}, returns={}, locals={})",
                 function_index,
                 function.name,
-                function.parameter_count,
+                parameter_description,
                 if function.return_types.is_empty() {
                     "void".to_string()
                 } else {
@@ -166,8 +177,10 @@ pub enum Instruction {
     JumpIfFalse(usize),
     Pop,
     CallBuiltin(BuiltinFunction, usize),
+    CallBuiltinSpread(BuiltinFunction, usize),
     CallPackage(PackageFunction, usize),
     CallFunction(usize, usize),
+    CallFunctionSpread(usize, usize),
     Return,
 }
 
@@ -255,10 +268,16 @@ impl Instruction {
             Instruction::CallBuiltin(builtin, arity) => {
                 format!("call-builtin {} {arity}", builtin.render())
             }
+            Instruction::CallBuiltinSpread(builtin, prefix_arity) => {
+                format!("call-builtin-spread {} {prefix_arity}", builtin.render())
+            }
             Instruction::CallPackage(function, arity) => {
                 format!("call-package {} {arity}", function.render())
             }
             Instruction::CallFunction(index, arity) => format!("call-function {index} {arity}"),
+            Instruction::CallFunctionSpread(index, prefix_arity) => {
+                format!("call-function-spread {index} {prefix_arity}")
+            }
             Instruction::Return => "return".to_string(),
         }
     }

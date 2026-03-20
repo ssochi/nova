@@ -118,8 +118,13 @@ impl<'a> FunctionAnalyzer<'a> {
         let mut scopes = vec![HashMap::new()];
         let mut local_names = Vec::new();
         for parameter in &function.parameters {
-            let ty = resolve_type_ref(&parameter.type_ref)
+            let parameter_type = resolve_type_ref(&parameter.type_ref)
                 .expect("function registry only keeps validated type names");
+            let ty = if parameter.variadic {
+                Type::Slice(Box::new(parameter_type))
+            } else {
+                parameter_type
+            };
             let slot = local_names.len();
             scopes[0].insert(parameter.name.clone(), LocalBinding { slot, ty });
             local_names.push(parameter.name.clone());
@@ -152,6 +157,7 @@ impl<'a> FunctionAnalyzer<'a> {
         Ok(CheckedFunction {
             name: self.function.name.clone(),
             parameter_count: self.function.parameters.len(),
+            variadic_element_type: signature.variadic_element_type.clone(),
             return_types: signature.return_types.clone(),
             local_names: self.local_names,
             body,

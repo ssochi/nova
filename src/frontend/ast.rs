@@ -91,11 +91,13 @@ impl FunctionDecl {
 pub struct Parameter {
     pub name: String,
     pub type_ref: TypeRef,
+    pub variadic: bool,
 }
 
 impl Parameter {
     fn render(&self) -> String {
-        format!("{} {}", self.name, self.type_ref.render())
+        let prefix = if self.variadic { "..." } else { "" };
+        format!("{} {}{}", self.name, prefix, self.type_ref.render())
     }
 }
 
@@ -621,8 +623,23 @@ pub enum Expression {
     },
     Call {
         callee: Box<Expression>,
-        arguments: Vec<Expression>,
+        arguments: Vec<CallArgument>,
     },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CallArgument {
+    Expression(Expression),
+    Spread(Expression),
+}
+
+impl CallArgument {
+    fn render(&self) -> String {
+        match self {
+            CallArgument::Expression(expression) => expression.render(),
+            CallArgument::Spread(expression) => format!("{}...", expression.render()),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -708,7 +725,7 @@ impl Expression {
                 callee.render(),
                 arguments
                     .iter()
-                    .map(Expression::render)
+                    .map(CallArgument::render)
                     .collect::<Vec<_>>()
                     .join(", ")
             ),

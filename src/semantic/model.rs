@@ -13,6 +13,7 @@ pub struct CheckedProgram {
 pub struct CheckedFunction {
     pub name: String,
     pub parameter_count: usize,
+    pub variadic_element_type: Option<Type>,
     pub return_types: Vec<Type>,
     pub local_names: Vec<String>,
     pub body: CheckedBlock,
@@ -310,6 +311,7 @@ impl CheckedCall {
         match &self.arguments {
             CheckedCallArguments::Expressions(arguments) => arguments.len(),
             CheckedCallArguments::ExpandedCall(call) => call.result_types.len(),
+            CheckedCallArguments::Spread { arguments, .. } => arguments.len() + 1,
         }
     }
 
@@ -320,6 +322,11 @@ impl CheckedCall {
                 .map(|argument| argument.ty.clone())
                 .collect(),
             CheckedCallArguments::ExpandedCall(call) => call.result_types.clone(),
+            CheckedCallArguments::Spread { arguments, spread } => arguments
+                .iter()
+                .map(|argument| argument.ty.clone())
+                .chain(std::iter::once(spread.ty.clone()))
+                .collect(),
         }
     }
 }
@@ -328,6 +335,10 @@ impl CheckedCall {
 pub enum CheckedCallArguments {
     Expressions(Vec<CheckedExpression>),
     ExpandedCall(Box<CheckedCall>),
+    Spread {
+        arguments: Vec<CheckedExpression>,
+        spread: Box<CheckedExpression>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -1,6 +1,6 @@
 use super::parse_source_file;
 use crate::frontend::ast::{
-    AssignmentTarget, Binding, BindingMode, ElseBranch, Expression, ForPostStatement,
+    AssignmentTarget, Binding, BindingMode, CallArgument, ElseBranch, Expression, ForPostStatement,
     HeaderStatement, ImportDecl, Statement, SwitchClause, TypeRef,
 };
 use crate::frontend::lexer::lex;
@@ -34,10 +34,80 @@ fn parse_slice_literal_and_index_expression() {
 
     match &function.body.statements[1] {
         Statement::Expr(Expression::Call { arguments, .. }) => {
-            assert!(matches!(arguments[0], Expression::Index { .. }));
+            assert!(matches!(
+                arguments[0],
+                CallArgument::Expression(Expression::Index { .. })
+            ));
         }
         _ => panic!("expected call expression"),
     }
+}
+
+#[test]
+fn parse_variadic_function_and_spread_call() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc collect(prefix int, values ...int) {\n\tprintln(prefix, values...)\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let function = &ast.functions[0];
+
+    assert!(!function.parameters[0].variadic);
+    assert!(function.parameters[1].variadic);
+    assert_eq!(
+        function.parameters[1].type_ref,
+        TypeRef::Named("int".into())
+    );
+
+    match &function.body.statements[0] {
+        Statement::Expr(Expression::Call { arguments, .. }) => {
+            assert!(matches!(
+                arguments.as_slice(),
+                [
+                    CallArgument::Expression(Expression::Identifier(prefix)),
+                    CallArgument::Spread(Expression::Identifier(values))
+                ] if prefix == "prefix" && values == "values"
+            ));
+        }
+        _ => panic!("expected call expression"),
+    }
+}
+
+#[test]
+fn reject_non_final_variadic_parameter() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc collect(values ...int, suffix int) {}\n".to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let error = parse_source_file(&tokens).expect_err("parsing should fail");
+
+    assert!(
+        error
+            .to_string()
+            .contains("variadic parameter must be the final parameter")
+    );
+}
+
+#[test]
+fn reject_non_final_spread_argument() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tprintln(values..., 1)\n}\n".to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let error = parse_source_file(&tokens).expect_err("parsing should fail");
+
+    assert!(
+        error
+            .to_string()
+            .contains("spread argument must be the final call argument")
+    );
 }
 
 #[test]
@@ -537,11 +607,11 @@ fn parse_nil_expression_and_nil_comparison() {
         Statement::Expr(Expression::Call { arguments, .. }) => {
             assert!(matches!(
                 &arguments[0],
-                Expression::Binary {
+                CallArgument::Expression(Expression::Binary {
                     left,
                     operator: _,
                     right,
-                } if **left == Expression::Identifier("values".into())
+                }) if **left == Expression::Identifier("values".into())
                     && **right == Expression::Nil
             ));
         }
@@ -861,6 +931,7 @@ fn parse_channel_types_and_send_receive() {
         &function.body.statements[4],
         Statement::Expr(Expression::Call { callee, arguments })
             if callee.as_ref() == &Expression::Identifier("close".into())
-                && arguments == &vec![Expression::Identifier("ready".into())]
+                && arguments
+                    == &vec![CallArgument::Expression(Expression::Identifier("ready".into()))]
     ));
 }

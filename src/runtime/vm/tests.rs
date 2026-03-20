@@ -15,6 +15,7 @@ fn execute_builds_and_indexes_slices() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
+            variadic_element_type: None,
             return_types: Vec::new(),
             local_names: vec!["values".to_string()],
             instructions: vec![
@@ -49,6 +50,7 @@ fn execute_strings_package_functions() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
+            variadic_element_type: None,
             return_types: Vec::new(),
             local_names: vec![],
             instructions: vec![
@@ -89,6 +91,7 @@ fn execute_cut_prefix_and_suffix_package_functions() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
+            variadic_element_type: None,
             return_types: Vec::new(),
             local_names: vec![],
             instructions: vec![
@@ -132,6 +135,7 @@ fn execute_slice_windows_and_index_assignment() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
+            variadic_element_type: None,
             return_types: Vec::new(),
             local_names: vec!["values".to_string(), "window".to_string()],
             instructions: vec![
@@ -178,6 +182,7 @@ fn execute_make_slice_allocation() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
+            variadic_element_type: None,
             return_types: Vec::new(),
             local_names: vec!["values".to_string(), "grown".to_string()],
             instructions: vec![
@@ -229,6 +234,7 @@ fn execute_string_indexing_slicing_and_byte_copy() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
+            variadic_element_type: None,
             return_types: Vec::new(),
             local_names: vec!["buf".to_string()],
             instructions: vec![
@@ -280,6 +286,7 @@ fn execute_byte_multiply_and_divide() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
+            variadic_element_type: None,
             return_types: Vec::new(),
             local_names: vec![],
             instructions: vec![
@@ -313,6 +320,7 @@ fn execute_string_byte_conversions() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
+            variadic_element_type: None,
             return_types: Vec::new(),
             local_names: vec!["bytes".to_string()],
             instructions: vec![
@@ -352,6 +360,7 @@ fn execute_maps_with_nil_reads_and_updates() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
+            variadic_element_type: None,
             return_types: Vec::new(),
             local_names: vec!["counts".to_string()],
             instructions: vec![
@@ -403,6 +412,7 @@ fn execute_map_literals_and_delete() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
+            variadic_element_type: None,
             return_types: Vec::new(),
             local_names: vec!["counts".to_string(), "nil_counts".to_string()],
             instructions: vec![
@@ -461,6 +471,7 @@ fn execute_map_literals_keep_last_duplicate_key() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
+            variadic_element_type: None,
             return_types: Vec::new(),
             local_names: vec!["counts".to_string()],
             instructions: vec![
@@ -501,6 +512,7 @@ fn execute_nil_map_assignment_fails() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
+            variadic_element_type: None,
             return_types: Vec::new(),
             local_names: vec!["counts".to_string()],
             instructions: vec![
@@ -535,6 +547,7 @@ fn execute_map_keys_returns_deterministic_key_slice() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
+            variadic_element_type: None,
             return_types: Vec::new(),
             local_names: vec!["keys".to_string()],
             instructions: vec![
@@ -581,6 +594,7 @@ fn execute_lookup_map_reports_value_and_presence() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
+            variadic_element_type: None,
             return_types: Vec::new(),
             local_names: vec!["counts".to_string()],
             instructions: vec![
@@ -626,6 +640,7 @@ fn execute_channels_send_receive_and_close() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
+            variadic_element_type: None,
             return_types: Vec::new(),
             local_names: vec!["ready".to_string()],
             instructions: vec![
@@ -679,6 +694,7 @@ fn execute_channel_send_reports_blocking_error() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
+            variadic_element_type: None,
             return_types: Vec::new(),
             local_names: vec!["ready".to_string()],
             instructions: vec![
@@ -708,4 +724,102 @@ fn execute_channel_send_reports_blocking_error() {
             .to_string()
             .contains("send would block in the current single-threaded VM")
     );
+}
+
+#[test]
+fn execute_variadic_user_function_calls_and_spread() {
+    let program = Program {
+        package_name: "main".to_string(),
+        entry_function: "main".to_string(),
+        entry_function_index: 1,
+        functions: vec![
+            CompiledFunction {
+                name: "count".to_string(),
+                parameter_count: 1,
+                variadic_element_type: Some(ValueType::Int),
+                return_types: vec![ValueType::Int],
+                local_names: vec!["values".to_string()],
+                instructions: vec![
+                    Instruction::LoadLocal(0),
+                    Instruction::CallBuiltin(BuiltinFunction::Len, 1),
+                    Instruction::Return,
+                ],
+            },
+            CompiledFunction {
+                name: "main".to_string(),
+                parameter_count: 0,
+                variadic_element_type: None,
+                return_types: Vec::new(),
+                local_names: vec!["values".to_string()],
+                instructions: vec![
+                    Instruction::PushInt(1),
+                    Instruction::PushInt(2),
+                    Instruction::CallFunction(0, 2),
+                    Instruction::CallBuiltin(BuiltinFunction::Println, 1),
+                    Instruction::PushInt(4),
+                    Instruction::PushInt(5),
+                    Instruction::BuildSlice(2),
+                    Instruction::StoreLocal(0),
+                    Instruction::LoadLocal(0),
+                    Instruction::CallFunctionSpread(0, 0),
+                    Instruction::CallBuiltin(BuiltinFunction::Println, 1),
+                    Instruction::PushNilSlice,
+                    Instruction::CallFunctionSpread(0, 0),
+                    Instruction::CallBuiltin(BuiltinFunction::Println, 1),
+                    Instruction::Return,
+                ],
+            },
+        ],
+    };
+
+    let output = VirtualMachine::new()
+        .execute(&program)
+        .expect("variadic calls should execute")
+        .render_output();
+
+    assert_eq!(output, "2\n2\n0\n");
+}
+
+#[test]
+fn execute_append_spread_for_slice_and_string_sources() {
+    let program = Program {
+        package_name: "main".to_string(),
+        entry_function: "main".to_string(),
+        entry_function_index: 0,
+        functions: vec![CompiledFunction {
+            name: "main".to_string(),
+            parameter_count: 0,
+            variadic_element_type: None,
+            return_types: Vec::new(),
+            local_names: vec!["bytes".to_string()],
+            instructions: vec![
+                Instruction::PushByte(b'g'),
+                Instruction::PushByte(b'o'),
+                Instruction::BuildSlice(2),
+                Instruction::StoreLocal(0),
+                Instruction::LoadLocal(0),
+                Instruction::PushByte(b'-'),
+                Instruction::PushByte(b'n'),
+                Instruction::PushByte(b'o'),
+                Instruction::PushByte(b'v'),
+                Instruction::PushByte(b'a'),
+                Instruction::BuildSlice(5),
+                Instruction::CallBuiltinSpread(BuiltinFunction::Append, 1),
+                Instruction::StoreLocal(0),
+                Instruction::LoadLocal(0),
+                Instruction::PushString("!".to_string()),
+                Instruction::CallBuiltinSpread(BuiltinFunction::Append, 1),
+                Instruction::Convert(ConversionKind::BytesToString),
+                Instruction::CallBuiltin(BuiltinFunction::Println, 1),
+                Instruction::Return,
+            ],
+        }],
+    };
+
+    let output = VirtualMachine::new()
+        .execute(&program)
+        .expect("append spread should execute")
+        .render_output();
+
+    assert_eq!(output, "go-nova!\n");
 }

@@ -34,6 +34,7 @@ This directory stores experience validation reports close to the real user path.
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `2026-03-20-variadic-functions-and-ellipsis-playtest.md`: records the CLI walkthrough for staged variadic declarations, explicit final-argument `...`, and builtin `append` spread semantics
 - `2026-03-20-call-argument-multi-result-forwarding-playtest.md`: records the CLI walkthrough for staged call-argument forwarding plus the `strings` / `bytes` `CutPrefix` / `CutSuffix` seams
 - `2026-03-20-multi-result-functions-and-cut-package-seams-playtest.md`: records the CLI walkthrough for unnamed multi-result functions plus the `strings.Cut` / `bytes.Cut` seams
 - `2026-03-20-import-aliases-and-bytes-package-playtest.md`: records the CLI walkthrough for grouped imports, explicit import aliases, and the staged `bytes` package seam

@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-09-21-38-variadic-functions-ellipsis`
+- Opened `2026-03-20-09-21-38-variadic-functions-ellipsis` for staged variadic declarations, explicit final-argument `...`, and append spread semantics under `M3`
 - Completed and archived `2026-03-20-08-55-11-call-argument-multi-result-forwarding`
 - Opened `2026-03-20-08-55-11-call-argument-multi-result-forwarding` for staged call-argument multi-result forwarding plus `CutPrefix` / `CutSuffix` package seams under `M3`
 - Completed and archived `2026-03-20-08-14-13-multi-result-functions-cut-seams`

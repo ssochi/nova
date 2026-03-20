@@ -90,6 +90,9 @@ impl<'a> Lexer<'a> {
                 ']' => self.push_simple(TokenKind::RightBracket, &mut tokens),
                 '{' => self.push_simple(TokenKind::LeftBrace, &mut tokens),
                 '}' => self.push_simple(TokenKind::RightBrace, &mut tokens),
+                '.' if self.peek_next() == Some('.') && self.peek_two_ahead() == Some('.') => {
+                    self.push_triple(TokenKind::Ellipsis, &mut tokens)
+                }
                 ',' => self.push_simple(TokenKind::Comma, &mut tokens),
                 ':' if self.peek_next() == Some('=') => {
                     self.push_double(TokenKind::Define, &mut tokens)
@@ -162,6 +165,15 @@ impl<'a> Lexer<'a> {
 
     fn push_double(&mut self, kind: TokenKind, tokens: &mut Vec<Token>) {
         let token = Token::new(kind, Span::new(self.line, self.column));
+        self.advance();
+        self.advance();
+        self.previous_can_end_statement = token.kind.can_end_statement();
+        tokens.push(token);
+    }
+
+    fn push_triple(&mut self, kind: TokenKind, tokens: &mut Vec<Token>) {
+        let token = Token::new(kind, Span::new(self.line, self.column));
+        self.advance();
         self.advance();
         self.advance();
         self.previous_can_end_statement = token.kind.can_end_statement();
@@ -295,6 +307,10 @@ impl<'a> Lexer<'a> {
 
     fn peek_next(&self) -> Option<char> {
         self.chars.get(self.index + 1).copied()
+    }
+
+    fn peek_two_ahead(&self) -> Option<char> {
+        self.chars.get(self.index + 2).copied()
     }
 
     fn advance(&mut self) -> Option<char> {

@@ -31,15 +31,21 @@ impl FunctionRegistry {
                 .parameters
                 .iter()
                 .map(|parameter| {
-                    let ty = resolve_type_ref(&parameter.type_ref).ok_or_else(|| {
-                        SemanticError::new(format!(
-                            "unsupported parameter type `{}` in function `{}`",
-                            parameter.type_ref.render(),
-                            function.name
-                        ))
-                    })?;
+                    let parameter_type =
+                        resolve_type_ref(&parameter.type_ref).ok_or_else(|| {
+                            SemanticError::new(format!(
+                                "unsupported parameter type `{}` in function `{}`",
+                                parameter.type_ref.render(),
+                                function.name
+                            ))
+                        })?;
+                    let ty = if parameter.variadic {
+                        Type::Slice(Box::new(parameter_type.clone()))
+                    } else {
+                        parameter_type.clone()
+                    };
                     validate_runtime_type(
-                        &ty,
+                        &parameter_type,
                         &format!(
                             "parameter `{}` in function `{}`",
                             parameter.name, function.name
@@ -73,6 +79,15 @@ impl FunctionRegistry {
             signatures.push(FunctionSignature {
                 name: function.name.clone(),
                 parameters,
+                variadic_element_type: function
+                    .parameters
+                    .last()
+                    .and_then(|parameter| {
+                        parameter
+                            .variadic
+                            .then(|| resolve_type_ref(&parameter.type_ref))
+                    })
+                    .flatten(),
                 return_types,
             });
         }
@@ -95,6 +110,7 @@ impl FunctionRegistry {
 pub(super) struct FunctionSignature {
     pub(super) name: String,
     pub(super) parameters: Vec<Type>,
+    pub(super) variadic_element_type: Option<Type>,
     pub(super) return_types: Vec<Type>,
 }
 

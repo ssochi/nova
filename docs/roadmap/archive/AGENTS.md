@@ -46,4 +46,5 @@ This directory stores complete archives of closed plans. It serves historical co
 - `2026-03-20-07-17-39-channel-runtime-first-slice/`: archived M3 plan for staged buffered `chan` support, explicit send / receive / close behavior, and channel-aware builtins
 - `2026-03-20-07-46-15-import-aliases-and-bytes-package/`: archived M3 plan for grouped imports, explicit import aliases, and the staged `bytes` package seam
 - `2026-03-20-08-55-11-call-argument-multi-result-forwarding/`: archived M3 plan for staged call-argument multi-result forwarding plus the `strings` / `bytes` `CutPrefix` / `CutSuffix` seams
+- `2026-03-20-09-42-18-variadic-functions-ellipsis/`: archived M3 plan for staged variadic function declarations, explicit final-argument `...`, and builtin `append` spread semantics
 - `2026-03-20-05-29-16-if-initializers-else-if/`: archived M3 plan for staged `if` statement initializers, shared header scoping, and `else if` chains

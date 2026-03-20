@@ -25,6 +25,7 @@
 
 ## Related Plans
 
+- `2026-03-20-09-21-38-variadic-functions-ellipsis`: completed plan for staged variadic function declarations, explicit final-argument `...`, and builtin `append` spread semantics
 - `2026-03-20-08-55-11-call-argument-multi-result-forwarding`: completed plan for staged call-argument multi-result forwarding plus `strings` / `bytes` `CutPrefix` / `CutSuffix` seams
 - `2026-03-20-08-14-13-multi-result-functions-cut-seams`: completed plan for the first staged multi-result model plus `strings.Cut` / `bytes.Cut`
 - `2026-03-20-07-46-15-import-aliases-and-bytes-package`: completed plan for grouped imports, explicit import aliases, and the staged `bytes` package seam
@@ -55,10 +56,11 @@
 - Runtime-surface growth can sprawl quickly if types, builtins, imports, and control-flow work are mixed into the same plan.
 - Builtin additions can become hardcoded special cases unless their contracts stay centralized.
 - Supporting more realistic Go programs will require careful staging so the VM remains understandable.
-- The current runtime now has byte-oriented strings, slice allocation, narrow explicit string/byte conversions, staged map groundwork, staged map literals plus `delete`, explicit `nil` for slice/map/chan contexts, staged `range` loops over slices/maps, duplicate constant literal-key diagnostics, staged comma-ok lookups, staged `if` headers, staged expression `switch`, classic `for` clauses, unlabeled `break` / `continue`, staged multi-binding short declarations and assignments, explicit `++` / `--`, staged compound assignments, the first buffered `chan` slice, grouped imports, explicit import aliases, explicit multi-result function signatures / returns, and package-backed `fmt` / `strings` / `bytes` seams including `Cut`; scheduler-aware blocking, channel directions, channel `range`, labels, broader `assign_op` coverage, real import graphs, wider package-backed runtime services, and wider multi-result consumption remain open.
+- The current runtime now has byte-oriented strings, slice allocation, narrow explicit string/byte conversions, staged map groundwork, staged map literals plus `delete`, explicit `nil` for slice/map/chan contexts, staged `range` loops over slices/maps, duplicate constant literal-key diagnostics, staged comma-ok lookups, staged `if` headers, staged expression `switch`, classic `for` clauses, unlabeled `break` / `continue`, staged multi-binding short declarations and assignments, explicit `++` / `--`, staged compound assignments, the first buffered `chan` slice, grouped imports, explicit import aliases, explicit multi-result function signatures / returns, staged variadic function declarations, explicit final-argument `...`, builtin `append` spread handling including `[]byte` plus `string...`, and package-backed `fmt` / `strings` / `bytes` seams including `Cut`; scheduler-aware blocking, channel directions, channel `range`, labels, broader `assign_op` coverage, real import graphs, wider package-backed runtime services, grouped parameter shorthand, and wider multi-result or interface-backed variadic consumption remain open.
 
 ## Next-Round Recommendations
 
-- Open the next `M3` plan for the next staged package or syntax slice that spends the new single-call-argument forwarding path on more realistic Go code.
+- Open the next `M3` plan for the next staged package or syntax slice that spends the new variadic/spread groundwork on more realistic Go code.
 - If control-flow stays the next priority, reuse the explicit `ForStatement` / `CheckedForStatement` model and the compiler control-flow stack instead of lowering new targets through ad hoc jumps.
+- Grouped parameter-name shorthand or the next package-backed API slice are now the strongest adjacent continuations; keep explicit `...` separate from the staged multi-result forwarding path.
 - Reuse the `docs/research/` flow before locking the next compatibility-sensitive slice.

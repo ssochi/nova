@@ -760,3 +760,42 @@ fn check_rejects_multi_result_binding_arity_mismatch() {
 
     cleanup_temp_source(path);
 }
+
+#[test]
+fn check_rejects_spread_call_to_non_variadic_function() {
+    let path = write_temp_source(
+        "check-bad-non-variadic-spread",
+        "package main\n\nfunc fixed(values []int) {}\n\nfunc main() {\n\tvar values = []int{1, 2}\n\tfixed(values...)\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("function `fixed` does not support explicit `...` arguments"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_spread_call_with_non_fixed_prefix_shape() {
+    let path = write_temp_source(
+        "check-bad-spread-prefix-shape",
+        "package main\n\nfunc total(values ...int) int {\n\treturn len(values)\n}\n\nfunc main() {\n\tvar values = []int{1, 2}\n\tprintln(total(1, values...))\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("requires 0 fixed arguments before the spread value"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_append_spread_with_wrong_type() {
+    let path = write_temp_source(
+        "check-bad-append-spread-type",
+        "package main\n\nfunc main() {\n\tvar values = []int{1}\n\tvalues = append(values, \"go\"...)\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("spread argument in call to builtin `append` requires `[]int`"));
+
+    cleanup_temp_source(path);
+}

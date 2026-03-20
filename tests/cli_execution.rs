@@ -82,6 +82,15 @@ fn run_executes_call_argument_multi_result_forwarding() {
 }
 
 #[test]
+fn run_executes_variadic_functions_and_append_spread() {
+    let output = run_cli(&["run", "examples/variadic.go"]).expect("program should run");
+    assert_eq!(
+        output,
+        "true 0\n1\nfalse 2\n6\nfalse 2\n6\ntrue 0\n4\ngo-nova!\n"
+    );
+}
+
+#[test]
 fn run_executes_slice_windows_and_index_assignment() {
     let output = run_cli(&["run", "examples/slice_windows.go"]).expect("program should run");
     assert_eq!(output, "3 9 7\n1 9 3 7\n");
@@ -236,6 +245,15 @@ fn dump_ast_renders_multi_result_signatures_and_bindings() {
 }
 
 #[test]
+fn dump_ast_renders_variadic_signatures_and_spread_calls() {
+    let output = run_cli(&["dump-ast", "examples/variadic.go"]).expect("ast should be rendered");
+
+    assert!(output.contains("func total(prefix int, values ...int) int {"));
+    assert!(output.contains("println(total(1, values...))"));
+    assert!(output.contains("bytes = append(bytes, \"!\"...)"));
+}
+
+#[test]
 fn dump_ast_renders_range_loops() {
     let output = run_cli(&["dump-ast", "examples/range_loops.go"]).expect("ast should be rendered");
 
@@ -339,6 +357,13 @@ fn dump_tokens_show_short_declaration_and_inc_dec_tokens() {
     assert!(output.contains(":="));
     assert!(output.contains("++"));
     assert!(output.contains("--"));
+}
+
+#[test]
+fn dump_tokens_show_ellipsis_token() {
+    let output = run_cli(&["dump-tokens", "examples/variadic.go"]).expect("tokens should render");
+
+    assert!(output.contains("..."));
 }
 
 #[test]
@@ -700,6 +725,16 @@ fn dump_bytecode_shows_call_argument_forwarding_and_cut_variants() {
     assert!(output.contains("call-package fmt.Println 1"));
     assert!(output.contains("call-package fmt.Println 3"));
     assert!(output.contains("call-package fmt.Println 2"));
+}
+
+#[test]
+fn dump_bytecode_shows_variadic_metadata_and_spread_calls() {
+    let output =
+        run_cli(&["dump-bytecode", "examples/variadic.go"]).expect("bytecode should be generated");
+
+    assert!(output.contains("function 0: total (params=1 + ...int"));
+    assert!(output.contains("call-function-spread 0 1"));
+    assert!(output.contains("call-builtin-spread append 1"));
 }
 
 #[test]

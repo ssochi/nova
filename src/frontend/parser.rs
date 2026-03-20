@@ -1,8 +1,8 @@
 use std::fmt;
 
 use crate::frontend::ast::{
-    AssignmentTarget, BinaryOperator, Block, Expression, FunctionDecl, ImportDecl, ImportSpec,
-    MapLiteralEntry, Parameter, SourceFileAst, TypeRef,
+    AssignmentTarget, BinaryOperator, Block, CallArgument, Expression, FunctionDecl, ImportDecl,
+    ImportSpec, MapLiteralEntry, Parameter, SourceFileAst, TypeRef,
 };
 use crate::frontend::token::{Token, TokenKind};
 
@@ -148,8 +148,16 @@ impl<'a> Parser<'a> {
 
         loop {
             let name = self.expect_identifier()?;
+            let variadic = self.match_kind(&TokenKind::Ellipsis);
             let type_ref = self.parse_type_ref()?;
-            parameters.push(Parameter { name, type_ref });
+            parameters.push(Parameter {
+                name,
+                type_ref,
+                variadic,
+            });
+            if variadic && self.check(&TokenKind::Comma) {
+                return Err(self.error_at_current("variadic parameter must be the final parameter"));
+            }
             if !self.match_kind(&TokenKind::Comma) {
                 break;
             }
@@ -520,7 +528,17 @@ impl<'a> Parser<'a> {
         let mut arguments = Vec::new();
         if !self.check(&TokenKind::RightParen) {
             loop {
-                arguments.push(self.parse_expression()?);
+                let argument = self.parse_expression()?;
+                let argument = if self.match_kind(&TokenKind::Ellipsis) {
+                    if !self.check(&TokenKind::RightParen) {
+                        return Err(self
+                            .error_at_current("spread argument must be the final call argument"));
+                    }
+                    CallArgument::Spread(argument)
+                } else {
+                    CallArgument::Expression(argument)
+                };
+                arguments.push(argument);
                 if !self.match_kind(&TokenKind::Comma) {
                     break;
                 }

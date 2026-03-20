@@ -204,32 +204,30 @@ impl VirtualMachine {
                     self.pop_value()?;
                 }
                 Instruction::CallBuiltin(builtin, arity) => self.call_builtin(builtin, arity)?,
+                Instruction::CallBuiltinSpread(builtin, prefix_arity) => {
+                    self.call_builtin_spread(builtin, prefix_arity)?
+                }
                 Instruction::CallPackage(function, arity) => {
                     self.call_package_function(function, arity)?
                 }
                 Instruction::CallFunction(function_index, arity) => {
-                    let function = program.functions.get(function_index).ok_or_else(|| {
-                        RuntimeError::new(format!("invalid function index {function_index}"))
-                    })?;
-                    if arity != function.parameter_count {
-                        return Err(RuntimeError::new(format!(
-                            "function `{}` expected {} arguments, received {}",
-                            function.name, function.parameter_count, arity
-                        )));
-                    }
-
-                    let mut arguments = Vec::with_capacity(arity);
-                    for _ in 0..arity {
-                        arguments.push(self.pop_value()?);
-                    }
-                    arguments.reverse();
-
-                    self.frames[frame_index].pc += 1;
-                    let mut frame = CallFrame::new(function_index, function.local_names.len());
-                    for (index, argument) in arguments.into_iter().enumerate() {
-                        frame.locals[index] = argument;
-                    }
-                    self.frames.push(frame);
+                    let arguments = self.pop_arguments(arity)?;
+                    self.call_user_function(program, frame_index, function_index, arguments)?;
+                    advance_pc = false;
+                }
+                Instruction::CallFunctionSpread(function_index, prefix_arity) => {
+                    let spread = self.pop_value()?;
+                    let mut arguments = self.pop_arguments(prefix_arity)?;
+                    let spread_arguments = match spread {
+                        Value::Slice(slice) => slice.visible_elements(),
+                        _ => {
+                            return Err(RuntimeError::new(
+                                "function call with `...` requires a slice spread argument",
+                            ));
+                        }
+                    };
+                    arguments.extend(spread_arguments);
+                    self.call_user_function(program, frame_index, function_index, arguments)?;
                     advance_pc = false;
                 }
                 Instruction::Return => {
@@ -331,6 +329,60 @@ impl VirtualMachine {
         }
         arguments.reverse();
         Ok(arguments)
+    }
+
+    fn call_user_function(
+        &mut self,
+        program: &Program,
+        caller_frame_index: usize,
+        function_index: usize,
+        arguments: Vec<Value>,
+    ) -> Result<(), RuntimeError> {
+        let function = program
+            .functions
+            .get(function_index)
+            .ok_or_else(|| RuntimeError::new(format!("invalid function index {function_index}")))?;
+        let fixed_parameter_count = if function.variadic_element_type.is_some() {
+            function.parameter_count.saturating_sub(1)
+        } else {
+            function.parameter_count
+        };
+        if function.variadic_element_type.is_some() {
+            if arguments.len() < fixed_parameter_count {
+                return Err(RuntimeError::new(format!(
+                    "function `{}` expected at least {} arguments, received {}",
+                    function.name,
+                    fixed_parameter_count,
+                    arguments.len()
+                )));
+            }
+        } else if arguments.len() != function.parameter_count {
+            return Err(RuntimeError::new(format!(
+                "function `{}` expected {} arguments, received {}",
+                function.name,
+                function.parameter_count,
+                arguments.len()
+            )));
+        }
+
+        self.frames[caller_frame_index].pc += 1;
+        let mut frame = CallFrame::new(function_index, function.local_names.len());
+        if function.variadic_element_type.is_some() {
+            for (index, argument) in arguments.iter().take(fixed_parameter_count).enumerate() {
+                frame.locals[index] = argument.clone();
+            }
+            frame.locals[fixed_parameter_count] = if arguments.len() == fixed_parameter_count {
+                Value::Slice(SliceValue::nil())
+            } else {
+                Value::Slice(SliceValue::new(arguments[fixed_parameter_count..].to_vec()))
+            };
+        } else {
+            for (index, argument) in arguments.into_iter().enumerate() {
+                frame.locals[index] = argument;
+            }
+        }
+        self.frames.push(frame);
+        Ok(())
     }
 
     fn index_value(&mut self, target_kind: SequenceKind) -> Result<(), RuntimeError> {

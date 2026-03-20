@@ -131,4 +131,44 @@ impl VirtualMachine {
 
         Ok(())
     }
+
+    pub(super) fn call_builtin_spread(
+        &mut self,
+        builtin: BuiltinFunction,
+        prefix_arity: usize,
+    ) -> Result<(), RuntimeError> {
+        let spread = self.pop_value()?;
+        let arguments = self.pop_arguments(prefix_arity)?;
+
+        match builtin {
+            BuiltinFunction::Append => {
+                let [target] = expect_exact_builtin_arguments(arguments, 1, "append")?;
+                let slice = match target {
+                    Value::Slice(slice) => slice,
+                    _ => {
+                        return Err(RuntimeError::new(
+                            "builtin `append` expected a slice as argument 1",
+                        ));
+                    }
+                };
+                let appended = match spread {
+                    Value::Slice(spread) => spread.visible_elements(),
+                    Value::String(value) => {
+                        value.as_bytes().iter().copied().map(Value::Byte).collect()
+                    }
+                    _ => {
+                        return Err(RuntimeError::new(
+                            "builtin `append` with `...` expected a slice or string spread argument",
+                        ));
+                    }
+                };
+                self.stack.push(Value::Slice(slice.append(&appended)));
+                Ok(())
+            }
+            _ => Err(RuntimeError::new(format!(
+                "builtin `{}` does not support explicit `...` arguments",
+                builtin.render()
+            ))),
+        }
+    }
 }

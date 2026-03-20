@@ -71,6 +71,43 @@ pub fn validate_builtin_call(
     (contract.validator)(argument_types)
 }
 
+pub fn validate_append_spread_call(
+    prefix_argument_types: &[Type],
+    spread_type: &Type,
+) -> Result<Vec<Type>, String> {
+    if prefix_argument_types.len() != 1 {
+        return Err(format!(
+            "builtin `append` with `...` expects 2 arguments, found {}",
+            prefix_argument_types.len() + 1
+        ));
+    }
+
+    let slice_type = prefix_argument_types[0].clone();
+    let element_type = slice_type.slice_element_type().cloned().ok_or_else(|| {
+        format!(
+            "argument 1 in call to builtin `append` requires `slice`, found `{}`",
+            prefix_argument_types[0].render()
+        )
+    })?;
+
+    let expected_spread_type = Type::Slice(Box::new(element_type.clone()));
+    if spread_type == &expected_spread_type
+        || (element_type == Type::Byte && spread_type == &Type::String)
+    {
+        return Ok(vec![slice_type]);
+    }
+
+    let expected = if element_type == Type::Byte {
+        "`[]byte` or `string`".to_string()
+    } else {
+        format!("`{}`", expected_spread_type.render())
+    };
+    Err(format!(
+        "spread argument in call to builtin `append` requires {expected}, found `{}`",
+        spread_type.render()
+    ))
+}
+
 fn builtin_contract(builtin: BuiltinFunction) -> &'static BuiltinContract {
     BUILTIN_CONTRACTS
         .iter()
@@ -294,7 +331,7 @@ fn validate_make_integer_arguments(argument_types: &[Type]) -> Result<(), String
 
 #[cfg(test)]
 mod tests {
-    use super::{validate_builtin_call, validate_make_call};
+    use super::{validate_append_spread_call, validate_builtin_call, validate_make_call};
     use crate::builtin::BuiltinFunction;
     use crate::semantic::model::Type;
 
@@ -382,6 +419,38 @@ mod tests {
 
         assert!(error.contains("argument 3"));
         assert!(error.contains("requires `int`"));
+    }
+
+    #[test]
+    fn append_spread_accepts_matching_slice_type() {
+        let result = validate_append_spread_call(
+            &[Type::Slice(Box::new(Type::Int))],
+            &Type::Slice(Box::new(Type::Int)),
+        )
+        .expect("append spread should accept matching slice type");
+
+        assert_eq!(result, vec![Type::Slice(Box::new(Type::Int))]);
+    }
+
+    #[test]
+    fn append_spread_accepts_byte_string_special_case() {
+        let result =
+            validate_append_spread_call(&[Type::Slice(Box::new(Type::Byte))], &Type::String)
+                .expect("append spread should accept []byte plus string");
+
+        assert_eq!(result, vec![Type::Slice(Box::new(Type::Byte))]);
+    }
+
+    #[test]
+    fn append_spread_rejects_mismatched_slice_type() {
+        let error = validate_append_spread_call(
+            &[Type::Slice(Box::new(Type::Int))],
+            &Type::Slice(Box::new(Type::String)),
+        )
+        .expect_err("append spread should reject mismatched slice type");
+
+        assert!(error.contains("spread argument"));
+        assert!(error.contains("[]int"));
     }
 
     #[test]
