@@ -8,7 +8,7 @@ pub struct BuiltinContract {
     pub validator: fn(&[Type]) -> Result<Vec<Type>, String>,
 }
 
-const BUILTIN_CONTRACTS: [BuiltinContract; 9] = [
+const BUILTIN_CONTRACTS: [BuiltinContract; 10] = [
     BuiltinContract {
         builtin: BuiltinFunction::Print,
         name: "print",
@@ -53,6 +53,11 @@ const BUILTIN_CONTRACTS: [BuiltinContract; 9] = [
         builtin: BuiltinFunction::Close,
         name: "close",
         validator: validate_close_builtin,
+    },
+    BuiltinContract {
+        builtin: BuiltinFunction::Clear,
+        name: "clear",
+        validator: validate_clear_builtin,
     },
 ];
 
@@ -250,6 +255,19 @@ fn validate_close_builtin(argument_types: &[Type]) -> Result<Vec<Type>, String> 
         Err(format!(
             "argument 1 in call to builtin `close` requires `chan`, found `{}`",
             channel_type.render()
+        ))
+    }
+}
+
+fn validate_clear_builtin(argument_types: &[Type]) -> Result<Vec<Type>, String> {
+    validate_exact_arity("clear", 1, argument_types.len())?;
+    let target_type = &argument_types[0];
+    if matches!(target_type, Type::Slice(_) | Type::Map { .. }) {
+        Ok(Vec::new())
+    } else {
+        Err(format!(
+            "argument 1 in call to builtin `clear` requires `slice` or `map`, found `{}`",
+            target_type.render()
         ))
     }
 }
@@ -540,5 +558,36 @@ mod tests {
                 .expect_err("close should reject non-channels");
 
         assert!(error.contains("requires `chan`"));
+    }
+
+    #[test]
+    fn clear_accepts_slice_argument() {
+        let result =
+            validate_builtin_call(BuiltinFunction::Clear, &[Type::Slice(Box::new(Type::Int))])
+                .expect("clear should accept slices");
+
+        assert_eq!(result, Vec::<Type>::new());
+    }
+
+    #[test]
+    fn clear_accepts_map_argument() {
+        let result = validate_builtin_call(
+            BuiltinFunction::Clear,
+            &[Type::Map {
+                key: Box::new(Type::String),
+                value: Box::new(Type::Int),
+            }],
+        )
+        .expect("clear should accept maps");
+
+        assert_eq!(result, Vec::<Type>::new());
+    }
+
+    #[test]
+    fn clear_rejects_non_slice_or_map_argument() {
+        let error = validate_builtin_call(BuiltinFunction::Clear, &[Type::String])
+            .expect_err("clear should reject strings");
+
+        assert!(error.contains("requires `slice` or `map`"));
     }
 }

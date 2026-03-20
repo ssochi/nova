@@ -68,6 +68,7 @@ Operational clarifications:
 33. When extending package-backed `strings` / `bytes` helpers, do not add APIs whose empty-input semantics depend on UTF-8 sequence or rune behavior until that runtime model exists; keep helpers such as `Split` / `SplitN` explicitly deferred instead of approximating them with byte-only logic.
 34. `Compare`-style `strings` / `bytes` helpers fit the current byte-oriented runtime, but `bytes.Compare` must preserve the real Go rule that nil and empty slices compare as equal.
 35. `Clone`-style `strings` / `bytes` helpers also fit the current byte-oriented runtime, but `bytes.Clone` must preserve the real Go rule that nil stays nil while a non-nil empty slice stays non-nil.
+36. When extending mutating builtins over composite values, keep the mutation explicit in the bytecode/runtime path instead of lowering it into hidden loops; for `clear`, preserve nil no-op behavior, keep slice clearing scoped to the visible `len` window, and do not collapse allocated maps into nil.
 
 If no task is explicitly specified, you must proactively choose the most worthwhile piece of work to advance, with the following priorities:
 1. **Obvious gaps in functionality, core experience, or core flow** (search the web more, do research, refer to relevant experience from similar high-quality projects, and established methodologies)

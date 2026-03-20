@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-10-46-29-builtin-clear-and-runtime-file-split`
+- Opened `2026-03-20-10-46-29-builtin-clear-and-runtime-file-split` for builtin `clear(slice|map)` plus runtime file-size governance under `M3`
 - Completed and archived `2026-03-20-10-32-34-strings-bytes-clone-seams`
 - Opened `2026-03-20-10-32-34-strings-bytes-clone-seams` for staged `strings.Clone` / `bytes.Clone` package seams under `M3`
 - Completed and archived `2026-03-20-10-21-19-strings-bytes-compare-seams`

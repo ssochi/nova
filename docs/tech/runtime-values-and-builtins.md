@@ -27,7 +27,7 @@ Describe the current runtime value categories and builtin execution model introd
   - Built by slice literals, `make([]T, len[, cap])`, and returned by `append`
   - Also used as the zero value for explicit typed slice declarations and explicit `nil` expressions via a nil-slice runtime state
   - Currently rendered in a Go-like `[value value]` form for builtin and package output
-  - Supports `len(slice)`, `cap(slice)`, `copy(dst, src)`, index expressions such as `values[0]`, simple slice expressions such as `values[1:3]`, element assignment such as `values[0] = 1`, explicit `nil` comparisons such as `values == nil`, and explicit `[]byte(string)` conversion by copying string bytes into a new non-nil byte slice
+  - Supports `len(slice)`, `cap(slice)`, `copy(dst, src)`, builtin `clear(slice)`, index expressions such as `values[0]`, simple slice expressions such as `values[1:3]`, element assignment such as `values[0] = 1`, explicit `nil` comparisons such as `values == nil`, and explicit `[]byte(string)` conversion by copying string bytes into a new non-nil byte slice
 - `chan`
   - Stored as shared channel state plus explicit nil-vs-allocated metadata
   - Built by `make(chan T[, size])` and used as the zero value for explicit typed channel declarations plus explicit `nil` expressions in channel context
@@ -38,7 +38,7 @@ Describe the current runtime value categories and builtin execution model introd
   - Stored as shared map storage plus explicit nil-vs-allocated state
   - Built by `make(map[K]V[, hint])`, `map[K]V{...}` literals, and used as the zero value for explicit typed map declarations and explicit `nil` expressions via a nil-map runtime state
   - Currently rendered in a deterministic `map[key:value]` debug form backed by sorted storage rather than real Go iteration behavior
-  - Supports `len(map)`, single-result index expressions such as `counts["nova"]`, staged comma-ok lookup statements such as `value, ok := counts["nova"]`, index assignment such as `counts["nova"] = 3`, explicit `nil` comparisons such as `counts == nil`, builtin `delete(counts, "nova")`, and staged `range` loops over keys and key/value pairs
+  - Supports `len(map)`, single-result index expressions such as `counts["nova"]`, staged comma-ok lookup statements such as `value, ok := counts["nova"]`, index assignment such as `counts["nova"] = 3`, explicit `nil` comparisons such as `counts == nil`, builtin `delete(counts, "nova")`, builtin `clear(counts)`, and staged `range` loops over keys and key/value pairs
   - Nil-map reads return the element zero value, nil-map deletes are no-ops, and nil-map writes raise a runtime error
   - Duplicate constant literal keys now fail during semantic analysis; non-literal duplicate writes still follow staged source-order last-write-wins behavior
 
@@ -55,6 +55,7 @@ Describe the current runtime value categories and builtin execution model introd
   - `make(map[K]V[, hint]) -> map[K]V`
   - `delete(map, key) -> void`
   - `close(chan) -> void`
+  - `clear(slice|map) -> void`
   - `cap(slice|chan) -> int`
   - `copy(slice, slice|string) -> int`
   - `append(slice, ...element) -> slice`
@@ -63,6 +64,7 @@ Describe the current runtime value categories and builtin execution model introd
 - `make` validates slice allocation arity (`len[, cap]`), channel allocation arity (`[size]`), or map allocation arity (`[hint]`) before lowering
 - `delete` validates a map first argument and a key matching the map key type before lowering
 - `close` validates one channel target before lowering
+- `clear` validates one slice or map target before lowering
 - `cap` validates one slice or channel target before lowering
 - `copy` validates destination and source slice types centrally before lowering, including the `[]byte` <- `string` special case
 - `append` validates a slice first argument and matching appended element types before lowering
@@ -130,6 +132,7 @@ Describe the current runtime value categories and builtin execution model introd
 - `copy` snapshots source slice elements before writing, so overlapping slice windows behave predictably
 - `copy([]byte, string)` copies raw string bytes into the destination slice and returns the copied byte count
 - `append` now reuses existing backing storage when spare capacity is available; otherwise it allocates a fresh slice value
+- `clear(slice)` mutates the visible slice window in place, zeroing each element without changing the slice length, capacity, or nil state
 - User-defined variadic calls materialize the tail arguments into a runtime slice local on function entry, and zero-tail calls produce a nil slice local
 - `call-function-spread` expands a final slice value into the variadic tail for user-defined calls, while `call-builtin-spread append` expands either a matching slice or the narrow `string` source for `[]byte`
 - `make([]T, len[, cap])` lowers into dedicated allocation bytecode instead of a generic runtime builtin call because its first argument is a type
@@ -142,6 +145,7 @@ Describe the current runtime value categories and builtin execution model introd
 - Map lookups return the zero value of the element type when the key is absent or the target map is nil
 - `lookup-map` returns the same element value plus a `bool` presence flag, so nil or missing-key comma-ok reads become `<zero>, false`
 - `delete(map, key)` removes present entries and treats nil or missing entries as no-ops
+- `clear(map)` removes all entries from an allocated map and treats nil maps as no-ops while preserving the nil-vs-allocated distinction
 - `for range slice` and `for range map` execute zero iterations when the source is nil
 - Map range currently iterates in deterministic sorted-key order because the runtime uses sorted storage for debugging
 - Channel send and receive currently surface runtime errors when the operation would block because the VM has no goroutines or scheduler yet

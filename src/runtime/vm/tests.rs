@@ -6,6 +6,8 @@ use crate::bytecode::instruction::{
 use crate::conversion::ConversionKind;
 use crate::package::PackageFunction;
 
+mod clear;
+
 #[test]
 fn execute_builds_and_indexes_slices() {
     let program = Program {

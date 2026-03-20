@@ -1,0 +1,6 @@
+- [done] Re-read startup context, latest archive context, milestone state, active plan state, and applicable docs before selecting the next `M3` slice.
+- [done] Write the research note and active-plan artifacts for builtin `clear` plus runtime file-size governance.
+- [done] Implement builtin metadata, semantic contracts, runtime helpers, and VM dispatch for `clear(slice|map)`.
+- [done] Split runtime-heavy tests into focused files where needed and add layered coverage plus an example.
+- [done] Run formatting, automated tests, and serial CLI validation commands.
+- [done] Update reports, tech docs, roadmap state, archive the plan if complete, and commit all changes.

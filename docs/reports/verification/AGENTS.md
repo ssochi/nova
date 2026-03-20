@@ -34,6 +34,7 @@ This directory stores validation evidence that "proves the change holds."
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `2026-03-20-builtin-clear-and-runtime-file-split.md`: validates builtin `clear(slice|map)` plus runtime file-size governance across the full CLI and VM stack
 - `2026-03-20-strings-bytes-clone-seams.md`: validates staged `strings.Clone` / `bytes.Clone` helpers across the full CLI and VM stack
 - `2026-03-20-strings-bytes-compare-seams.md`: validates staged `strings.Compare` / `bytes.Compare` helpers across the full CLI and VM stack
 - `2026-03-20-strings-bytes-last-index-byte-search.md`: validates staged `strings` / `bytes` last-index and byte-search helpers across the full CLI and VM stack

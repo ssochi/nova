@@ -127,6 +127,18 @@ impl VirtualMachine {
                     ChannelCloseError::Closed => RuntimeError::new("close of closed channel"),
                 })?;
             }
+            BuiltinFunction::Clear => {
+                let [target] = expect_exact_builtin_arguments(arguments, 1, "clear")?;
+                match target {
+                    Value::Slice(slice) => slice.clear(),
+                    Value::Map(map) => map.clear(),
+                    _ => {
+                        return Err(RuntimeError::new(
+                            "builtin `clear` expected a slice or map as argument 1",
+                        ));
+                    }
+                }
+            }
         }
 
         Ok(())
