@@ -6,7 +6,9 @@ use crate::semantic::analyzer::SemanticError;
 use crate::semantic::builtins::resolve_builtin;
 use crate::semantic::model::Type;
 use crate::semantic::packages::resolve_import_path;
-use crate::semantic::support::{is_supported_named_type, resolve_type_ref, validate_runtime_type};
+use crate::semantic::support::{
+    flatten_function_parameters, is_supported_named_type, resolve_type_ref, validate_runtime_type,
+};
 
 pub(super) struct FunctionRegistry {
     name_to_index: HashMap<String, usize>,
@@ -27,8 +29,8 @@ impl FunctionRegistry {
                 )));
             }
 
-            let parameters = function
-                .parameters
+            let flattened_parameters = flatten_function_parameters(function);
+            let parameters = flattened_parameters
                 .iter()
                 .map(|parameter| {
                     let parameter_type =
@@ -79,8 +81,7 @@ impl FunctionRegistry {
             signatures.push(FunctionSignature {
                 name: function.name.clone(),
                 parameters,
-                variadic_element_type: function
-                    .parameters
+                variadic_element_type: flattened_parameters
                     .last()
                     .and_then(|parameter| {
                         parameter

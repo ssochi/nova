@@ -12,6 +12,8 @@
   - `cli_diagnostics.rs`: invalid-program and diagnostic coverage
   - `cli_builtin_clear.rs`: focused CLI coverage for builtin `clear(slice|map)`
   - `cli_builtin_clear_diagnostics.rs`: focused diagnostic coverage for mistyped builtin `clear` calls
+  - `cli_grouped_parameters.rs`: focused CLI coverage for grouped parameter-name shorthand in function signatures
+  - `cli_grouped_parameters_diagnostics.rs`: focused diagnostic coverage for invalid grouped parameter declarations
   - `cli_strings_bytes_clone.rs`: focused CLI coverage for the `strings.Clone` / `bytes.Clone` helper slice
   - `cli_strings_bytes_clone_diagnostics.rs`: focused diagnostic coverage for mistyped `strings.Clone` / `bytes.Clone` calls
   - `cli_strings_bytes_last_index.rs`: focused CLI coverage for the `strings` / `bytes` last-index and byte-search helper slice

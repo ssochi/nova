@@ -58,7 +58,7 @@ impl ImportSpec {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FunctionDecl {
     pub name: String,
-    pub parameters: Vec<Parameter>,
+    pub parameters: Vec<ParameterDecl>,
     pub return_types: Vec<TypeRef>,
     pub body: Block,
 }
@@ -68,7 +68,7 @@ impl FunctionDecl {
         let parameters = self
             .parameters
             .iter()
-            .map(Parameter::render)
+            .map(ParameterDecl::render)
             .collect::<Vec<_>>()
             .join(", ");
         let return_types = render_result_type_list(&self.return_types);
@@ -88,16 +88,21 @@ impl FunctionDecl {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Parameter {
-    pub name: String,
+pub struct ParameterDecl {
+    pub names: Vec<String>,
     pub type_ref: TypeRef,
     pub variadic: bool,
 }
 
-impl Parameter {
+impl ParameterDecl {
     fn render(&self) -> String {
         let prefix = if self.variadic { "..." } else { "" };
-        format!("{} {}{}", self.name, prefix, self.type_ref.render())
+        format!(
+            "{} {}{}",
+            self.names.join(", "),
+            prefix,
+            self.type_ref.render()
+        )
     }
 }
 

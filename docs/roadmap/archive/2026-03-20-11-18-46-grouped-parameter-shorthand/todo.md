@@ -1,0 +1,6 @@
+- [done] Open the plan, sync roadmap indexes, and pin the iteration scope to grouped parameter-name shorthand under `M3`
+- [done] Write research and design notes for grouped parameter-name shorthand and staged variadic interaction
+- [done] Implement frontend and semantic support while preserving source-facing readability
+- [done] Add focused parser, semantic, and CLI coverage plus an example program
+- [done] Run formatting, tests, CLI validation, and write verification and experience reports
+- [done] Archive the completed plan, refresh roadmap context, and commit the full working tree

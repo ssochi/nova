@@ -655,6 +655,46 @@ fn analyze_variadic_functions_and_append_spread() {
 }
 
 #[test]
+fn analyze_grouped_parameter_names() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc describe(left, right string) string {\n\treturn left + right\n}\n\nfunc total(base, offset int, values ...int) int {\n\treturn base + offset + len(values)\n}\n\nfunc main() {\n\tprintln(describe(\"nova\", \"go\"))\n\tprintln(total(1, 2, 3, 4))\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let program = analyze_package(&ast).expect("analysis should succeed");
+
+    assert_eq!(program.functions[0].parameter_count, 2);
+    assert_eq!(program.functions[0].local_names, vec!["left", "right"]);
+    assert_eq!(program.functions[1].parameter_count, 3);
+    assert_eq!(program.functions[1].variadic_element_type, Some(Type::Int));
+    assert_eq!(
+        program.functions[1].local_names,
+        vec!["base", "offset", "values"]
+    );
+}
+
+#[test]
+fn reject_duplicate_grouped_parameter_name() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc pair(left, right string, left int) {}\n".to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let error = analyze_package(&ast).expect_err("analysis should reject duplicate parameter");
+
+    assert!(
+        error
+            .to_string()
+            .contains("parameter `left` is already defined in function `pair`")
+    );
+}
+
+#[test]
 fn reject_break_outside_breakable_statement() {
     let source = SourceFile {
         path: "test.go".into(),

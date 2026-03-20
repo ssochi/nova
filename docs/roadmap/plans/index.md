@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-11-02-46-grouped-parameter-shorthand`
+- Opened `2026-03-20-11-02-46-grouped-parameter-shorthand` for staged grouped parameter-name shorthand under `M3`
 - Completed and archived `2026-03-20-10-46-29-builtin-clear-and-runtime-file-split`
 - Opened `2026-03-20-10-46-29-builtin-clear-and-runtime-file-split` for builtin `clear(slice|map)` plus runtime file-size governance under `M3`
 - Completed and archived `2026-03-20-10-32-34-strings-bytes-clone-seams`

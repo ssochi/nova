@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::frontend::ast::{
     AssignmentTarget, BinaryOperator, Block, CallArgument, Expression, FunctionDecl, ImportDecl,
-    ImportSpec, MapLiteralEntry, Parameter, SourceFileAst, TypeRef,
+    ImportSpec, MapLiteralEntry, ParameterDecl, SourceFileAst, TypeRef,
 };
 use crate::frontend::token::{Token, TokenKind};
 
@@ -140,18 +140,24 @@ impl<'a> Parser<'a> {
         Ok(vec![self.parse_type_ref()?])
     }
 
-    fn parse_parameter_list(&mut self) -> Result<Vec<Parameter>, ParseError> {
+    fn parse_parameter_list(&mut self) -> Result<Vec<ParameterDecl>, ParseError> {
         let mut parameters = Vec::new();
         if self.check(&TokenKind::RightParen) {
             return Ok(parameters);
         }
 
         loop {
-            let name = self.expect_identifier()?;
+            let mut names = vec![self.expect_identifier()?];
+            while self.match_kind(&TokenKind::Comma) {
+                names.push(self.expect_identifier()?);
+            }
             let variadic = self.match_kind(&TokenKind::Ellipsis);
+            if variadic && names.len() != 1 {
+                return Err(self.error_at_current("can only use `...` with one final parameter"));
+            }
             let type_ref = self.parse_type_ref()?;
-            parameters.push(Parameter {
-                name,
+            parameters.push(ParameterDecl {
+                names,
                 type_ref,
                 variadic,
             });

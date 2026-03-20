@@ -33,6 +33,7 @@ This directory stores research notes that inform roadmap choices and implementat
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `2026-03-20-grouped-parameter-shorthand.md`: official behavior baseline for grouped input parameter declarations such as `func f(a, b int)`
 - `2026-03-20-builtin-clear-slice-map.md`: official behavior baseline for builtin `clear` on staged `slice` and `map` values
 - `2026-03-20-strings-bytes-clone-seams.md`: official behavior baseline for staged `strings.Clone` / `bytes.Clone` package helpers
 - `2026-03-20-strings-bytes-compare-seams.md`: official behavior baseline for staged `strings.Compare` / `bytes.Compare` package helpers

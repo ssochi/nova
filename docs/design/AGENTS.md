@@ -32,6 +32,7 @@ This directory stores feature and subsystem designs. It describes intent, scope 
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `grouped-parameter-shorthand.md`: design baseline for grouped input parameter declarations such as `func f(a, b int)`
 - `strings-bytes-compare-seams.md`: design baseline for staged `strings.Compare` / `bytes.Compare` package helpers
 - `multi-result-functions-and-cut-package-seams.md`: design baseline for unnamed multi-result functions, staged binding forms, and `strings.Cut` / `bytes.Cut`
 - `import-aliases-and-bytes-package.md`: design baseline for grouped imports, explicit import aliases, and the staged `bytes` package seam

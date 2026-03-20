@@ -13,8 +13,8 @@ use crate::semantic::model::{
 };
 use crate::semantic::registry::{FunctionRegistry, ImportRegistry};
 use crate::semantic::support::{
-    block_guarantees_return, coerce_expression_to_type, expect_type, render_type_list,
-    resolve_type_ref, validate_runtime_type, zero_value_expression,
+    block_guarantees_return, coerce_expression_to_type, expect_type, flatten_function_parameters,
+    render_type_list, resolve_type_ref, validate_runtime_type, zero_value_expression,
 };
 
 mod expressions;
@@ -117,7 +117,7 @@ impl<'a> FunctionAnalyzer<'a> {
     ) -> Self {
         let mut scopes = vec![HashMap::new()];
         let mut local_names = Vec::new();
-        for parameter in &function.parameters {
+        for parameter in flatten_function_parameters(function) {
             let parameter_type = resolve_type_ref(&parameter.type_ref)
                 .expect("function registry only keeps validated type names");
             let ty = if parameter.variadic {
@@ -127,7 +127,7 @@ impl<'a> FunctionAnalyzer<'a> {
             };
             let slot = local_names.len();
             scopes[0].insert(parameter.name.clone(), LocalBinding { slot, ty });
-            local_names.push(parameter.name.clone());
+            local_names.push(parameter.name);
         }
 
         Self {
@@ -156,7 +156,7 @@ impl<'a> FunctionAnalyzer<'a> {
 
         Ok(CheckedFunction {
             name: self.function.name.clone(),
-            parameter_count: self.function.parameters.len(),
+            parameter_count: flatten_function_parameters(self.function).len(),
             variadic_element_type: signature.variadic_element_type.clone(),
             return_types: signature.return_types.clone(),
             local_names: self.local_names,
@@ -166,8 +166,8 @@ impl<'a> FunctionAnalyzer<'a> {
 
     fn ensure_unique_parameters(&self) -> Result<(), SemanticError> {
         let mut seen = HashMap::new();
-        for parameter in &self.function.parameters {
-            if seen.insert(parameter.name.as_str(), ()).is_some() {
+        for parameter in flatten_function_parameters(self.function) {
+            if seen.insert(parameter.name.clone(), ()).is_some() {
                 return Err(SemanticError::new(format!(
                     "parameter `{}` is already defined in function `{}`",
                     parameter.name, self.function.name

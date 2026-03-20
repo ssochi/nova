@@ -44,6 +44,7 @@ Operational clarifications:
 9. If a builtin needs a type argument, model that syntax explicitly in the AST and checked layer instead of forcing type syntax through ordinary value-expression call arguments.
 10. If explicit conversion syntax such as `T(x)` is added, keep it distinct from ordinary call expressions in the AST and checked model; do not hide conversions inside builtin dispatch.
 11. If a source file is already near the 1000-line limit, split tests or helpers into submodules in the same iteration instead of letting feature work push the file further over the limit.
+    - Before closing the plan, run `wc -l` on every touched code/document file that could be near the limit and treat any `>1000` result as a blocking issue for that round.
 12. When introducing a new composite runtime category such as `map` or `chan`, model nil-vs-allocated state explicitly and keep `dump-bytecode` readable with dedicated instructions instead of generic runtime fallbacks.
 13. When introducing typed composite literals such as `map[K]V{...}`, keep them explicit in the AST, checked model, and bytecode instead of silently lowering them into synthetic `make` plus mutation during parsing or semantic analysis.
 14. When exposing source-level `nil`, keep untyped `nil` explicit in the checked layer and only resolve it where slice/map/chan type context already exists; do not erase that distinction inside parsing or generic runtime values.

@@ -37,6 +37,7 @@ Describe the concrete execution pipeline shipped in the bootstrap milestone, inc
 ## Current Semantic Rules
 
 - Package analysis validates duplicate function names, variable scopes, call arity, and zero/one/multi-result return compatibility.
+- Package analysis also flattens grouped input parameter declarations such as `func f(a, b int)` into the ordered parameter-slot metadata used by lowering and the VM.
 - Package analysis also validates supported import paths and selector calls to imported package members.
 - Execution additionally requires the configured package and entry function to exist, and the entry function must be `func main()`.
 - Local variables must be declared before assignment or use, with nested block scopes mapped to fixed slots during analysis.

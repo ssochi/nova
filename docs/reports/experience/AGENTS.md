@@ -34,6 +34,7 @@ This directory stores experience validation reports close to the real user path.
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `2026-03-20-grouped-parameter-shorthand-playtest.md`: records the CLI walkthrough for grouped input parameter declarations and grouped-prefix variadic signatures
 - `2026-03-20-builtin-clear-and-runtime-file-split-playtest.md`: records the CLI walkthrough for builtin `clear(slice|map)` plus runtime file-size governance
 - `2026-03-20-strings-bytes-clone-seams-playtest.md`: records the CLI walkthrough for staged `strings.Clone` / `bytes.Clone` package helpers
 - `2026-03-20-strings-bytes-compare-seams-playtest.md`: records the CLI walkthrough for staged `strings.Compare` / `bytes.Compare` package helpers

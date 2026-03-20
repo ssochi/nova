@@ -55,7 +55,9 @@ fn parse_variadic_function_and_spread_call() {
     let ast = parse_source_file(&tokens).expect("parsing should succeed");
     let function = &ast.functions[0];
 
+    assert_eq!(function.parameters[0].names, vec!["prefix".to_string()]);
     assert!(!function.parameters[0].variadic);
+    assert_eq!(function.parameters[1].names, vec!["values".to_string()]);
     assert!(function.parameters[1].variadic);
     assert_eq!(
         function.parameters[1].type_ref,
@@ -77,6 +79,33 @@ fn parse_variadic_function_and_spread_call() {
 }
 
 #[test]
+fn parse_grouped_parameter_names() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc pair(a, b int, prefix, suffix string, values ...int) {\n\tprintln(a, b, prefix, suffix, values)\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let function = &ast.functions[0];
+
+    assert_eq!(
+        function.parameters[0].names,
+        vec!["a".to_string(), "b".to_string()]
+    );
+    assert_eq!(
+        function.parameters[1].names,
+        vec!["prefix".to_string(), "suffix".to_string()]
+    );
+    assert_eq!(function.parameters[2].names, vec!["values".to_string()]);
+    assert!(function.parameters[2].variadic);
+
+    let rendered = ast.render();
+    assert!(rendered.contains("func pair(a, b int, prefix, suffix string, values ...int)"));
+}
+
+#[test]
 fn reject_non_final_variadic_parameter() {
     let source = SourceFile {
         path: "test.go".into(),
@@ -90,6 +119,23 @@ fn reject_non_final_variadic_parameter() {
         error
             .to_string()
             .contains("variadic parameter must be the final parameter")
+    );
+}
+
+#[test]
+fn reject_grouped_variadic_parameter_names() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc collect(values, more ...int) {}\n".to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let error = parse_source_file(&tokens).expect_err("parsing should fail");
+
+    assert!(
+        error
+            .to_string()
+            .contains("can only use `...` with one final parameter")
     );
 }
 

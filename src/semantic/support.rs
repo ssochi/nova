@@ -1,9 +1,30 @@
-use crate::frontend::ast::TypeRef;
+use crate::frontend::ast::{FunctionDecl, TypeRef};
 use crate::semantic::analyzer::SemanticError;
 use crate::semantic::model::{
     CheckedBlock, CheckedElseBranch, CheckedExpression, CheckedExpressionKind, CheckedForStatement,
     CheckedIfStatement, CheckedStatement, CheckedSwitchClause, CheckedSwitchStatement, Type,
 };
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FlattenedParameter {
+    pub name: String,
+    pub type_ref: TypeRef,
+    pub variadic: bool,
+}
+
+pub fn flatten_function_parameters(function: &FunctionDecl) -> Vec<FlattenedParameter> {
+    let mut parameters = Vec::new();
+    for declaration in &function.parameters {
+        for name in &declaration.names {
+            parameters.push(FlattenedParameter {
+                name: name.clone(),
+                type_ref: declaration.type_ref.clone(),
+                variadic: declaration.variadic,
+            });
+        }
+    }
+    parameters
+}
 
 pub fn resolve_type_ref(type_ref: &TypeRef) -> Option<Type> {
     match type_ref {
