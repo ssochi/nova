@@ -25,6 +25,7 @@
 
 ## Related Plans
 
+- `2026-03-20-10-08-16-strings-bytes-last-index-byte-search`: completed plan for staged `strings` / `bytes` last-index and byte-search package seams
 - `2026-03-20-09-49-02-strings-bytes-index-trim`: completed plan for staged `strings` / `bytes` index, suffix, and trim package seams
 - `2026-03-20-09-21-38-variadic-functions-ellipsis`: completed plan for staged variadic function declarations, explicit final-argument `...`, and builtin `append` spread semantics
 - `2026-03-20-08-55-11-call-argument-multi-result-forwarding`: completed plan for staged call-argument multi-result forwarding plus `strings` / `bytes` `CutPrefix` / `CutSuffix` seams
@@ -61,7 +62,7 @@
 
 ## Next-Round Recommendations
 
-- Open the next `M3` plan for either grouped parameter-name shorthand or the next package/API slice that avoids rune-sensitive behavior until the runtime models it deliberately.
+- Open the next `M3` plan for another byte-oriented package/API slice or a quality-oriented refactor that reduces pressure on large integration and contract files without stalling feature progress.
 - If control-flow stays the next priority, reuse the explicit `ForStatement` / `CheckedForStatement` model and the compiler control-flow stack instead of lowering new targets through ad hoc jumps.
-- Grouped parameter-name shorthand, `LastIndex`-style search helpers, or another package-backed API slice are the strongest adjacent continuations; keep explicit `...` separate from the staged multi-result forwarding path and keep UTF-8-sequence-sensitive helpers deferred.
+- `Compare`-style helpers, another low-risk package-backed API slice, or a file-size governance pass are the strongest adjacent continuations; keep explicit `...` separate from the staged multi-result forwarding path and keep UTF-8-sequence-sensitive helpers deferred.
 - Reuse the `docs/research/` flow before locking the next compatibility-sensitive slice.

@@ -1,0 +1,6 @@
+- [done] Write the research note for byte-oriented `strings` / `bytes` last-index and byte-search helpers.
+- [done] Open the active `M3` plan and align roadmap indexes with the new execution surface.
+- [done] Implement package metadata, semantic contracts, and VM/runtime dispatch for the selected helpers.
+- [done] Add example coverage plus focused unit and CLI tests in layered files.
+- [done] Run formatting, automated tests, and serial CLI validation commands.
+- [done] Update reports, tech docs, milestone state, archive the plan if complete, and commit all changes.

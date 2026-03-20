@@ -1,7 +1,7 @@
 use std::convert::TryFrom;
 
 use super::support::{
-    execute_bytes_package_function, expect_exact_package_arguments,
+    execute_bytes_package_function, expect_byte_package_argument, expect_exact_package_arguments,
     expect_integer_package_argument, expect_string_package_argument,
     expect_string_slice_package_argument, render_package_arguments,
 };
@@ -57,6 +57,46 @@ impl VirtualMachine {
                 let needle = expect_string_package_argument(function, 2, needle)?;
                 let index = value
                     .index_of(&needle)
+                    .map(|offset| offset as i64)
+                    .unwrap_or(-1);
+                self.stack.push(Value::Integer(index));
+            }
+            PackageFunction::StringsLastIndex => {
+                let [value, needle] = expect_exact_package_arguments(function, arguments, 2)?;
+                let value = expect_string_package_argument(function, 1, value)?;
+                let needle = expect_string_package_argument(function, 2, needle)?;
+                let index = if needle.as_bytes().is_empty() {
+                    value.len() as i64
+                } else {
+                    value
+                        .as_bytes()
+                        .windows(needle.len())
+                        .rposition(|window| window == needle.as_bytes())
+                        .map(|offset| offset as i64)
+                        .unwrap_or(-1)
+                };
+                self.stack.push(Value::Integer(index));
+            }
+            PackageFunction::StringsIndexByte => {
+                let [value, needle] = expect_exact_package_arguments(function, arguments, 2)?;
+                let value = expect_string_package_argument(function, 1, value)?;
+                let needle = expect_byte_package_argument(function, 2, needle)?;
+                let index = value
+                    .as_bytes()
+                    .iter()
+                    .position(|value| *value == needle)
+                    .map(|offset| offset as i64)
+                    .unwrap_or(-1);
+                self.stack.push(Value::Integer(index));
+            }
+            PackageFunction::StringsLastIndexByte => {
+                let [value, needle] = expect_exact_package_arguments(function, arguments, 2)?;
+                let value = expect_string_package_argument(function, 1, value)?;
+                let needle = expect_byte_package_argument(function, 2, needle)?;
+                let index = value
+                    .as_bytes()
+                    .iter()
+                    .rposition(|value| *value == needle)
                     .map(|offset| offset as i64)
                     .unwrap_or(-1);
                 self.stack.push(Value::Integer(index));
@@ -122,6 +162,9 @@ impl VirtualMachine {
             | PackageFunction::BytesHasPrefix
             | PackageFunction::BytesHasSuffix
             | PackageFunction::BytesIndex
+            | PackageFunction::BytesLastIndex
+            | PackageFunction::BytesIndexByte
+            | PackageFunction::BytesLastIndexByte
             | PackageFunction::BytesCut
             | PackageFunction::BytesCutPrefix
             | PackageFunction::BytesCutSuffix

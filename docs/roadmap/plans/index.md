@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-10-08-16-strings-bytes-last-index-byte-search`
+- Opened `2026-03-20-10-08-16-strings-bytes-last-index-byte-search` for staged `strings` / `bytes` last-index and byte-search package seams under `M3`
 - Completed and archived `2026-03-20-09-49-02-strings-bytes-index-trim`
 - Opened `2026-03-20-09-49-02-strings-bytes-index-trim` for staged `strings` / `bytes` index, suffix, and trim package seams under `M3`
 - Completed and archived `2026-03-20-09-21-38-variadic-functions-ellipsis`

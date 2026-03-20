@@ -26,7 +26,7 @@ const FMT_FUNCTIONS: [PackageFunctionContract; 3] = [
     },
 ];
 
-const STRINGS_FUNCTIONS: [PackageFunctionContract; 11] = [
+const STRINGS_FUNCTIONS: [PackageFunctionContract; 14] = [
     PackageFunctionContract {
         function: PackageFunction::StringsContains,
         member_name: "Contains",
@@ -46,6 +46,21 @@ const STRINGS_FUNCTIONS: [PackageFunctionContract; 11] = [
         function: PackageFunction::StringsIndex,
         member_name: "Index",
         validator: validate_strings_index,
+    },
+    PackageFunctionContract {
+        function: PackageFunction::StringsLastIndex,
+        member_name: "LastIndex",
+        validator: validate_strings_last_index,
+    },
+    PackageFunctionContract {
+        function: PackageFunction::StringsIndexByte,
+        member_name: "IndexByte",
+        validator: validate_strings_index_byte,
+    },
+    PackageFunctionContract {
+        function: PackageFunction::StringsLastIndexByte,
+        member_name: "LastIndexByte",
+        validator: validate_strings_last_index_byte,
     },
     PackageFunctionContract {
         function: PackageFunction::StringsCut,
@@ -84,7 +99,7 @@ const STRINGS_FUNCTIONS: [PackageFunctionContract; 11] = [
     },
 ];
 
-const BYTES_FUNCTIONS: [PackageFunctionContract; 12] = [
+const BYTES_FUNCTIONS: [PackageFunctionContract; 15] = [
     PackageFunctionContract {
         function: PackageFunction::BytesEqual,
         member_name: "Equal",
@@ -109,6 +124,21 @@ const BYTES_FUNCTIONS: [PackageFunctionContract; 12] = [
         function: PackageFunction::BytesIndex,
         member_name: "Index",
         validator: validate_bytes_index,
+    },
+    PackageFunctionContract {
+        function: PackageFunction::BytesLastIndex,
+        member_name: "LastIndex",
+        validator: validate_bytes_last_index,
+    },
+    PackageFunctionContract {
+        function: PackageFunction::BytesIndexByte,
+        member_name: "IndexByte",
+        validator: validate_bytes_index_byte,
+    },
+    PackageFunctionContract {
+        function: PackageFunction::BytesLastIndexByte,
+        member_name: "LastIndexByte",
+        validator: validate_bytes_last_index_byte,
     },
     PackageFunctionContract {
         function: PackageFunction::BytesCut,
@@ -185,7 +215,12 @@ pub fn expected_argument_types(function: PackageFunction) -> Option<Vec<Type>> {
         | PackageFunction::StringsCut
         | PackageFunction::StringsCutPrefix
         | PackageFunction::StringsCutSuffix => Some(vec![Type::String, Type::String]),
-        PackageFunction::StringsIndex => Some(vec![Type::String, Type::String]),
+        PackageFunction::StringsIndex | PackageFunction::StringsLastIndex => {
+            Some(vec![Type::String, Type::String])
+        }
+        PackageFunction::StringsIndexByte | PackageFunction::StringsLastIndexByte => {
+            Some(vec![Type::String, Type::Byte])
+        }
         PackageFunction::StringsTrimPrefix | PackageFunction::StringsTrimSuffix => {
             Some(vec![Type::String, Type::String])
         }
@@ -200,7 +235,12 @@ pub fn expected_argument_types(function: PackageFunction) -> Option<Vec<Type>> {
         | PackageFunction::BytesCut
         | PackageFunction::BytesCutPrefix
         | PackageFunction::BytesCutSuffix => Some(vec![byte_slice_type(), byte_slice_type()]),
-        PackageFunction::BytesIndex => Some(vec![byte_slice_type(), byte_slice_type()]),
+        PackageFunction::BytesIndex | PackageFunction::BytesLastIndex => {
+            Some(vec![byte_slice_type(), byte_slice_type()])
+        }
+        PackageFunction::BytesIndexByte | PackageFunction::BytesLastIndexByte => {
+            Some(vec![byte_slice_type(), Type::Byte])
+        }
         PackageFunction::BytesTrimPrefix | PackageFunction::BytesTrimSuffix => {
             Some(vec![byte_slice_type(), byte_slice_type()])
         }
@@ -307,6 +347,61 @@ fn validate_strings_index(argument_types: &[Type]) -> Result<Vec<Type>, String> 
         PackageFunction::StringsIndex,
         2,
         &Type::String,
+        &argument_types[1],
+    )?;
+    Ok(vec![Type::Int])
+}
+
+fn validate_strings_last_index(argument_types: &[Type]) -> Result<Vec<Type>, String> {
+    validate_exact_package_arity(PackageFunction::StringsLastIndex, 2, argument_types.len())?;
+    expect_package_argument_type(
+        PackageFunction::StringsLastIndex,
+        1,
+        &Type::String,
+        &argument_types[0],
+    )?;
+    expect_package_argument_type(
+        PackageFunction::StringsLastIndex,
+        2,
+        &Type::String,
+        &argument_types[1],
+    )?;
+    Ok(vec![Type::Int])
+}
+
+fn validate_strings_index_byte(argument_types: &[Type]) -> Result<Vec<Type>, String> {
+    validate_exact_package_arity(PackageFunction::StringsIndexByte, 2, argument_types.len())?;
+    expect_package_argument_type(
+        PackageFunction::StringsIndexByte,
+        1,
+        &Type::String,
+        &argument_types[0],
+    )?;
+    expect_package_argument_type(
+        PackageFunction::StringsIndexByte,
+        2,
+        &Type::Byte,
+        &argument_types[1],
+    )?;
+    Ok(vec![Type::Int])
+}
+
+fn validate_strings_last_index_byte(argument_types: &[Type]) -> Result<Vec<Type>, String> {
+    validate_exact_package_arity(
+        PackageFunction::StringsLastIndexByte,
+        2,
+        argument_types.len(),
+    )?;
+    expect_package_argument_type(
+        PackageFunction::StringsLastIndexByte,
+        1,
+        &Type::String,
+        &argument_types[0],
+    )?;
+    expect_package_argument_type(
+        PackageFunction::StringsLastIndexByte,
+        2,
+        &Type::Byte,
         &argument_types[1],
     )?;
     Ok(vec![Type::Int])
@@ -522,6 +617,60 @@ fn validate_bytes_index(argument_types: &[Type]) -> Result<Vec<Type>, String> {
     Ok(vec![Type::Int])
 }
 
+fn validate_bytes_last_index(argument_types: &[Type]) -> Result<Vec<Type>, String> {
+    validate_exact_package_arity(PackageFunction::BytesLastIndex, 2, argument_types.len())?;
+    let byte_slice = byte_slice_type();
+    expect_package_argument_type(
+        PackageFunction::BytesLastIndex,
+        1,
+        &byte_slice,
+        &argument_types[0],
+    )?;
+    expect_package_argument_type(
+        PackageFunction::BytesLastIndex,
+        2,
+        &byte_slice,
+        &argument_types[1],
+    )?;
+    Ok(vec![Type::Int])
+}
+
+fn validate_bytes_index_byte(argument_types: &[Type]) -> Result<Vec<Type>, String> {
+    validate_exact_package_arity(PackageFunction::BytesIndexByte, 2, argument_types.len())?;
+    let byte_slice = byte_slice_type();
+    expect_package_argument_type(
+        PackageFunction::BytesIndexByte,
+        1,
+        &byte_slice,
+        &argument_types[0],
+    )?;
+    expect_package_argument_type(
+        PackageFunction::BytesIndexByte,
+        2,
+        &Type::Byte,
+        &argument_types[1],
+    )?;
+    Ok(vec![Type::Int])
+}
+
+fn validate_bytes_last_index_byte(argument_types: &[Type]) -> Result<Vec<Type>, String> {
+    validate_exact_package_arity(PackageFunction::BytesLastIndexByte, 2, argument_types.len())?;
+    let byte_slice = byte_slice_type();
+    expect_package_argument_type(
+        PackageFunction::BytesLastIndexByte,
+        1,
+        &byte_slice,
+        &argument_types[0],
+    )?;
+    expect_package_argument_type(
+        PackageFunction::BytesLastIndexByte,
+        2,
+        &Type::Byte,
+        &argument_types[1],
+    )?;
+    Ok(vec![Type::Int])
+}
+
 fn validate_bytes_cut(argument_types: &[Type]) -> Result<Vec<Type>, String> {
     validate_exact_package_arity(PackageFunction::BytesCut, 2, argument_types.len())?;
     let byte_slice = byte_slice_type();
@@ -689,133 +838,4 @@ fn expect_package_argument_type(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::validate_package_call;
-    use crate::package::PackageFunction;
-    use crate::semantic::model::Type;
-
-    #[test]
-    fn join_accepts_string_slices() {
-        let result = validate_package_call(
-            PackageFunction::StringsJoin,
-            &[Type::Slice(Box::new(Type::String)), Type::String],
-        )
-        .expect("strings.Join should accept []string and string");
-
-        assert_eq!(result, vec![Type::String]);
-    }
-
-    #[test]
-    fn repeat_rejects_non_integer_count() {
-        let error =
-            validate_package_call(PackageFunction::StringsRepeat, &[Type::String, Type::Bool])
-                .expect_err("strings.Repeat should reject non-int counts");
-
-        assert!(error.contains("argument 2"));
-        assert!(error.contains("requires `int`"));
-    }
-
-    #[test]
-    fn cut_reports_multi_result_contract() {
-        let result =
-            validate_package_call(PackageFunction::StringsCut, &[Type::String, Type::String])
-                .expect("strings.Cut should accept two strings");
-
-        assert_eq!(result, vec![Type::String, Type::String, Type::Bool]);
-    }
-
-    #[test]
-    fn cut_prefix_reports_multi_result_contract() {
-        let result = validate_package_call(
-            PackageFunction::StringsCutPrefix,
-            &[Type::String, Type::String],
-        )
-        .expect("strings.CutPrefix should accept two strings");
-
-        assert_eq!(result, vec![Type::String, Type::Bool]);
-    }
-
-    #[test]
-    fn strings_index_reports_integer_contract() {
-        let result =
-            validate_package_call(PackageFunction::StringsIndex, &[Type::String, Type::String])
-                .expect("strings.Index should accept two strings");
-
-        assert_eq!(result, vec![Type::Int]);
-    }
-
-    #[test]
-    fn bytes_join_accepts_nested_byte_slices() {
-        let result = validate_package_call(
-            PackageFunction::BytesJoin,
-            &[
-                Type::Slice(Box::new(Type::Slice(Box::new(Type::Byte)))),
-                Type::Slice(Box::new(Type::Byte)),
-            ],
-        )
-        .expect("bytes.Join should accept [][]byte and []byte");
-
-        assert_eq!(result, vec![Type::Slice(Box::new(Type::Byte))]);
-    }
-
-    #[test]
-    fn bytes_repeat_rejects_non_integer_count() {
-        let error = validate_package_call(
-            PackageFunction::BytesRepeat,
-            &[Type::Slice(Box::new(Type::Byte)), Type::Bool],
-        )
-        .expect_err("bytes.Repeat should reject non-int counts");
-
-        assert!(error.contains("argument 2"));
-        assert!(error.contains("requires `int`"));
-    }
-
-    #[test]
-    fn bytes_cut_reports_multi_result_contract() {
-        let result = validate_package_call(
-            PackageFunction::BytesCut,
-            &[
-                Type::Slice(Box::new(Type::Byte)),
-                Type::Slice(Box::new(Type::Byte)),
-            ],
-        )
-        .expect("bytes.Cut should accept two []byte values");
-
-        assert_eq!(
-            result,
-            vec![
-                Type::Slice(Box::new(Type::Byte)),
-                Type::Slice(Box::new(Type::Byte)),
-                Type::Bool
-            ]
-        );
-    }
-
-    #[test]
-    fn bytes_cut_suffix_reports_multi_result_contract() {
-        let result = validate_package_call(
-            PackageFunction::BytesCutSuffix,
-            &[
-                Type::Slice(Box::new(Type::Byte)),
-                Type::Slice(Box::new(Type::Byte)),
-            ],
-        )
-        .expect("bytes.CutSuffix should accept two []byte values");
-
-        assert_eq!(result, vec![Type::Slice(Box::new(Type::Byte)), Type::Bool]);
-    }
-
-    #[test]
-    fn bytes_trim_suffix_reports_slice_contract() {
-        let result = validate_package_call(
-            PackageFunction::BytesTrimSuffix,
-            &[
-                Type::Slice(Box::new(Type::Byte)),
-                Type::Slice(Box::new(Type::Byte)),
-            ],
-        )
-        .expect("bytes.TrimSuffix should accept two []byte values");
-
-        assert_eq!(result, vec![Type::Slice(Box::new(Type::Byte))]);
-    }
-}
+mod tests;

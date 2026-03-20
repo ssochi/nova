@@ -39,7 +39,7 @@ Operational clarifications:
 4. Distinguish package-level validation from execution entrypoint validation. Commands like `check` should not silently inherit `run`-specific assumptions such as `main.main`.
 5. When collecting CLI validation traces with `cargo run -- ...`, execute them serially. Parallel cargo invocations add lock-wait noise and can corrupt experience evidence.
 6. If Rust formatting is required and `cargo fmt` is unavailable locally, install `rustfmt` first and record that environment repair in the validation trail.
-7. Keep automated validation layered: prefer focused unit tests inside `src/` plus reusable CLI integration helpers under `tests/` instead of one monolithic integration file.
+7. Keep automated validation layered: prefer focused unit tests inside `src/` plus reusable CLI integration helpers under `tests/` instead of one monolithic integration file. When `tests/cli_execution.rs` or `tests/cli_diagnostics.rs` are already large, add a new focused integration file instead of extending them again.
 8. When adding a new language form or runtime path, keep both `dump-ast` and `dump-bytecode` useful enough to expose that path without reading the implementation.
 9. If a builtin needs a type argument, model that syntax explicitly in the AST and checked layer instead of forcing type syntax through ordinary value-expression call arguments.
 10. If explicit conversion syntax such as `T(x)` is added, keep it distinct from ordinary call expressions in the AST and checked model; do not hide conversions inside builtin dispatch.

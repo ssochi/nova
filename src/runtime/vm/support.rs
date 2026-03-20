@@ -77,6 +77,22 @@ pub(super) fn expect_integer_package_argument(
     }
 }
 
+pub(super) fn expect_byte_package_argument(
+    function: PackageFunction,
+    position: usize,
+    value: Value,
+) -> Result<u8, RuntimeError> {
+    match value {
+        Value::Byte(value) => Ok(value),
+        other => Err(RuntimeError::new(format!(
+            "argument {} in call to `{}` expected `byte`, found `{}`",
+            position,
+            function.render(),
+            runtime_type_name(&other)
+        ))),
+    }
+}
+
 pub(super) fn expect_string_slice_package_argument(
     function: PackageFunction,
     position: usize,
@@ -233,6 +249,37 @@ pub(super) fn execute_bytes_package_function(
                         function.render()
                     ))
                 })?
+                .map(|offset| offset as i64)
+                .unwrap_or(-1);
+            Ok(vec![Value::Integer(index)])
+        }
+        PackageFunction::BytesLastIndex => {
+            let [value, needle] = expect_exact_package_arguments(function, arguments, 2)?;
+            let value = expect_byte_slice_package_argument(function, 1, value)?;
+            let needle = expect_byte_slice_package_argument(function, 2, needle)?;
+            let index = last_subslice_index(&value, &needle)
+                .map(|offset| offset as i64)
+                .unwrap_or(-1);
+            Ok(vec![Value::Integer(index)])
+        }
+        PackageFunction::BytesIndexByte => {
+            let [value, needle] = expect_exact_package_arguments(function, arguments, 2)?;
+            let value = expect_byte_slice_package_argument(function, 1, value)?;
+            let needle = expect_byte_package_argument(function, 2, needle)?;
+            let index = value
+                .iter()
+                .position(|value| *value == needle)
+                .map(|offset| offset as i64)
+                .unwrap_or(-1);
+            Ok(vec![Value::Integer(index)])
+        }
+        PackageFunction::BytesLastIndexByte => {
+            let [value, needle] = expect_exact_package_arguments(function, arguments, 2)?;
+            let value = expect_byte_slice_package_argument(function, 1, value)?;
+            let needle = expect_byte_package_argument(function, 2, needle)?;
+            let index = value
+                .iter()
+                .rposition(|value| *value == needle)
                 .map(|offset| offset as i64)
                 .unwrap_or(-1);
             Ok(vec![Value::Integer(index)])
@@ -446,4 +493,32 @@ fn join_byte_slices(elements: &[Vec<u8>], separator: &[u8]) -> Vec<u8> {
         joined.extend_from_slice(element);
     }
     joined
+}
+
+fn last_subslice_index(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() {
+        return Some(haystack.len());
+    }
+
+    haystack
+        .windows(needle.len())
+        .rposition(|window| window == needle)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::last_subslice_index;
+
+    #[test]
+    fn last_subslice_index_matches_go_style_empty_and_missing_cases() {
+        assert_eq!(last_subslice_index(b"nova-go-go", b"go"), Some(8));
+        assert_eq!(last_subslice_index(b"nova", b""), Some(4));
+        assert_eq!(last_subslice_index(b"nova", b"vm"), None);
+    }
+
+    #[test]
+    fn last_subslice_index_handles_nil_equivalent_empty_slice_inputs() {
+        assert_eq!(last_subslice_index(b"", b""), Some(0));
+        assert_eq!(last_subslice_index(b"", b"x"), None);
+    }
 }

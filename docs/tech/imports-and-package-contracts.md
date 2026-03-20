@@ -34,6 +34,9 @@ Describe the narrow import and package-function contract model introduced during
   - `strings.HasPrefix(string, string) -> bool`
   - `strings.HasSuffix(string, string) -> bool`
   - `strings.Index(string, string) -> int`
+  - `strings.LastIndex(string, string) -> int`
+  - `strings.IndexByte(string, byte) -> int`
+  - `strings.LastIndexByte(string, byte) -> int`
   - `strings.Cut(string, string) -> (string, string, bool)`
   - `strings.CutPrefix(string, string) -> (string, bool)`
   - `strings.CutSuffix(string, string) -> (string, bool)`
@@ -46,6 +49,9 @@ Describe the narrow import and package-function contract model introduced during
   - `bytes.HasPrefix([]byte, []byte) -> bool`
   - `bytes.HasSuffix([]byte, []byte) -> bool`
   - `bytes.Index([]byte, []byte) -> int`
+  - `bytes.LastIndex([]byte, []byte) -> int`
+  - `bytes.IndexByte([]byte, byte) -> int`
+  - `bytes.LastIndexByte([]byte, byte) -> int`
   - `bytes.Cut([]byte, []byte) -> ([]byte, []byte, bool)`
   - `bytes.CutPrefix([]byte, []byte) -> ([]byte, bool)`
   - `bytes.CutSuffix([]byte, []byte) -> ([]byte, bool)`
@@ -83,6 +89,9 @@ Describe the narrow import and package-function contract model introduced during
   - `strings.HasPrefix`: return whether one string begins with another
   - `strings.HasSuffix`: return whether one string ends with another
   - `strings.Index`: return the first matching substring index or `-1`
+  - `strings.LastIndex`: return the last matching substring index or `-1`
+  - `strings.IndexByte`: return the first matching byte index or `-1`
+  - `strings.LastIndexByte`: return the last matching byte index or `-1`
   - `strings.Cut`: push `(before, after, found)` using the first separator match
   - `strings.CutPrefix`: push `(after, found)` when a prefix match is present, otherwise `(original, false)`
   - `strings.CutSuffix`: push `(before, found)` when a suffix match is present, otherwise `(original, false)`
@@ -95,6 +104,9 @@ Describe the narrow import and package-function contract model introduced during
   - `bytes.HasPrefix`: test whether a `[]byte` value begins with a prefix
   - `bytes.HasSuffix`: test whether a `[]byte` value ends with a suffix
   - `bytes.Index`: return the first matching subslice index or `-1`
+  - `bytes.LastIndex`: return the last matching subslice index or `-1`
+  - `bytes.IndexByte`: return the first matching byte index or `-1`
+  - `bytes.LastIndexByte`: return the last matching byte index or `-1`
   - `bytes.Cut`: push `(before, after, found)` while preserving the staged nil `after` result on misses
   - `bytes.CutPrefix`: push `(after, found)` while preserving the original non-nil slice on misses
   - `bytes.CutSuffix`: push `(before, found)` while preserving the original non-nil slice on misses

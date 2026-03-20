@@ -14,6 +14,7 @@ Describe the current layered validation strategy so later iterations can expand 
 - CLI integration tests under `tests/`
   - `tests/cli_execution.rs`: happy-path runs plus `dump-*` inspection surfaces
   - `tests/cli_diagnostics.rs`: invalid programs and diagnostic expectations
+  - focused one-feature files such as `tests/cli_strings_bytes_last_index.rs` and `tests/cli_strings_bytes_last_index_diagnostics.rs` when the large baseline integration files are already near the repository size ceiling
   - `tests/support/mod.rs`: shared CLI invocation and temporary source helpers
 - When a feature adds an explicit staged surface such as `range`, comma-ok `map` lookup, or `if` headers, cover both `dump-ast` and `dump-bytecode` so users can inspect it without reading the implementation.
 - When a feature relies on staged lowering rather than a dedicated instruction for every case, use CLI `dump-bytecode` assertions on hidden locals or explicit helper instructions so the new path remains discoverable.
@@ -24,6 +25,7 @@ Describe the current layered validation strategy so later iterations can expand 
 
 - Add a unit test first when a change lives in one layer and can be validated without the full CLI.
 - Add or update CLI integration coverage when the user-visible compiler surface changes.
+- Prefer a new focused integration file over extending `tests/cli_execution.rs` or `tests/cli_diagnostics.rs` once those broad files are already near 1000 lines.
 - Keep real CLI validation serial when collecting evidence for reports.
 - Do not let `check` assertions depend on `run`-only entrypoint assumptions.
 
