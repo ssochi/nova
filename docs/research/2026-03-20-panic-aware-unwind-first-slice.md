@@ -1,8 +1,8 @@
-# Panic-Aware Unwind First Slice
+# Panic-Aware Unwind and Recover Baseline
 
 ## Goal
 
-Establish the official and locally verified behavior baseline for a first staged panic slice built on top of the existing explicit `defer` implementation.
+Establish the official and locally verified behavior baseline for the staged panic/recover surface built on top of the existing explicit `defer` implementation.
 
 ## Sources Reviewed
 
@@ -13,6 +13,10 @@ Establish the official and locally verified behavior baseline for a first staged
   - deferred calls during panic propagation
   - deferred panic overriding a normal return
   - `panic(nil)` behavior
+  - direct deferred recovery through a named function
+  - helper-call and deferred-builtin `recover()` non-recovery
+  - `recover()` return values outside panic and after a successful recovery
+  - post-recovery return values for unnamed and named results
 
 ## Confirmed Findings
 
@@ -22,17 +26,24 @@ Establish the official and locally verified behavior baseline for a first staged
 - `panic(nil)` is accepted syntactically, but starting in Go 1.21 it produces a separate run-time panic rather than reporting a nil recovered value.
 - The spec describes both explicit builtin `panic` and ordinary run-time panics as entering the same panicking sequence.
 - `recover` is meaningful only when called directly inside a deferred function during an active panicking sequence.
+- A directly deferred named function can recover a panic; `defer namedRecover()` works when `namedRecover` itself calls `recover()` directly.
+- A helper invoked by the deferred function cannot recover the panic; `recover()` in that helper returns `nil`.
+- `defer recover()` does not stop the panic in real Go; the deferred builtin call still yields `nil` and the panic continues.
+- Once one direct `recover()` succeeds, later `recover()` calls in the same deferred function return `nil`.
+- Recovering a panic resumes normal return from the panicking function. Unnamed results fall back to their zero values, while named results can still be changed by a deferred closure before the function returns.
+- Recovering `panic(nil)` returns a non-nil payload in Go 1.21 (`*runtime.PanicNilError`) whose string form is `panic called with nil argument`.
 
 ## Implementation Implications
 
 - The VM should represent panic-state unwinding explicitly instead of treating builtin `panic` as just another immediate runtime error.
 - Existing runtime traps that already correspond to Go run-time panics should be able to enter the same unwind path so deferred calls still run.
 - The existing per-frame deferred-call stack and pending-return storage are the right extension points; the runtime should not bolt on a second unwind mechanism.
-- The first slice can ship accurate `panic` behavior without `recover`, because `recover` needs a result carrier equivalent to `interface{}` / `any`, which the current type system does not model.
-- `panic(nil)` should stay explicit in the staged design; either it needs dedicated lowering/runtime handling or the divergence must be documented clearly.
+- Now that `any` / `interface{}` exist, recovered payloads can reenter the staged language as boxed `any` values rather than raw runtime messages.
+- Recover eligibility should be modeled on the deferred user-function frame itself; helper frames and deferred builtins must remain ineligible even while a panic is active.
+- The current runtime still lacks Go's concrete runtime panic object types, so recovered runtime panic payloads and `panic(nil)` need a documented staged representation instead of pretending to return `runtime.Error` or `*runtime.PanicNilError`.
 
 ## Deferred Questions
 
-- How should recovered panic payloads be typed once the project introduces `interface{}` or `any`?
 - Which remaining runtime trap sites should be promoted from plain runtime errors into staged run-time panics in later rounds?
+- How closely should the staged runtime eventually approximate Go's concrete recovered payload types for runtime panics and `panic(nil)`?
 - How closely should the CLI eventually approximate real Go panic formatting and stack traces?

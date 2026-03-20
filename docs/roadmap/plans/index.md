@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-13-28-50-recover-first-slice`
+- Opened `2026-03-20-13-28-50-recover-first-slice` for the first staged `recover()` builtin slice plus VM file-size governance under `M3`
 - Completed and archived `2026-03-20-12-55-53-empty-interface-any-and-fmt-spread`
 - Opened `2026-03-20-12-55-53-empty-interface-any-and-fmt-spread` for staged empty-interface groundwork plus `fmt` variadic spread support under `M3`
 - Completed and archived `2026-03-20-12-28-16-panic-aware-unwind-first-slice`

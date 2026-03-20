@@ -11,6 +11,7 @@ pub enum BuiltinFunction {
     Close,
     Clear,
     Panic,
+    Recover,
 }
 
 impl BuiltinFunction {
@@ -27,6 +28,7 @@ impl BuiltinFunction {
             BuiltinFunction::Close => "close",
             BuiltinFunction::Clear => "clear",
             BuiltinFunction::Panic => "panic",
+            BuiltinFunction::Recover => "recover",
         }
     }
 }

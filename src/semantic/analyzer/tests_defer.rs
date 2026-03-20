@@ -43,3 +43,16 @@ fn reject_defer_of_builtin_outside_statement_context() {
             .contains("builtin `len` is not permitted in defer statement context")
     );
 }
+
+#[test]
+fn recoverable_panic_counts_as_terminating_path_for_value_function() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc report() {\n\tprintln(recover())\n}\n\nfunc value() int {\n\tdefer report()\n\tpanic(\"boom\")\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    analyze_package(&ast).expect("analysis should accept panic as terminating");
+}

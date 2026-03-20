@@ -1,8 +1,10 @@
+use crate::builtin::BuiltinFunction;
 use crate::frontend::ast::{FunctionDecl, TypeRef};
 use crate::semantic::analyzer::SemanticError;
 use crate::semantic::model::{
-    CheckedBlock, CheckedElseBranch, CheckedExpression, CheckedExpressionKind, CheckedForStatement,
-    CheckedIfStatement, CheckedStatement, CheckedSwitchClause, CheckedSwitchStatement, Type,
+    CallTarget, CheckedBlock, CheckedElseBranch, CheckedExpression, CheckedExpressionKind,
+    CheckedForStatement, CheckedIfStatement, CheckedStatement, CheckedSwitchClause,
+    CheckedSwitchStatement, Type,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -254,6 +256,7 @@ pub fn validate_make_literal_bounds(
 fn statement_guarantees_termination(statement: &CheckedStatement) -> bool {
     match statement {
         CheckedStatement::Return(_) => true,
+        CheckedStatement::Expr(expression) => expression_guarantees_termination(expression),
         CheckedStatement::If(if_statement) => if_statement_guarantees_termination(if_statement),
         CheckedStatement::Switch(switch_statement) => {
             switch_statement_guarantees_termination(switch_statement)
@@ -264,6 +267,14 @@ fn statement_guarantees_termination(statement: &CheckedStatement) -> bool {
         CheckedStatement::Break | CheckedStatement::Continue => false,
         _ => false,
     }
+}
+
+fn expression_guarantees_termination(expression: &CheckedExpression) -> bool {
+    matches!(
+        &expression.kind,
+        CheckedExpressionKind::Call(call)
+            if matches!(call.target, CallTarget::Builtin(BuiltinFunction::Panic))
+    )
 }
 
 fn if_statement_guarantees_termination(if_statement: &CheckedIfStatement) -> bool {

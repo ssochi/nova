@@ -159,6 +159,10 @@ impl VirtualMachine {
             BuiltinFunction::Panic => Err(RuntimeError::new(
                 "builtin `panic` is lowered into explicit panic bytecode",
             )),
+            BuiltinFunction::Recover => {
+                let [] = expect_exact_builtin_arguments(arguments, 0, "recover")?;
+                Ok(vec![self.recover_builtin_value()?])
+            }
         }
     }
 

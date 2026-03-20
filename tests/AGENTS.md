@@ -14,6 +14,8 @@
   - `cli_builtin_clear_diagnostics.rs`: focused diagnostic coverage for mistyped builtin `clear` calls
   - `cli_panic.rs`: focused CLI coverage for staged builtin `panic` plus panic-aware deferred unwinding
   - `cli_panic_diagnostics.rs`: focused diagnostic coverage for invalid builtin `panic` calls
+  - `cli_recover.rs`: focused CLI coverage for staged builtin `recover()`, direct deferred recovery, and documented non-recovery cases
+  - `cli_recover_diagnostics.rs`: focused diagnostic coverage for invalid builtin `recover()` calls
   - `cli_any_interface.rs`: focused CLI coverage for staged empty-interface `any` / `interface{}` values, explicit boxing, and `fmt` variadic spread over `[]any`
   - `cli_any_interface_diagnostics.rs`: focused diagnostic coverage for invalid `fmt` spread and unsupported interface-equality shapes in the staged empty-interface slice
   - `cli_defer.rs`: focused CLI coverage for staged `defer` statements and explicit defer bytecode

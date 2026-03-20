@@ -1,0 +1,5 @@
+- [done] Extend the panic/recover research baseline and open the active `M3` plan for staged `recover()`.
+- [done] Implement builtin `recover()` across semantic analysis, runtime unwind state, and VM execution with file-size-safe helper extraction.
+- [done] Add focused VM and CLI tests covering successful recovery, nil recovery, helper-call non-recovery, and deferred builtin `recover()`.
+- [done] Run serial validation and CLI playtests, then synchronize design/tech/report docs and roadmap status.
+- [done] Archive the completed plan, update milestone indexes, and commit the full working tree.

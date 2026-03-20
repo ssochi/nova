@@ -182,14 +182,14 @@ pub enum Instruction {
     Pop,
     CallBuiltin(BuiltinFunction, usize),
     CallBuiltinSpread(BuiltinFunction, usize),
-    Panic,
+    Panic(ValueType),
     PanicNil,
     CallPackage(PackageFunction, usize),
     CallPackageSpread(PackageFunction, usize),
     CallFunction(usize, usize),
     CallFunctionSpread(usize, usize),
     DeferBuiltin(BuiltinFunction, usize),
-    DeferPanic,
+    DeferPanic(ValueType),
     DeferPanicNil,
     DeferPackage(PackageFunction, usize),
     DeferPackageSpread(PackageFunction, usize),
@@ -287,7 +287,7 @@ impl Instruction {
             Instruction::CallBuiltinSpread(builtin, prefix_arity) => {
                 format!("call-builtin-spread {} {prefix_arity}", builtin.render())
             }
-            Instruction::Panic => "panic".to_string(),
+            Instruction::Panic(value_type) => format!("panic {}", value_type.render()),
             Instruction::PanicNil => "panic-nil".to_string(),
             Instruction::CallPackage(function, arity) => {
                 format!("call-package {} {arity}", function.render())
@@ -302,7 +302,9 @@ impl Instruction {
             Instruction::DeferBuiltin(builtin, arity) => {
                 format!("defer-builtin {} {arity}", builtin.render())
             }
-            Instruction::DeferPanic => "defer-panic".to_string(),
+            Instruction::DeferPanic(value_type) => {
+                format!("defer-panic {}", value_type.render())
+            }
             Instruction::DeferPanicNil => "defer-panic-nil".to_string(),
             Instruction::DeferPackage(function, arity) => {
                 format!("defer-package {} {arity}", function.render())

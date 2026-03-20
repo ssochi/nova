@@ -8,7 +8,7 @@ pub struct BuiltinContract {
     pub validator: fn(&[Type]) -> Result<Vec<Type>, String>,
 }
 
-const BUILTIN_CONTRACTS: [BuiltinContract; 11] = [
+const BUILTIN_CONTRACTS: [BuiltinContract; 12] = [
     BuiltinContract {
         builtin: BuiltinFunction::Print,
         name: "print",
@@ -63,6 +63,11 @@ const BUILTIN_CONTRACTS: [BuiltinContract; 11] = [
         builtin: BuiltinFunction::Panic,
         name: "panic",
         validator: validate_panic_builtin,
+    },
+    BuiltinContract {
+        builtin: BuiltinFunction::Recover,
+        name: "recover",
+        validator: validate_recover_builtin,
     },
 ];
 
@@ -128,6 +133,7 @@ pub fn builtin_permits_statement_context(builtin: BuiltinFunction) -> bool {
             | BuiltinFunction::Close
             | BuiltinFunction::Clear
             | BuiltinFunction::Panic
+            | BuiltinFunction::Recover
     )
 }
 
@@ -296,6 +302,11 @@ fn validate_panic_builtin(argument_types: &[Type]) -> Result<Vec<Type>, String> 
         return Err("argument 1 in call to builtin `panic` requires a value".to_string());
     }
     Ok(Vec::new())
+}
+
+fn validate_recover_builtin(argument_types: &[Type]) -> Result<Vec<Type>, String> {
+    validate_exact_arity("recover", 0, argument_types.len())?;
+    Ok(vec![Type::Any])
 }
 
 fn validate_exact_arity(name: &str, expected: usize, actual: usize) -> Result<(), String> {
@@ -631,5 +642,21 @@ mod tests {
             .expect_err("panic should require one argument");
 
         assert!(error.contains("expects 1 arguments"));
+    }
+
+    #[test]
+    fn recover_returns_any_without_arguments() {
+        let result = validate_builtin_call(BuiltinFunction::Recover, &[])
+            .expect("recover should accept zero arguments");
+
+        assert_eq!(result, vec![Type::Any]);
+    }
+
+    #[test]
+    fn recover_rejects_arguments() {
+        let error = validate_builtin_call(BuiltinFunction::Recover, &[Type::String])
+            .expect_err("recover should reject arguments");
+
+        assert!(error.contains("expects 0 arguments"));
     }
 }

@@ -34,6 +34,7 @@ This directory stores validation evidence that "proves the change holds."
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `2026-03-20-recover-first-slice.md`: validates staged builtin `recover()`, typed panic bytecode, direct deferred recovery, helper/deferred-builtin non-recovery, and file-size governance across the full CLI and VM stack
 - `2026-03-20-empty-interface-any-and-fmt-spread.md`: validates staged empty-interface `any` / `interface{}` support, explicit boxing bytecode, nil-interface runtime behavior, and `fmt` `[]any...` spread across the full CLI and VM stack
 - `2026-03-20-panic-aware-unwind-first-slice.md`: validates staged builtin `panic`, panic-aware deferred unwinding, selected runtime-trap escalation, and file-size governance across the full CLI and VM stack
 - `2026-03-20-defer-first-slice.md`: validates staged `defer` statements, eager argument capture, and explicit frame-exit execution across the full CLI and VM stack

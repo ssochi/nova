@@ -10,6 +10,7 @@ use crate::runtime::value::{
 };
 
 mod builtins;
+mod calls;
 mod interfaces;
 mod packages;
 mod support;
@@ -33,9 +34,9 @@ impl RuntimeError {
         }
     }
 
-    fn panic_value(value: Value) -> Self {
+    fn panic_value(value: Value, value_type: ValueType) -> Self {
         Self {
-            kind: RuntimeErrorKind::Panic(PanicPayload::Value(value)),
+            kind: RuntimeErrorKind::Panic(PanicPayload::Value { value, value_type }),
         }
     }
 
@@ -129,13 +130,30 @@ impl VirtualMachine {
         self.frames.push(CallFrame::new(
             program.entry_function_index,
             entry.local_names.len(),
+            entry.parameter_count,
             ReturnMode::Normal,
+            entry.return_types.clone(),
+            false,
         ));
 
         while let Some(frame_index) = self.frames.len().checked_sub(1) {
             if self.panic_ready_to_unwind() {
                 if let Some(error) = self.resume_panic_unwind(program)? {
                     return Err(self.decorate_runtime_error(error));
+                }
+                continue;
+            }
+            if self.frames[frame_index].returning {
+                match self.resume_return(program) {
+                    Ok(Some(result)) => return Ok(result),
+                    Ok(None) => {}
+                    Err(error) => {
+                        if let Some(payload) = error.clone().into_panic_payload() {
+                            self.begin_panic(payload);
+                            continue;
+                        }
+                        return Err(self.decorate_runtime_error(error));
+                    }
                 }
                 continue;
             }
@@ -153,7 +171,6 @@ impl VirtualMachine {
             })?;
 
             let mut advance_pc = true;
-            let mut completed_execution = None;
             let step_result = (|| -> Result<(), RuntimeError> {
                 match instruction {
                     Instruction::PushInt(value) => self.stack.push(Value::Integer(value)),
@@ -285,9 +302,9 @@ impl VirtualMachine {
                     Instruction::CallBuiltinSpread(builtin, prefix_arity) => {
                         self.call_builtin_spread(builtin, prefix_arity)?
                     }
-                    Instruction::Panic => {
+                    Instruction::Panic(value_type) => {
                         let value = self.pop_value()?;
-                        return Err(RuntimeError::panic_value(value));
+                        return Err(RuntimeError::panic_value(value, value_type));
                     }
                     Instruction::PanicNil => return Err(RuntimeError::panic_nil()),
                     Instruction::CallPackage(function, arity) => {
@@ -305,6 +322,7 @@ impl VirtualMachine {
                             arguments,
                             ReturnMode::Normal,
                             true,
+                            None,
                         )?;
                         advance_pc = false;
                     }
@@ -321,6 +339,7 @@ impl VirtualMachine {
                             arguments,
                             ReturnMode::Normal,
                             true,
+                            None,
                         )?;
                         advance_pc = false;
                     }
@@ -330,11 +349,11 @@ impl VirtualMachine {
                             .deferred_calls
                             .push(DeferredCall::Builtin { builtin, arguments });
                     }
-                    Instruction::DeferPanic => {
+                    Instruction::DeferPanic(value_type) => {
                         let value = self.pop_value()?;
                         self.frames[frame_index]
                             .deferred_calls
-                            .push(DeferredCall::PanicValue(value));
+                            .push(DeferredCall::PanicValue { value, value_type });
                     }
                     Instruction::DeferPanicNil => {
                         self.frames[frame_index]
@@ -392,29 +411,7 @@ impl VirtualMachine {
                             return_values.reverse();
                             self.frames[frame_index].pending_return_values = Some(return_values);
                         }
-
-                        let deferred_call = self.frames[frame_index].deferred_calls.pop();
-
-                        if let Some(deferred_call) = deferred_call {
-                            self.execute_deferred_call(program, frame_index, deferred_call)?;
-                        } else {
-                            let frame = self.frames.pop().ok_or_else(|| {
-                                RuntimeError::new("return with no active call frame")
-                            })?;
-                            let return_values = frame
-                                .pending_return_values
-                                .ok_or_else(|| RuntimeError::new("return frame missing values"))?;
-                            if matches!(frame.return_mode, ReturnMode::Normal) {
-                                for value in return_values {
-                                    self.stack.push(value);
-                                }
-                            }
-                            if self.frames.is_empty() {
-                                completed_execution = Some(ExecutionResult {
-                                    output: self.output.clone(),
-                                });
-                            }
-                        }
+                        self.frames[frame_index].returning = true;
                         advance_pc = false;
                     }
                 }
@@ -423,9 +420,6 @@ impl VirtualMachine {
 
             match step_result {
                 Ok(()) => {
-                    if let Some(result) = completed_execution {
-                        return Ok(result);
-                    }
                     if advance_pc {
                         self.frames[frame_index].pc += 1;
                     }
@@ -507,73 +501,6 @@ impl VirtualMachine {
         let right = self.pop_string()?;
         let left = self.pop_string()?;
         self.stack.push(Value::String(left.concat(&right)));
-        Ok(())
-    }
-
-    fn pop_arguments(&mut self, arity: usize) -> Result<Vec<Value>, RuntimeError> {
-        let mut arguments = Vec::with_capacity(arity);
-        for _ in 0..arity {
-            arguments.push(self.pop_value()?);
-        }
-        arguments.reverse();
-        Ok(arguments)
-    }
-
-    fn call_user_function(
-        &mut self,
-        program: &Program,
-        caller_frame_index: usize,
-        function_index: usize,
-        arguments: Vec<Value>,
-        return_mode: ReturnMode,
-        advance_caller_pc: bool,
-    ) -> Result<(), RuntimeError> {
-        let function = program
-            .functions
-            .get(function_index)
-            .ok_or_else(|| RuntimeError::new(format!("invalid function index {function_index}")))?;
-        let fixed_parameter_count = if function.variadic_element_type.is_some() {
-            function.parameter_count.saturating_sub(1)
-        } else {
-            function.parameter_count
-        };
-        if function.variadic_element_type.is_some() {
-            if arguments.len() < fixed_parameter_count {
-                return Err(RuntimeError::new(format!(
-                    "function `{}` expected at least {} arguments, received {}",
-                    function.name,
-                    fixed_parameter_count,
-                    arguments.len()
-                )));
-            }
-        } else if arguments.len() != function.parameter_count {
-            return Err(RuntimeError::new(format!(
-                "function `{}` expected {} arguments, received {}",
-                function.name,
-                function.parameter_count,
-                arguments.len()
-            )));
-        }
-
-        if advance_caller_pc {
-            self.frames[caller_frame_index].pc += 1;
-        }
-        let mut frame = CallFrame::new(function_index, function.local_names.len(), return_mode);
-        if function.variadic_element_type.is_some() {
-            for (index, argument) in arguments.iter().take(fixed_parameter_count).enumerate() {
-                frame.locals[index] = argument.clone();
-            }
-            frame.locals[fixed_parameter_count] = if arguments.len() == fixed_parameter_count {
-                Value::Slice(SliceValue::nil())
-            } else {
-                Value::Slice(SliceValue::new(arguments[fixed_parameter_count..].to_vec()))
-            };
-        } else {
-            for (index, argument) in arguments.into_iter().enumerate() {
-                frame.locals[index] = argument;
-            }
-        }
-        self.frames.push(frame);
         Ok(())
     }
 
