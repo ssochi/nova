@@ -7,6 +7,7 @@ use crate::conversion::ConversionKind;
 use crate::package::PackageFunction;
 
 mod any;
+mod assertions;
 mod clear;
 mod defer;
 mod panic;

@@ -18,6 +18,7 @@ Describe the current layered validation strategy so later iterations can expand 
   - `tests/cli_panic.rs` and `tests/cli_panic_diagnostics.rs`: focused coverage for builtin `panic`, explicit panic bytecode, panic-aware unwind, and invalid panic arity
   - `tests/cli_recover.rs` and `tests/cli_recover_diagnostics.rs`: focused coverage for builtin `recover()`, direct deferred recovery, helper/deferred-builtin non-recovery, and invalid recover arity
   - `tests/cli_any_interface.rs` and `tests/cli_any_interface_diagnostics.rs`: focused coverage for staged empty-interface values, explicit boxing, `fmt` `[]any...` spread, and invalid spread diagnostics
+  - `tests/cli_type_assertions.rs` and `tests/cli_type_assertions_diagnostics.rs`: focused coverage for staged single-result `x.(T)` assertions, typed-nil assertion payloads, runtime mismatch panics, invalid operands, and rejected `.(type)` syntax
   - focused one-feature files such as `tests/cli_strings_bytes_last_index.rs` and `tests/cli_strings_bytes_last_index_diagnostics.rs` when the large baseline integration files are already near the repository size ceiling
   - `tests/support/mod.rs`: shared CLI invocation and temporary source helpers
 - When a feature adds an explicit staged surface such as `range`, comma-ok `map` lookup, or `if` headers, cover both `dump-ast` and `dump-bytecode` so users can inspect it without reading the implementation.

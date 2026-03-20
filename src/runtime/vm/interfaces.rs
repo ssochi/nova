@@ -9,6 +9,20 @@ impl VirtualMachine {
         Ok(())
     }
 
+    pub(super) fn type_assert(&mut self, expected_type: ValueType) -> Result<(), RuntimeError> {
+        let value = self.pop_value()?;
+        let Value::Interface(interface) = value else {
+            return Err(RuntimeError::new(format!(
+                "type assertion requires interface value, found `{}`",
+                super::support::runtime_type_name(&value)
+            )));
+        };
+
+        let asserted = self.assert_interface_type(interface, &expected_type)?;
+        self.stack.push(asserted);
+        Ok(())
+    }
+
     pub(super) fn compare_values_for_equality(
         &self,
         left: Value,
@@ -69,6 +83,35 @@ impl VirtualMachine {
             .into_inner()
             .ok_or_else(|| RuntimeError::new("boxed interface value was missing payload"))?;
         Ok(value == other)
+    }
+
+    fn assert_interface_type(
+        &self,
+        interface: InterfaceValue,
+        expected_type: &ValueType,
+    ) -> Result<Value, RuntimeError> {
+        let Some(actual_type) = interface.value_type() else {
+            return Err(RuntimeError::user_panic_message(format!(
+                "interface conversion: interface {{}} is nil, not {}",
+                expected_type.render()
+            )));
+        };
+
+        if expected_type == &ValueType::Any {
+            return Ok(Value::Interface(interface));
+        }
+
+        if actual_type != expected_type {
+            return Err(RuntimeError::user_panic_message(format!(
+                "interface conversion: interface {{}} is {}, not {}",
+                actual_type.render(),
+                expected_type.render()
+            )));
+        }
+
+        interface
+            .into_inner()
+            .ok_or_else(|| RuntimeError::new("boxed interface value was missing payload"))
     }
 }
 

@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 
 use crate::builtin::BuiltinFunction;
-use crate::conversion::ConversionKind;
 use crate::frontend::ast::{BinaryOperator, CallArgument, Expression, TypeRef};
 use crate::semantic::analyzer::{FunctionAnalyzer, SemanticError};
 use crate::semantic::builtins::{
@@ -142,6 +141,10 @@ impl<'a> FunctionAnalyzer<'a> {
             Expression::Selector { .. } => Err(SemanticError::new(
                 "selector expressions are only supported as imported package call targets",
             )),
+            Expression::TypeAssertion {
+                target,
+                asserted_type,
+            } => self.analyze_type_assertion_expression(target, asserted_type),
             Expression::Make {
                 type_ref,
                 arguments,
@@ -663,54 +666,6 @@ impl<'a> FunctionAnalyzer<'a> {
             target: CallTarget::Builtin(builtin),
             arguments: checked_arguments,
             result_types,
-        })
-    }
-
-    fn analyze_conversion_expression(
-        &mut self,
-        type_ref: &TypeRef,
-        value: &Expression,
-    ) -> Result<CheckedExpression, SemanticError> {
-        let target_type = resolve_type_ref(type_ref).ok_or_else(|| {
-            SemanticError::new(format!(
-                "conversion does not support target type `{}`",
-                type_ref.render()
-            ))
-        })?;
-        let value = self.analyze_expression(value)?;
-        if target_type == Type::Any {
-            return coerce_expression_to_type(&Type::Any, value, "conversion to `any`");
-        }
-        let conversion = match (&target_type, &value.ty) {
-            (Type::Slice(element), Type::String) if element.as_ref() == &Type::Byte => {
-                ConversionKind::StringToBytes
-            }
-            (Type::String, source) if source.is_byte_slice() => ConversionKind::BytesToString,
-            (Type::Slice(element), _) if element.as_ref() == &Type::Byte => {
-                return Err(SemanticError::new(format!(
-                    "conversion to `[]byte` requires `string`, found `{}`",
-                    value.ty.render()
-                )));
-            }
-            (Type::String, _) => {
-                return Err(SemanticError::new(format!(
-                    "conversion to `string` requires `[]byte`, found `{}`",
-                    value.ty.render()
-                )));
-            }
-            _ => {
-                return Err(SemanticError::new(format!(
-                    "conversion to `{}` is not supported",
-                    target_type.render()
-                )));
-            }
-        };
-        Ok(CheckedExpression {
-            ty: target_type,
-            kind: CheckedExpressionKind::Conversion {
-                conversion,
-                value: Box::new(value),
-            },
         })
     }
 

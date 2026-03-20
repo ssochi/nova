@@ -28,6 +28,7 @@ Describe the current runtime value categories and builtin execution model introd
   - Nil interface values render as `<nil>`, while boxed interface values render through the underlying runtime value display path
   - Boxed typed-nil composite values stay distinct from nil interfaces, so `var value any = []byte(nil); value == nil` remains false in the staged model
   - The current equality slice supports `value == nil`, direct interface-vs-interface equality with dynamic-type checks, direct interface-vs-concrete scalar equality, and a runtime panic for same-type boxed payloads that are still uncomparable
+  - The current assertion slice also supports explicit single-result `value.(T)` over staged runtime types; success returns the unboxed concrete payload for non-interface targets, while `value.(any)` returns the original boxed interface payload when non-nil
 - `slice`
   - Stored as shared backing storage plus start / length / capacity metadata
   - Built by slice literals, `make([]T, len[, cap])`, and returned by `append`
@@ -134,10 +135,12 @@ Describe the current runtime value categories and builtin execution model introd
 - Bytecode now also uses `push-nil-slice` / `push-nil-chan` / `push-nil-map` for typed zero-value declarations, `build-slice <count>` for slice literals, `build-map <type> <count>` for map literals, `make-slice <type>`, `make-chan <type>`, and `make-map <type>` for allocation, `send` / `receive <type>` for channel operations, `index <slice|string>` and `index-map <type>` for element reads, `lookup-map <type>` for comma-ok reads, `slice <slice|string>` for window creation, and `set-index` / `set-map-index` for indexed writes
 - Bytecode now also uses `convert string->[]byte` and `convert []byte->string` for the narrow explicit conversion surface
 - Bytecode now also records optional variadic function metadata plus explicit `call-function-spread`, `call-builtin-spread`, `call-package-spread`, `defer-package-spread`, `push-nil-interface`, and `box-any <type>` instructions so `dump-bytecode` keeps variadic and interface behavior readable
+- Bytecode now also records explicit `type-assert <type>` instructions so interface assertions remain inspectable instead of disappearing into generic helper calls
 - Bytecode now also records explicit typed `panic <type>`, `panic-nil`, `defer-panic <type>`, and `defer-panic-nil` instructions plus the earlier `defer-builtin`, `defer-package`, `defer-function`, and `defer-function-spread` instructions so panic and deferred execution stay visible instead of disappearing into synthetic tail blocks
 - Explicit source-level `nil` is resolved in semantic analysis into typed nil-slice, nil-chan, or nil-map zero values before lowering
 - Staged `range` loops now lower by evaluating the source once, storing explicit hidden range locals, iterating slices through index/len loops, and iterating maps through a dedicated `map-keys` instruction plus key-slice traversal
 - Equality now reuses the generic value comparison path for ordinary tagged values, while interface equality also checks boxed runtime types so nil-interface behavior and uncomparable interface payloads stay explicit
+- Interface assertions now execute through the same dedicated runtime interface helper seam, preserving typed-nil slice/map/chan payloads on success and raising staged interface-conversion panics for nil-interface or mismatched-dynamic-type failures
 - VM output is an accumulated string buffer instead of newline-separated records
 - `print` appends rendered arguments without an automatic trailing newline
 - `println` appends rendered arguments plus a newline

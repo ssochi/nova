@@ -23,6 +23,7 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 - Model typed `make` expressions explicitly because their first argument is a type, then lower slices and maps into dedicated checked allocation expressions before bytecode generation.
 - Model staged map literals explicitly in the checked layer instead of hiding them behind synthetic `make` plus index assignment trees.
 - Model explicit conversion syntax separately from ordinary calls because `T(x)` uses a type in callee position rather than a runtime function value.
+- Model explicit type assertions separately from selectors, calls, and conversions because `x.(T)` needs interface-only operand validation and explicit runtime-type metadata during lowering.
 - Model explicit `nil` as a dedicated untyped checked expression and coerce it centrally when typed slice/map context is available.
 - Model `byte` explicitly so string indexing and `[]byte` paths do not collapse into ad hoc `int` behavior.
 - Model `chan` explicitly so send statements, receive expressions, and nil/equality behavior remain visible in the checked layer instead of being hidden inside builtin dispatch.
@@ -91,6 +92,7 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 - User-defined functions now also support grouped named result declarations plus bare `return`; named result slots are initialized explicitly at function entry, while mixed named/unnamed result lists remain invalid.
 - `defer` is now supported for the current direct-call subset: builtins permitted in statement context, imported package members, and user-defined function names. Parenthesized defer expressions, arbitrary non-call operands, closures, and methods remain deferred.
 - `recover()` is now supported with an intentionally narrow rule: it returns `any`, may appear in ordinary expression or defer-statement contexts, and only directly deferred user-defined function frames can actually stop an active panic. Helper calls and deferred builtin `recover()` still return nil.
+- Single-result type assertions are now supported for `any` / `interface{}` operands across the currently modeled runtime types, while comma-ok assertions and type switches remain deferred.
 - Call forwarding is still staged: a multi-result call may feed another call only when it is the entire argument list by itself, while prefixed forms such as `f(1, pair())` remain invalid single-value contexts.
 - User-defined functions now also support staged final variadic parameters, and calls may use explicit final `...` spreading only for the fixed-prefix-plus-spread shape required by real Go; broader package-backed variadic slice forwarding still remains deferred.
 - User-defined functions now also support grouped input parameter-name shorthand such as `func f(a, b int)` plus grouped named result declarations such as `func f() (left, right string)`; grouped declarations preserve source readability in `dump-ast` but flatten into ordinary ordered parameter/result slots before checked-program construction.

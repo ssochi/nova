@@ -12,6 +12,11 @@ Verify the minimal real-Go behavior needed to stage empty-interface support thro
   - zero-value `any` printing and `== nil`
   - interface equality with a comparable payload
   - interface equality with an uncomparable payload
+  - single-result type assertions from `any` to comparable scalars, `[]byte`, and `any`
+  - failed type assertions on nil interfaces and mismatched dynamic types
+  - invalid type assertions on non-interface operands through `go build`
+- Official Go language specification
+  - `Type assertions` section in `https://go.dev/ref/spec`
 
 ## Confirmed Findings
 
@@ -20,6 +25,12 @@ Verify the minimal real-Go behavior needed to stage empty-interface support thro
 - The zero value of `any` prints as `<nil>` through `fmt` and compares equal to `nil`.
 - An interface value holding a comparable payload can compare directly to a matching concrete comparable value; `var value any = "boom"; value == "boom"` evaluates to `true`.
 - Comparing an interface value whose dynamic payload is uncomparable can panic at runtime; `var value any = []int{1}; _ = value == value` fails with `panic: runtime error: comparing uncomparable type []int`.
+- A type assertion `value.(T)` requires the operand to have interface type at compile time; `var x int = 7; _ = x.(int)` fails with `invalid operation: x (variable of type int) is not an interface`.
+- Successful single-result assertions preserve the dynamic payload, including typed nil composites; `var boxed any = []byte(nil); boxed.([]byte) == nil` evaluates to `true`.
+- Asserting an interface value to `any` succeeds when the interface holds any dynamic value and returns that boxed payload as another interface value; the observed `%T` / `%v` output for `var x any = 7; x.(any)` is `int 7`.
+- A failed single-result assertion panics at runtime with interface-conversion wording that distinguishes nil interfaces from mismatched dynamic types:
+  - `var x any; _ = x.(string)` panics with `interface conversion: interface {} is nil, not string`
+  - `var x any = "go"; _ = x.([]byte)` panics with `interface conversion: interface {} is string, not []uint8`
 
 ## Implementation Implications
 
@@ -31,8 +42,16 @@ Verify the minimal real-Go behavior needed to stage empty-interface support thro
   - `any` / `interface{}` against other interface values, with runtime panic on uncomparable dynamic payloads of the same boxed runtime type
 - The runtime printer should render nil interface values as `<nil>` and boxed interface values through the underlying value display path.
 - Package-call spread should stay narrow in this round: support the staged variadic `fmt` functions once `[]any` exists instead of claiming general package `...` support.
+- The first type-assertion slice can stay narrow and still unlock real interface use:
+  - keep assertion syntax explicit in the AST and checked model instead of pretending it is a call or conversion
+  - require an `any` / `interface{}` operand in semantic analysis
+  - allow currently modeled destination runtime types, including `int`, `byte`, `bool`, `string`, `[]T`, `map[K]V`, `chan T`, and `any`
+  - preserve typed-nil slice/map/chan payloads when the dynamic type matches
+  - lower success/failure through dedicated bytecode and VM interface helpers so `dump-bytecode` stays readable
+- The first slice should stop short of comma-ok assertions and type switches; those need explicit multi-result and statement-surface planning instead of being hidden behind generic call results.
 
 ## Deferred Questions
 
 - Whether the project should expose empty-interface conversions as a dedicated checked node or reuse a generalized boxing node for all `any` coercions.
-- How broader interface equality, type assertions, method sets, and `recover` should build on top of this slice without reworking the runtime representation again.
+- How comma-ok type assertions and type switches should build on the same checked and bytecode representation without introducing first-class tuple runtime values.
+- How broader interface equality, non-empty interfaces, method sets, and `recover` should build on top of this slice without reworking the runtime representation again.

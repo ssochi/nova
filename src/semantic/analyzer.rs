@@ -21,6 +21,7 @@ use crate::semantic::support::{
 mod defer;
 mod expressions;
 mod ifs;
+mod interfaces;
 mod lookup;
 mod loops;
 mod range;
@@ -945,3 +946,5 @@ enum ControlFlowContext {
 mod tests;
 #[cfg(test)]
 mod tests_defer;
+#[cfg(test)]
+mod tests_type_assertions;

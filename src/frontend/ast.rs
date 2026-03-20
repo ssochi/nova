@@ -579,6 +579,10 @@ pub enum Expression {
         target: Box<Expression>,
         member: String,
     },
+    TypeAssertion {
+        target: Box<Expression>,
+        asserted_type: TypeRef,
+    },
     Receive {
         channel: Box<Expression>,
     },
@@ -676,6 +680,10 @@ impl Expression {
             Expression::Selector { target, member } => {
                 format!("{}.{}", target.render(), member)
             }
+            Expression::TypeAssertion {
+                target,
+                asserted_type,
+            } => format!("{}.({})", target.render(), asserted_type.render()),
             Expression::Receive { channel } => format!("<-{}", channel.render()),
             Expression::Make {
                 type_ref,

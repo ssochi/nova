@@ -1,0 +1,4 @@
+- [done] Extend the existing empty-interface research note and open the new `M3` type-assertion plan/design baseline.
+- [done] Implement explicit type-assertion parsing, semantic analysis, bytecode lowering, and VM execution.
+- [done] Add examples, focused unit tests, focused CLI tests, and diagnostic coverage for type assertions.
+- [done] Run formatting, tests, serial CLI validation, line-count checks, then synchronize roadmap/docs and archive the completed plan.

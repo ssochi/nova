@@ -34,6 +34,7 @@ This directory stores feature and subsystem designs. It describes intent, scope 
 - `AGENTS.md`: this directory convention
 - `recover-first-slice.md`: design baseline for staged builtin `recover()`, deferred-frame recovery eligibility, recovered `any` payloads, and VM helper extraction
 - `empty-interface-any-and-fmt-spread.md`: design baseline for staged empty-interface `any` / `interface{}` values, explicit boxing, nil-interface runtime behavior, and `fmt` variadic spread support
+- `type-assertions-first-slice.md`: design baseline for staged single-result `x.(T)` assertions over empty-interface values and explicit assertion lowering/runtime execution
 - `panic-aware-unwind-first-slice.md`: design baseline for staged builtin `panic`, panic-aware defer unwinding, and shared runtime trap escalation
 - `defer-first-slice.md`: design baseline for staged `defer` statements, frame-level deferred-call stacks, and explicit unwind behavior
 - `named-result-parameters.md`: design baseline for grouped named result declarations, function-entry result slots, and bare `return`

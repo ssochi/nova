@@ -34,6 +34,7 @@ This directory stores research notes that inform roadmap choices and implementat
 
 - `AGENTS.md`: this directory convention
 - `2026-03-20-empty-interface-any-and-fmt-spread.md`: local Go behavior baseline for staged empty-interface `any` / `interface{}` support, nil-interface behavior, interface equality edges, and `fmt` variadic spread over `[]any`
+  - extended with the first staged `x.(T)` type-assertion compatibility findings for empty-interface values
 - `2026-03-20-panic-aware-unwind-first-slice.md`: official and local Go behavior baseline for staged panic/recover semantics, panic-aware defer unwinding, direct recovery eligibility, and `panic(nil)` recovery behavior
 - `2026-03-20-defer-first-slice.md`: official behavior baseline for the first staged `defer` statement slice
 - `2026-03-20-named-result-parameters.md`: official behavior baseline for grouped named result declarations, result-slot initialization, and bare `return`

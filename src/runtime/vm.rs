@@ -208,6 +208,7 @@ impl VirtualMachine {
                     }
                     Instruction::Convert(conversion) => self.convert_value(conversion)?,
                     Instruction::BoxAny(value_type) => self.box_any(value_type)?,
+                    Instruction::TypeAssert(value_type) => self.type_assert(value_type)?,
                     Instruction::LoadLocal(index) => {
                         let value = self.frames[frame_index]
                             .locals

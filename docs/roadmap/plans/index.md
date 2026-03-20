@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-13-55-46-type-assertions-first-slice`
+- Opened `2026-03-20-13-55-46-type-assertions-first-slice` for the first staged type-assertion slice on top of empty-interface runtime support under `M3`
 - Completed and archived `2026-03-20-13-28-50-recover-first-slice`
 - Opened `2026-03-20-13-28-50-recover-first-slice` for the first staged `recover()` builtin slice plus VM file-size governance under `M3`
 - Completed and archived `2026-03-20-12-55-53-empty-interface-any-and-fmt-spread`

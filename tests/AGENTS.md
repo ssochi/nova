@@ -18,6 +18,8 @@
   - `cli_recover_diagnostics.rs`: focused diagnostic coverage for invalid builtin `recover()` calls
   - `cli_any_interface.rs`: focused CLI coverage for staged empty-interface `any` / `interface{}` values, explicit boxing, and `fmt` variadic spread over `[]any`
   - `cli_any_interface_diagnostics.rs`: focused diagnostic coverage for invalid `fmt` spread and unsupported interface-equality shapes in the staged empty-interface slice
+  - `cli_type_assertions.rs`: focused CLI coverage for staged single-result `x.(T)` assertions, typed-nil payload preservation, and runtime mismatch diagnostics
+  - `cli_type_assertions_diagnostics.rs`: focused diagnostic coverage for invalid type-assertion operands and unsupported type-switch syntax
   - `cli_defer.rs`: focused CLI coverage for staged `defer` statements and explicit defer bytecode
   - `cli_defer_diagnostics.rs`: focused diagnostic coverage for invalid `defer` forms and builtin statement-context restrictions
   - `cli_grouped_parameters.rs`: focused CLI coverage for grouped parameter-name shorthand in function signatures

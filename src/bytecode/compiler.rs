@@ -378,6 +378,15 @@ impl<'a> FunctionCompiler<'a> {
                 self.instructions
                     .push(Instruction::BoxAny(lower_value_type(&value.ty)?));
             }
+            CheckedExpressionKind::TypeAssertion {
+                value,
+                asserted_type,
+            } => {
+                self.compile_expression(value)?;
+                self.expect_value(&value.ty, "type assertion")?;
+                self.instructions
+                    .push(Instruction::TypeAssert(lower_value_type(asserted_type)?));
+            }
             CheckedExpressionKind::ZeroValue => match &expression.ty {
                 Type::Int => self.instructions.push(Instruction::PushInt(0)),
                 Type::Byte => self.instructions.push(Instruction::PushByte(0)),

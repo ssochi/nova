@@ -244,6 +244,10 @@ pub enum CheckedExpressionKind {
     UntypedNil,
     ZeroValue,
     BoxAny(Box<CheckedExpression>),
+    TypeAssertion {
+        value: Box<CheckedExpression>,
+        asserted_type: Type,
+    },
     SliceLiteral {
         elements: Vec<CheckedExpression>,
     },

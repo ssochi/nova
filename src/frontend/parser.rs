@@ -328,6 +328,10 @@ impl<'a> Parser<'a> {
 
         loop {
             if self.match_kind(&TokenKind::Dot) {
+                if self.match_kind(&TokenKind::LeftParen) {
+                    expression = self.parse_type_assertion_expression(expression)?;
+                    continue;
+                }
                 let member = self.expect_identifier()?;
                 expression = Expression::Selector {
                     target: Box::new(expression),
@@ -605,6 +609,26 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn parse_type_assertion_expression(
+        &mut self,
+        target: Expression,
+    ) -> Result<Expression, ParseError> {
+        if matches!(self.current_kind(), Some(TokenKind::Identifier(name)) if name == "type")
+            && self.peek_kind() == Some(&TokenKind::RightParen)
+        {
+            return Err(self.error_at_current("type switches are not supported"));
+        }
+        if !self.check_type_start() {
+            return Err(self.error_at_current("type assertion requires a type"));
+        }
+        let asserted_type = self.parse_type_ref()?;
+        self.expect(TokenKind::RightParen)?;
+        Ok(Expression::TypeAssertion {
+            target: Box::new(target),
+            asserted_type,
+        })
+    }
+
     fn parse_type_ref(&mut self) -> Result<TypeRef, ParseError> {
         if self.match_kind(&TokenKind::LeftBracket) {
             self.expect(TokenKind::RightBracket)?;
@@ -808,3 +832,5 @@ mod tests_any_interface;
 mod tests_defer;
 #[cfg(test)]
 mod tests_named_results;
+#[cfg(test)]
+mod tests_type_assertions;

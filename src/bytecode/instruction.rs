@@ -151,6 +151,7 @@ pub enum Instruction {
     },
     Convert(ConversionKind),
     BoxAny(ValueType),
+    TypeAssert(ValueType),
     LoadLocal(usize),
     StoreLocal(usize),
     Add,
@@ -245,6 +246,9 @@ impl Instruction {
             }
             Instruction::Convert(conversion) => format!("convert {}", conversion.render()),
             Instruction::BoxAny(value_type) => format!("box-any {}", value_type.render()),
+            Instruction::TypeAssert(value_type) => {
+                format!("type-assert {}", value_type.render())
+            }
             Instruction::LoadLocal(index) => format!("load-local {index}"),
             Instruction::StoreLocal(index) => format!("store-local {index}"),
             Instruction::Add => "add".to_string(),
