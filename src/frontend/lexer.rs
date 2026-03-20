@@ -281,6 +281,7 @@ impl<'a> Lexer<'a> {
             "return" => TokenKind::Return,
             "map" => TokenKind::Map,
             "chan" => TokenKind::Chan,
+            "interface" => TokenKind::Interface,
             "nil" => TokenKind::Nil,
             "true" => TokenKind::Bool(true),
             "false" => TokenKind::Bool(false),

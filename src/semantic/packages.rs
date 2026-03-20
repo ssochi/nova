@@ -273,6 +273,15 @@ pub fn expected_argument_types(function: PackageFunction) -> Option<Vec<Type>> {
     }
 }
 
+pub fn variadic_element_type(function: PackageFunction) -> Option<Type> {
+    match function {
+        PackageFunction::FmtPrint | PackageFunction::FmtPrintln | PackageFunction::FmtSprint => {
+            Some(Type::Any)
+        }
+        _ => None,
+    }
+}
+
 fn package_functions(package: ImportedPackage) -> &'static [PackageFunctionContract] {
     match package {
         ImportedPackage::Fmt => &FMT_FUNCTIONS,

@@ -114,7 +114,7 @@ impl VirtualMachine {
                     Value::Byte(value) => MapKey::Byte(value),
                     Value::Boolean(value) => MapKey::Boolean(value),
                     Value::String(value) => MapKey::String(value),
-                    Value::Slice(_) | Value::Chan(_) | Value::Map(_) => {
+                    Value::Interface(_) | Value::Slice(_) | Value::Chan(_) | Value::Map(_) => {
                         return Err(RuntimeError::new(
                             "builtin `delete` expected a comparable scalar key as argument 2",
                         ));

@@ -10,6 +10,7 @@ use crate::runtime::value::{
 };
 
 mod builtins;
+mod interfaces;
 mod packages;
 mod support;
 mod unwind;
@@ -161,6 +162,7 @@ impl VirtualMachine {
                     Instruction::PushString(value) => {
                         self.stack.push(Value::String(StringValue::from(value)))
                     }
+                    Instruction::PushNilInterface => self.stack.push(Value::nil_any()),
                     Instruction::PushNilSlice => self.stack.push(Value::Slice(SliceValue::nil())),
                     Instruction::PushNilChan => self.stack.push(Value::Chan(ChannelValue::nil())),
                     Instruction::PushNilMap => self.stack.push(Value::Map(MapValue::nil())),
@@ -188,6 +190,7 @@ impl VirtualMachine {
                         self.make_map(&map_type, has_hint)?
                     }
                     Instruction::Convert(conversion) => self.convert_value(conversion)?,
+                    Instruction::BoxAny(value_type) => self.box_any(value_type)?,
                     Instruction::LoadLocal(index) => {
                         let value = self.frames[frame_index]
                             .locals
@@ -238,8 +241,8 @@ impl VirtualMachine {
                             }
                         },
                     )?,
-                    Instruction::Equal => self.binary_compare(|left, right| left == right)?,
-                    Instruction::NotEqual => self.binary_compare(|left, right| left != right)?,
+                    Instruction::Equal => self.binary_compare(true)?,
+                    Instruction::NotEqual => self.binary_compare(false)?,
                     Instruction::Less => self.binary_integer_compare(|left, right| left < right)?,
                     Instruction::LessEqual => {
                         self.binary_integer_compare(|left, right| left <= right)?
@@ -290,6 +293,9 @@ impl VirtualMachine {
                     Instruction::CallPackage(function, arity) => {
                         self.call_package_function(function, arity)?
                     }
+                    Instruction::CallPackageSpread(function, prefix_arity) => {
+                        self.call_package_function_spread(function, prefix_arity)?
+                    }
                     Instruction::CallFunction(function_index, arity) => {
                         let arguments = self.pop_arguments(arity)?;
                         self.call_user_function(
@@ -337,6 +343,17 @@ impl VirtualMachine {
                     }
                     Instruction::DeferPackage(function, arity) => {
                         let arguments = self.pop_arguments(arity)?;
+                        self.frames[frame_index]
+                            .deferred_calls
+                            .push(DeferredCall::Package {
+                                function,
+                                arguments,
+                            });
+                    }
+                    Instruction::DeferPackageSpread(function, prefix_arity) => {
+                        let spread = self.pop_value()?;
+                        let arguments = self.pop_arguments(prefix_arity)?;
+                        let arguments = self.expand_package_spread_arguments(arguments, spread)?;
                         self.frames[frame_index]
                             .deferred_calls
                             .push(DeferredCall::Package {
@@ -477,13 +494,12 @@ impl VirtualMachine {
         Ok(())
     }
 
-    fn binary_compare(
-        &mut self,
-        operation: impl FnOnce(Value, Value) -> bool,
-    ) -> Result<(), RuntimeError> {
+    fn binary_compare(&mut self, expect_equal: bool) -> Result<(), RuntimeError> {
         let right = self.pop_value()?;
         let left = self.pop_value()?;
-        self.stack.push(Value::Boolean(operation(left, right)));
+        let equals = self.compare_values_for_equality(left, right)?;
+        self.stack
+            .push(Value::Boolean(if expect_equal { equals } else { !equals }));
         Ok(())
     }
 
@@ -912,6 +928,7 @@ impl VirtualMachine {
             Value::Byte(_)
             | Value::Boolean(_)
             | Value::String(_)
+            | Value::Interface(_)
             | Value::Slice(_)
             | Value::Chan(_)
             | Value::Map(_) => Err(RuntimeError::new("expected integer value on the stack")),
@@ -924,6 +941,7 @@ impl VirtualMachine {
             Value::Integer(_)
             | Value::Byte(_)
             | Value::String(_)
+            | Value::Interface(_)
             | Value::Slice(_)
             | Value::Chan(_)
             | Value::Map(_) => Err(RuntimeError::new("expected boolean value on the stack")),
@@ -936,6 +954,7 @@ impl VirtualMachine {
             Value::Integer(_)
             | Value::Byte(_)
             | Value::Boolean(_)
+            | Value::Interface(_)
             | Value::Slice(_)
             | Value::Chan(_)
             | Value::Map(_) => Err(RuntimeError::new("expected string value on the stack")),
@@ -948,9 +967,9 @@ impl VirtualMachine {
             Value::Byte(value) => Ok(MapKey::Byte(value)),
             Value::Boolean(value) => Ok(MapKey::Boolean(value)),
             Value::String(value) => Ok(MapKey::String(value)),
-            Value::Slice(_) | Value::Chan(_) | Value::Map(_) => Err(RuntimeError::new(
-                "map index key is not a comparable scalar value",
-            )),
+            Value::Interface(_) | Value::Slice(_) | Value::Chan(_) | Value::Map(_) => Err(
+                RuntimeError::new("map index key is not a comparable scalar value"),
+            ),
         }
     }
 

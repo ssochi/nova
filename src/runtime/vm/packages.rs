@@ -22,6 +22,38 @@ impl VirtualMachine {
         Ok(())
     }
 
+    pub(super) fn call_package_function_spread(
+        &mut self,
+        function: PackageFunction,
+        prefix_arity: usize,
+    ) -> Result<(), RuntimeError> {
+        let spread = self.pop_value()?;
+        let arguments = self.pop_arguments(prefix_arity)?;
+        let arguments = self.expand_package_spread_arguments(arguments, spread)?;
+        for value in self.execute_package_function(function, arguments)? {
+            self.stack.push(value);
+        }
+        Ok(())
+    }
+
+    pub(super) fn expand_package_spread_arguments(
+        &self,
+        mut arguments: Vec<Value>,
+        spread: Value,
+    ) -> Result<Vec<Value>, RuntimeError> {
+        let spread_arguments = match spread {
+            Value::Slice(slice) => slice.visible_elements(),
+            other => {
+                return Err(RuntimeError::new(format!(
+                    "package function spread requires a slice argument, found `{}`",
+                    super::support::runtime_type_name(&other)
+                )));
+            }
+        };
+        arguments.extend(spread_arguments);
+        Ok(arguments)
+    }
+
     pub(super) fn execute_package_function(
         &mut self,
         function: PackageFunction,

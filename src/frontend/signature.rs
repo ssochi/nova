@@ -36,6 +36,7 @@ impl ResultDecl {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TypeRef {
     Named(String),
+    Interface,
     Slice(Box<TypeRef>),
     Chan(Box<TypeRef>),
     Map {
@@ -48,6 +49,7 @@ impl TypeRef {
     pub fn render(&self) -> String {
         match self {
             TypeRef::Named(name) => name.clone(),
+            TypeRef::Interface => "interface{}".to_string(),
             TypeRef::Slice(element) => format!("[]{}", element.render()),
             TypeRef::Chan(element) => format!("chan {}", element.render()),
             TypeRef::Map { key, value } => {

@@ -4,12 +4,15 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::rc::Rc;
 
+use crate::bytecode::instruction::ValueType;
+
 #[derive(Clone, Debug)]
 pub enum Value {
     Integer(i64),
     Byte(u8),
     Boolean(bool),
     String(StringValue),
+    Interface(InterfaceValue),
     Slice(SliceValue),
     Chan(ChannelValue),
     Map(MapValue),
@@ -28,9 +31,40 @@ impl Value {
             Value::Byte(_) => Value::Byte(0),
             Value::Boolean(_) => Value::Boolean(false),
             Value::String(_) => Value::String(StringValue::empty()),
+            Value::Interface(_) => Value::Interface(InterfaceValue::nil()),
             Value::Slice(_) => Value::Slice(SliceValue::nil()),
             Value::Chan(_) => Value::Chan(ChannelValue::nil()),
             Value::Map(_) => Value::Map(MapValue::nil()),
+        }
+    }
+
+    pub fn boxed_any(value_type: ValueType, value: Value) -> Self {
+        Self::Interface(InterfaceValue::boxed(value_type, value))
+    }
+
+    pub fn nil_any() -> Self {
+        Self::Interface(InterfaceValue::nil())
+    }
+
+    pub fn is_runtime_comparable(&self) -> bool {
+        match self {
+            Value::Integer(_)
+            | Value::Byte(_)
+            | Value::Boolean(_)
+            | Value::String(_)
+            | Value::Chan(_) => true,
+            Value::Interface(value) => value
+                .value()
+                .map(Value::is_runtime_comparable)
+                .unwrap_or(true),
+            Value::Slice(_) | Value::Map(_) => false,
+        }
+    }
+
+    pub fn boxed_value(&self) -> Option<&Value> {
+        match self {
+            Value::Interface(value) => value.value(),
+            _ => None,
         }
     }
 }
@@ -42,6 +76,7 @@ impl fmt::Display for Value {
             Value::Byte(value) => write!(f, "{value}"),
             Value::Boolean(value) => write!(f, "{value}"),
             Value::String(value) => write!(f, "{value}"),
+            Value::Interface(value) => write!(f, "{value}"),
             Value::Slice(slice) => write!(
                 f,
                 "[{}]",
@@ -65,6 +100,7 @@ impl PartialEq for Value {
             (Value::Byte(left), Value::Byte(right)) => left == right,
             (Value::Boolean(left), Value::Boolean(right)) => left == right,
             (Value::String(left), Value::String(right)) => left == right,
+            (Value::Interface(left), Value::Interface(right)) => left == right,
             (Value::Slice(left), Value::Slice(right)) => left == right,
             (Value::Chan(left), Value::Chan(right)) => left == right,
             (Value::Map(left), Value::Map(right)) => left == right,
@@ -74,6 +110,53 @@ impl PartialEq for Value {
 }
 
 impl Eq for Value {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InterfaceValue {
+    value_type: Option<ValueType>,
+    value: Option<Box<Value>>,
+}
+
+impl InterfaceValue {
+    pub fn nil() -> Self {
+        Self {
+            value_type: None,
+            value: None,
+        }
+    }
+
+    pub fn boxed(value_type: ValueType, value: Value) -> Self {
+        Self {
+            value_type: Some(value_type),
+            value: Some(Box::new(value)),
+        }
+    }
+
+    pub fn value(&self) -> Option<&Value> {
+        self.value.as_deref()
+    }
+
+    pub fn value_type(&self) -> Option<&ValueType> {
+        self.value_type.as_ref()
+    }
+
+    pub fn into_inner(self) -> Option<Value> {
+        self.value.map(|value| *value)
+    }
+
+    pub fn is_nil(&self) -> bool {
+        self.value.is_none()
+    }
+}
+
+impl fmt::Display for InterfaceValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.value() {
+            Some(value) => write!(f, "{value}"),
+            None => f.write_str("<nil>"),
+        }
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct StringValue {

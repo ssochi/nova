@@ -8,6 +8,7 @@ pub enum ValueType {
     Byte,
     Bool,
     String,
+    Any,
     Slice(Box<ValueType>),
     Chan(Box<ValueType>),
     Map {
@@ -23,6 +24,7 @@ impl ValueType {
             ValueType::Byte => "byte".to_string(),
             ValueType::Bool => "bool".to_string(),
             ValueType::String => "string".to_string(),
+            ValueType::Any => "any".to_string(),
             ValueType::Slice(element) => format!("[]{}", element.render()),
             ValueType::Chan(element) => format!("chan {}", element.render()),
             ValueType::Map { key, value } => format!("map[{}]{}", key.render(), value.render()),
@@ -126,6 +128,7 @@ pub enum Instruction {
     PushByte(u8),
     PushBool(bool),
     PushString(String),
+    PushNilInterface,
     PushNilSlice,
     PushNilChan,
     PushNilMap,
@@ -147,6 +150,7 @@ pub enum Instruction {
         has_hint: bool,
     },
     Convert(ConversionKind),
+    BoxAny(ValueType),
     LoadLocal(usize),
     StoreLocal(usize),
     Add,
@@ -181,12 +185,14 @@ pub enum Instruction {
     Panic,
     PanicNil,
     CallPackage(PackageFunction, usize),
+    CallPackageSpread(PackageFunction, usize),
     CallFunction(usize, usize),
     CallFunctionSpread(usize, usize),
     DeferBuiltin(BuiltinFunction, usize),
     DeferPanic,
     DeferPanicNil,
     DeferPackage(PackageFunction, usize),
+    DeferPackageSpread(PackageFunction, usize),
     DeferFunction(usize, usize),
     DeferFunctionSpread(usize, usize),
     Return,
@@ -201,6 +207,7 @@ impl Instruction {
             Instruction::PushString(value) => {
                 format!("push-string {}", render_string_literal(value))
             }
+            Instruction::PushNilInterface => "push-nil-interface".to_string(),
             Instruction::PushNilSlice => "push-nil-slice".to_string(),
             Instruction::PushNilChan => "push-nil-chan".to_string(),
             Instruction::PushNilMap => "push-nil-map".to_string(),
@@ -237,6 +244,7 @@ impl Instruction {
                 )
             }
             Instruction::Convert(conversion) => format!("convert {}", conversion.render()),
+            Instruction::BoxAny(value_type) => format!("box-any {}", value_type.render()),
             Instruction::LoadLocal(index) => format!("load-local {index}"),
             Instruction::StoreLocal(index) => format!("store-local {index}"),
             Instruction::Add => "add".to_string(),
@@ -284,6 +292,9 @@ impl Instruction {
             Instruction::CallPackage(function, arity) => {
                 format!("call-package {} {arity}", function.render())
             }
+            Instruction::CallPackageSpread(function, prefix_arity) => {
+                format!("call-package-spread {} {prefix_arity}", function.render())
+            }
             Instruction::CallFunction(index, arity) => format!("call-function {index} {arity}"),
             Instruction::CallFunctionSpread(index, prefix_arity) => {
                 format!("call-function-spread {index} {prefix_arity}")
@@ -295,6 +306,9 @@ impl Instruction {
             Instruction::DeferPanicNil => "defer-panic-nil".to_string(),
             Instruction::DeferPackage(function, arity) => {
                 format!("defer-package {} {arity}", function.render())
+            }
+            Instruction::DeferPackageSpread(function, prefix_arity) => {
+                format!("defer-package-spread {} {prefix_arity}", function.render())
             }
             Instruction::DeferFunction(index, arity) => format!("defer-function {index} {arity}"),
             Instruction::DeferFunctionSpread(index, prefix_arity) => {

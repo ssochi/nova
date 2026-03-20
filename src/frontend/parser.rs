@@ -420,7 +420,9 @@ impl<'a> Parser<'a> {
             TokenKind::LeftBracket if self.peek_kind() == Some(&TokenKind::RightBracket) => {
                 self.parse_type_prefixed_expression()
             }
-            TokenKind::Map | TokenKind::Chan => self.parse_type_prefixed_expression(),
+            TokenKind::Map | TokenKind::Chan | TokenKind::Interface => {
+                self.parse_type_prefixed_expression()
+            }
             TokenKind::LeftParen => {
                 self.advance();
                 let expression = self.parse_expression()?;
@@ -452,6 +454,9 @@ impl<'a> Parser<'a> {
                 "composite literal requires `slice` or `map` type, found `chan {}`",
                 element_type.render()
             ))),
+            TypeRef::Interface => Err(ParseError::new(
+                "composite literal requires `slice` or `map` type, found `interface{}`",
+            )),
             TypeRef::Map { key, value } => self.parse_map_literal_with_type(*key, *value),
             TypeRef::Named(name) => Err(ParseError::new(format!(
                 "composite literal requires `slice` or `map` type, found `{name}`"
@@ -610,6 +615,12 @@ impl<'a> Parser<'a> {
             return Ok(TypeRef::Chan(Box::new(self.parse_type_ref()?)));
         }
 
+        if self.match_kind(&TokenKind::Interface) {
+            self.expect(TokenKind::LeftBrace)?;
+            self.expect(TokenKind::RightBrace)?;
+            return Ok(TypeRef::Interface);
+        }
+
         if self.match_kind(&TokenKind::Map) {
             self.expect(TokenKind::LeftBracket)?;
             let key = self.parse_type_ref()?;
@@ -627,6 +638,7 @@ impl<'a> Parser<'a> {
     fn check_type_start(&self) -> bool {
         self.check(&TokenKind::LeftBracket)
             || self.check(&TokenKind::Chan)
+            || self.check(&TokenKind::Interface)
             || self.check(&TokenKind::Map)
             || matches!(self.current_token().kind, TokenKind::Identifier(_))
     }
@@ -770,7 +782,7 @@ impl<'a> Parser<'a> {
 }
 
 fn is_supported_named_type(name: &str) -> bool {
-    matches!(name, "int" | "byte" | "bool" | "string")
+    matches!(name, "int" | "byte" | "bool" | "string" | "any")
 }
 
 fn assignment_target_from_expression(
@@ -790,6 +802,8 @@ fn assignment_target_from_expression(
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_any_interface;
 #[cfg(test)]
 mod tests_defer;
 #[cfg(test)]

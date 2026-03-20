@@ -6,6 +6,7 @@ use crate::bytecode::instruction::{
 use crate::conversion::ConversionKind;
 use crate::package::PackageFunction;
 
+mod any;
 mod clear;
 mod defer;
 mod panic;

@@ -22,6 +22,12 @@ Describe the current runtime value categories and builtin execution model introd
   - Supports byte-oriented index expressions such as `text[0]` and simple slice expressions such as `text[1:3]`
   - Supports explicit `string([]byte)` conversion by copying bytes out of a runtime byte slice
   - Current CLI rendering is lossy for invalid UTF-8 byte sequences because the output buffer is still a Rust `String`
+- `any` / `interface{}`
+  - Stored as an explicit nil-vs-boxed interface runtime value rather than a silent alias to raw runtime values
+  - Supports declarations through both `any` and `interface{}` syntax plus explicit conversions such as `any("boom")` and `interface{}(value)`
+  - Nil interface values render as `<nil>`, while boxed interface values render through the underlying runtime value display path
+  - Boxed typed-nil composite values stay distinct from nil interfaces, so `var value any = []byte(nil); value == nil` remains false in the staged model
+  - The current equality slice supports `value == nil`, direct interface-vs-interface equality with dynamic-type checks, direct interface-vs-concrete scalar equality, and a runtime panic for same-type boxed payloads that are still uncomparable
 - `slice`
   - Stored as shared backing storage plus start / length / capacity metadata
   - Built by slice literals, `make([]T, len[, cap])`, and returned by `append`
@@ -117,18 +123,19 @@ Describe the current runtime value categories and builtin execution model introd
 - Alias imports resolve through the declared binding name, while grouped imports remain explicit in `dump-ast`
 - Unsupported import paths and unsupported package members fail during semantic analysis
 - Fixed-arity typed package functions can now coerce explicit `nil` into slice/map zero values when the signature provides enough type context, such as `strings.Join(nil, ":")`
-- The current package layer does not yet support explicit `...` slice forwarding because the only exposed variadic package APIs are `fmt`-style any-value helpers and the project does not model `[]any`
+- The staged variadic `fmt` helpers now accept explicit `[]any` spread calls such as `fmt.Println(args...)`
+- That spread support stays intentionally narrow in this round: the spread value must be `[]any`, and there may not be extra prefix arguments before the spread because the current staged variadic rule only allows the fixed non-variadic prefix
 
 ## Runtime Execution Notes
 
 - Bytecode uses `push-string` for literals, `push-byte` for byte zero values, and `concat` for string addition
 - Bytecode now also uses `push-nil-slice` / `push-nil-chan` / `push-nil-map` for typed zero-value declarations, `build-slice <count>` for slice literals, `build-map <type> <count>` for map literals, `make-slice <type>`, `make-chan <type>`, and `make-map <type>` for allocation, `send` / `receive <type>` for channel operations, `index <slice|string>` and `index-map <type>` for element reads, `lookup-map <type>` for comma-ok reads, `slice <slice|string>` for window creation, and `set-index` / `set-map-index` for indexed writes
 - Bytecode now also uses `convert string->[]byte` and `convert []byte->string` for the narrow explicit conversion surface
-- Bytecode now also records optional variadic function metadata plus explicit `call-function-spread` / `call-builtin-spread` instructions so `dump-bytecode` keeps variadic behavior readable
+- Bytecode now also records optional variadic function metadata plus explicit `call-function-spread`, `call-builtin-spread`, `call-package-spread`, `defer-package-spread`, `push-nil-interface`, and `box-any <type>` instructions so `dump-bytecode` keeps variadic and interface behavior readable
 - Bytecode now also records explicit `panic`, `panic-nil`, `defer-panic`, and `defer-panic-nil` instructions plus the earlier `defer-builtin`, `defer-package`, `defer-function`, and `defer-function-spread` instructions so panic and deferred execution stay visible instead of disappearing into synthetic tail blocks
 - Explicit source-level `nil` is resolved in semantic analysis into typed nil-slice, nil-chan, or nil-map zero values before lowering
 - Staged `range` loops now lower by evaluating the source once, storing explicit hidden range locals, iterating slices through index/len loops, and iterating maps through a dedicated `map-keys` instruction plus key-slice traversal
-- Equality still reuses the generic value comparison path because runtime values are tagged; slice/map equality is only exposed through the explicit `nil` coercion path, while channel equality compares shared runtime identity plus nil
+- Equality now reuses the generic value comparison path for ordinary tagged values, while interface equality also checks boxed runtime types so nil-interface behavior and uncomparable interface payloads stay explicit
 - VM output is an accumulated string buffer instead of newline-separated records
 - `print` appends rendered arguments without an automatic trailing newline
 - `println` appends rendered arguments plus a newline
@@ -140,7 +147,7 @@ Describe the current runtime value categories and builtin execution model introd
 - User-defined variadic calls materialize the tail arguments into a runtime slice local on function entry, and zero-tail calls produce a nil slice local
 - VM call frames now keep an explicit deferred-call stack plus pending return values, so staged `defer` evaluates arguments immediately, executes deferred calls in LIFO order, and drains them before frame removal
 - VM execution now also keeps an explicit pending-panic payload plus unwind depth, so panic-triggered unwinding can execute deferred user calls before continuing the panic across callers
-- `call-function-spread` expands a final slice value into the variadic tail for user-defined calls, while `call-builtin-spread append` expands either a matching slice or the narrow `string` source for `[]byte`
+- `call-function-spread` expands a final slice value into the variadic tail for user-defined calls, `call-package-spread` expands a staged `[]any` into the `fmt` variadic helpers, and `call-builtin-spread append` expands either a matching slice or the narrow `string` source for `[]byte`
 - Deferred user-defined calls currently discard all return values through frame metadata instead of pushing them back onto the caller stack
 - `make([]T, len[, cap])` lowers into dedicated allocation bytecode instead of a generic runtime builtin call because its first argument is a type
 - `make(chan T[, size])` also lowers into dedicated allocation bytecode so buffer size and nil-channel behavior stay explicit in `dump-bytecode`
@@ -164,7 +171,7 @@ Describe the current runtime value categories and builtin execution model introd
 - `string([]byte)` copies the visible byte slice elements into a new runtime string value
 - Explicit typed local declarations are lowered into concrete zero-producing instructions, so `var total int`, `var marker byte`, `var ready bool`, `var label string`, `var values []int`, and `var counts map[string]int` all produce Go-like zero values without runtime type reflection
 - User-defined calls, returns, assignments, and typed package-call arguments can now reuse the same zero-value lowering path when they receive explicit `nil` in a typed slice/map context
-- Bytecode now also uses `call-package` for metadata-backed package functions
+- Bytecode now also uses `call-package` plus `call-package-spread` for metadata-backed package functions
 - `fmt.Sprint` returns a runtime string value without mutating the output buffer
 - `fmt` formatting is intentionally approximate and does not yet support format verbs
 - `strings` package functions now operate on the byte-oriented runtime string representation instead of converting through Rust-only string semantics

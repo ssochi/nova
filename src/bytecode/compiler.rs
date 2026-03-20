@@ -1,9 +1,7 @@
 use std::fmt;
 
 use crate::builtin::BuiltinFunction;
-use crate::bytecode::instruction::{
-    CompiledFunction, Instruction, Program, SequenceKind, ValueType,
-};
+use crate::bytecode::instruction::{CompiledFunction, Instruction, Program, SequenceKind};
 use crate::semantic::model::{
     CallTarget, CheckedBinaryOperator, CheckedBinding, CheckedBlock, CheckedCall,
     CheckedCallArguments, CheckedElseBranch, CheckedExpression, CheckedExpressionKind,
@@ -14,6 +12,9 @@ use crate::semantic::model::{
 
 mod calls;
 mod simple_statements;
+mod types;
+
+use self::types::{lower_result_types, lower_sequence_kind, lower_value_type};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompileError {
@@ -371,6 +372,12 @@ impl<'a> FunctionCompiler<'a> {
                     "untyped `nil` must be resolved before bytecode lowering",
                 ));
             }
+            CheckedExpressionKind::BoxAny(value) => {
+                self.compile_expression(value)?;
+                self.expect_value(&value.ty, "interface boxing")?;
+                self.instructions
+                    .push(Instruction::BoxAny(lower_value_type(&value.ty)?));
+            }
             CheckedExpressionKind::ZeroValue => match &expression.ty {
                 Type::Int => self.instructions.push(Instruction::PushInt(0)),
                 Type::Byte => self.instructions.push(Instruction::PushByte(0)),
@@ -378,6 +385,7 @@ impl<'a> FunctionCompiler<'a> {
                 Type::String => self
                     .instructions
                     .push(Instruction::PushString(String::new())),
+                Type::Any => self.instructions.push(Instruction::PushNilInterface),
                 Type::UntypedNil => {
                     return Err(CompileError::new(
                         "zero-value synthesis does not support untyped `nil`",
@@ -541,14 +549,13 @@ impl<'a> FunctionCompiler<'a> {
                 self.instructions.push(instruction);
             }
             CallTarget::PackageFunction(function) => {
-                if matches!(call.arguments, CheckedCallArguments::Spread { .. }) {
-                    return Err(CompileError::new(format!(
-                        "package function `{}` cannot be lowered with explicit `...` arguments",
-                        function.render()
-                    )));
-                }
-                self.instructions
-                    .push(Instruction::CallPackage(*function, call.argument_count()));
+                let instruction = match &call.arguments {
+                    CheckedCallArguments::Spread { arguments, .. } => {
+                        Instruction::CallPackageSpread(*function, arguments.len())
+                    }
+                    _ => Instruction::CallPackage(*function, call.argument_count()),
+                };
+                self.instructions.push(instruction);
             }
             CallTarget::UserDefined { function_index, .. } => {
                 let instruction = match &call.arguments {
@@ -581,14 +588,13 @@ impl<'a> FunctionCompiler<'a> {
                     .push(Instruction::DeferBuiltin(*builtin, call.argument_count()));
             }
             CallTarget::PackageFunction(function) => {
-                if matches!(call.arguments, CheckedCallArguments::Spread { .. }) {
-                    return Err(CompileError::new(format!(
-                        "package function `{}` cannot be lowered with explicit `...` in defer",
-                        function.render()
-                    )));
-                }
-                self.instructions
-                    .push(Instruction::DeferPackage(*function, call.argument_count()));
+                let instruction = match &call.arguments {
+                    CheckedCallArguments::Spread { arguments, .. } => {
+                        Instruction::DeferPackageSpread(*function, arguments.len())
+                    }
+                    _ => Instruction::DeferPackage(*function, call.argument_count()),
+                };
+                self.instructions.push(instruction);
             }
             CallTarget::UserDefined { function_index, .. } => {
                 let instruction = match &call.arguments {
@@ -924,41 +930,5 @@ impl ControlFlowContext {
                 "`continue` lowering requires a loop context",
             )),
         }
-    }
-}
-
-fn lower_value_type(ty: &Type) -> Result<ValueType, CompileError> {
-    match ty {
-        Type::Int => Ok(ValueType::Int),
-        Type::Byte => Ok(ValueType::Byte),
-        Type::Bool => Ok(ValueType::Bool),
-        Type::String => Ok(ValueType::String),
-        Type::UntypedNil => Err(CompileError::new(
-            "runtime value types do not support untyped `nil`",
-        )),
-        Type::Slice(element) => Ok(ValueType::Slice(Box::new(lower_value_type(element)?))),
-        Type::Chan(element) => Ok(ValueType::Chan(Box::new(lower_value_type(element)?))),
-        Type::Map { key, value } => Ok(ValueType::Map {
-            key: Box::new(lower_value_type(key)?),
-            value: Box::new(lower_value_type(value)?),
-        }),
-        Type::Void => Err(CompileError::new(
-            "runtime value types do not support `void`",
-        )),
-    }
-}
-
-fn lower_result_types(types: &[Type]) -> Result<Vec<ValueType>, CompileError> {
-    types.iter().map(lower_value_type).collect()
-}
-
-fn lower_sequence_kind(ty: &Type) -> Result<SequenceKind, CompileError> {
-    match ty {
-        Type::Slice(_) => Ok(SequenceKind::Slice),
-        Type::String => Ok(SequenceKind::String),
-        _ => Err(CompileError::new(format!(
-            "sequence operations do not support `{}`",
-            ty.render()
-        ))),
     }
 }

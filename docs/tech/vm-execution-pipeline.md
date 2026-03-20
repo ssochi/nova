@@ -41,18 +41,22 @@ Describe the concrete execution pipeline shipped in the bootstrap milestone, inc
 - Package analysis also flattens explicit result declarations such as `func f() (left, right string)` into ordered result-slot metadata while keeping named result bindings visible to semantic scope checks.
 - Package analysis also validates supported import paths and selector calls to imported package members.
 - Package analysis now also validates staged `defer` statements as explicit statement nodes, reusing ordinary call contracts while rejecting parenthesized defer operands and builtins that are not valid in statement context.
+- Package analysis now also resolves both `any` and `interface{}` into one explicit empty-interface type and keeps coercions into that type visible through checked boxing nodes instead of silent assignment-only special cases.
 - Execution additionally requires the configured package and entry function to exist, and the entry function must be `func main()`.
 - Local variables must be declared before assignment or use, with nested block scopes mapped to fixed slots during analysis.
 - Builtin calls, user-defined function calls, and metadata-backed `fmt` / `strings` / `bytes` package seams are supported.
 - Current builtin coverage includes `print`, `println`, `len`, `cap`, `append`, `copy`, `delete`, `close`, `clear`, `panic`, and typed `make` handling.
 - Current imported package coverage is `fmt.Print`, `fmt.Println`, `fmt.Sprint`, `strings.Compare`, `strings.Clone`, `strings.Join`, `strings.Contains`, `strings.HasPrefix`, `strings.HasSuffix`, `strings.Index`, `strings.LastIndex`, `strings.IndexByte`, `strings.LastIndexByte`, `strings.Cut`, `strings.CutPrefix`, `strings.CutSuffix`, `strings.TrimPrefix`, `strings.TrimSuffix`, `strings.Repeat`, `bytes.Compare`, `bytes.Clone`, `bytes.Equal`, `bytes.Contains`, `bytes.HasPrefix`, `bytes.HasSuffix`, `bytes.Index`, `bytes.LastIndex`, `bytes.IndexByte`, `bytes.LastIndexByte`, `bytes.Cut`, `bytes.CutPrefix`, `bytes.CutSuffix`, `bytes.TrimPrefix`, `bytes.TrimSuffix`, `bytes.Join`, and `bytes.Repeat`.
+- The staged empty-interface slice now supports declarations, returns, conversions, and `[]any` literals, while `fmt.Print*` additionally accepts explicit `args...` when `args` is `[]any`.
 - Compiled-function metadata now records explicit result lists instead of a boolean `returns_value` flag, so the VM can return zero, one, or several values through the same stack-frame path.
 - Bytecode lowering now also emits explicit zero-value stores for named result locals at function entry, because VM local-slot defaults are not type-aware.
 - The current multi-result model is explicit rather than tuple-based: staged `return`, multi-binding `:=` / `=`, single-call-argument forwarding, and package seams can consume multi-result calls, while unsupported single-value contexts still fail during semantic analysis.
 - Bare `return` now lowers through explicit reads of tracked result locals, and semantic analysis rejects bare returns whose named result bindings are shadowed out of scope.
 - Deferred calls now lower through explicit defer instructions instead of synthetic tail blocks, keeping eager argument capture and LIFO execution visible in `dump-bytecode`.
 - Explicit builtin `panic` now lowers through dedicated panic instructions rather than a generic builtin call so `dump-bytecode` keeps panic entry points readable.
+- Empty-interface coercions now lower through explicit `box-any <type>` bytecode, while nil interface zero values lower through `push-nil-interface`.
 - Runtime dispatch inside `src/runtime/vm/` is now split between `builtins.rs`, `packages.rs`, and `support.rs` so package growth does not keep accumulating in one VM file.
+- Runtime interface values now carry explicit nil-vs-boxed state plus the boxed dynamic runtime type, so nil checks and staged interface equality do not collapse boxed typed-nil composites into nil interfaces.
 - VM call frames now retain both pending return values and a deferred-call stack, while the VM also tracks a pending panic payload plus unwind depth so staged `defer` can run during ordinary returns and panic propagation through the same frame model.
 - Branch and loop conditions must produce boolean values, staged control-flow headers run before condition or clause dispatch, and expression-switch tags are evaluated once before clause comparison.
 - The current branch model supports `if`, `else`, explicit `else if`, and staged expression `switch` lowering with header scopes chosen during semantic analysis.
@@ -65,7 +69,7 @@ Describe the concrete execution pipeline shipped in the bootstrap milestone, inc
 
 ## Near-Term Extension Path
 
-1. Keep `recover` deferred until the type system can carry panic payloads through an `interface{}` / `any`-like surface instead of inventing an ad hoc placeholder.
+1. Keep `recover` deferred even though the empty-interface carrier now exists; it still needs deliberate unwind-state and direct-call design on top of the new type/runtime surface.
 2. Do not add channel `range` or comma-ok receive opportunistically; pair them with the blocking-model design they still need on top of the new multi-result path.
 3. Keep package-backed services growing without collapsing into ad hoc dispatch tables spread across the VM.
 4. Separate bytecode IR from runtime-specific instruction encoding if the VM grows significantly.

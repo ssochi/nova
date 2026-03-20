@@ -11,7 +11,9 @@ use crate::semantic::model::{
     CallTarget, CheckedBinaryOperator, CheckedCall, CheckedCallArguments, CheckedExpression,
     CheckedExpressionKind, CheckedMapLiteralEntry, Type,
 };
-use crate::semantic::packages::{resolve_package_function, validate_package_call};
+use crate::semantic::packages::{
+    resolve_package_function, validate_package_call, variadic_element_type,
+};
 use crate::semantic::support::{
     coerce_expression_to_type, coerce_nil_equality_operands, expect_type, render_type_list,
     resolve_type_ref, validate_make_literal_bounds, validate_runtime_type,
@@ -340,12 +342,6 @@ impl<'a> FunctionAnalyzer<'a> {
                     package_name
                 ))
             })?;
-        if matches!(checked_arguments, CheckedCallArguments::Spread { .. }) {
-            return Err(SemanticError::new(format!(
-                "package function `{}` does not support explicit `...` arguments in the current subset",
-                package_function.render()
-            )));
-        }
         let checked_arguments =
             self.coerce_package_call_arguments(package_function, checked_arguments)?;
         let argument_types = checked_call_argument_types(&checked_arguments);
@@ -556,9 +552,43 @@ impl<'a> FunctionAnalyzer<'a> {
         function: crate::package::PackageFunction,
         checked_arguments: CheckedCallArguments,
     ) -> Result<CheckedCallArguments, SemanticError> {
+        if let Some(variadic_element_type) = variadic_element_type(function) {
+            return match checked_arguments {
+                CheckedCallArguments::Expressions(arguments) => {
+                    Ok(CheckedCallArguments::Expressions(arguments))
+                }
+                CheckedCallArguments::ExpandedCall(call) => {
+                    Ok(CheckedCallArguments::ExpandedCall(call))
+                }
+                CheckedCallArguments::Spread { arguments, spread } => {
+                    if !arguments.is_empty() {
+                        return Err(SemanticError::new(format!(
+                            "package function `{}` with `...` requires 0 fixed arguments before the spread value, found {}",
+                            function.render(),
+                            arguments.len()
+                        )));
+                    }
+                    let spread = coerce_expression_to_type(
+                        &Type::Slice(Box::new(variadic_element_type)),
+                        *spread,
+                        &format!("spread argument in call to `{}`", function.render()),
+                    )?;
+                    Ok(CheckedCallArguments::Spread {
+                        arguments,
+                        spread: Box::new(spread),
+                    })
+                }
+            };
+        }
         let Some(expected_arguments) = crate::semantic::packages::expected_argument_types(function)
         else {
-            return Ok(checked_arguments);
+            return match checked_arguments {
+                CheckedCallArguments::Spread { .. } => Err(SemanticError::new(format!(
+                    "package function `{}` does not support explicit `...` arguments in the current subset",
+                    function.render()
+                ))),
+                _ => Ok(checked_arguments),
+            };
         };
         match checked_arguments {
             CheckedCallArguments::Expressions(arguments) => {
@@ -582,9 +612,10 @@ impl<'a> FunctionAnalyzer<'a> {
             CheckedCallArguments::ExpandedCall(call) => {
                 Ok(CheckedCallArguments::ExpandedCall(call))
             }
-            CheckedCallArguments::Spread { arguments, spread } => {
-                Ok(CheckedCallArguments::Spread { arguments, spread })
-            }
+            CheckedCallArguments::Spread { .. } => Err(SemanticError::new(format!(
+                "package function `{}` does not support explicit `...` arguments in the current subset",
+                function.render()
+            ))),
         }
     }
 
@@ -647,6 +678,9 @@ impl<'a> FunctionAnalyzer<'a> {
             ))
         })?;
         let value = self.analyze_expression(value)?;
+        if target_type == Type::Any {
+            return coerce_expression_to_type(&Type::Any, value, "conversion to `any`");
+        }
         let conversion = match (&target_type, &value.ty) {
             (Type::Slice(element), Type::String) if element.as_ref() == &Type::Byte => {
                 ConversionKind::StringToBytes

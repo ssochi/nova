@@ -74,7 +74,8 @@ Operational clarifications:
 37. When extending named result parameters, keep result declarations explicit in the AST and checked layer, initialize named result slots explicitly before the body instead of relying on VM local defaults, and model bare `return` as ordered result-slot reads with semantic shadowing checks.
 38. When extending `defer`, keep it explicit as a statement-scoped AST / checked / bytecode / VM-frame feature; evaluate arguments immediately, execute deferred calls in LIFO order before frame removal, and do not lower the feature into synthetic tail blocks that would block future panic-aware unwinding.
 39. When extending `panic`, keep the entry explicit in builtin validation plus bytecode, reuse the existing defer/frame unwind model, and do not claim `recover` until the type system can carry panic payloads through an `interface{}` / `any`-like surface.
-40. When `run` fails during runtime execution, preserve any already-buffered program output in the user-visible diagnostic so deferred prints and other pre-failure output are not silently dropped.
+40. When extending empty-interface `any` / `interface{}`, keep the syntax explicit in the AST, keep boxing explicit in the checked / bytecode pipeline, and model nil-interface state distinctly from boxed typed-nil composite values instead of erasing everything into raw runtime values.
+41. When `run` fails during runtime execution, preserve any already-buffered program output in the user-visible diagnostic so deferred prints and other pre-failure output are not silently dropped.
 
 If no task is explicitly specified, you must proactively choose the most worthwhile piece of work to advance, with the following priorities:
 1. **Obvious gaps in functionality, core experience, or core flow** (search the web more, do research, refer to relevant experience from similar high-quality projects, and established methodologies)

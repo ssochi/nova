@@ -1,6 +1,6 @@
 use super::analyze_package;
 use crate::frontend::{lexer::lex, parser::parse_source_file};
-use crate::semantic::model::Type;
+use crate::semantic::model::{CheckedExpressionKind, CheckedStatement, Type};
 use crate::source::SourceFile;
 
 #[test]
@@ -128,6 +128,51 @@ fn analyze_maps_with_make_len_index_and_assignment() {
     let program = analyze_package(&ast).expect("analysis should succeed");
 
     assert_eq!(program.functions.len(), 1);
+}
+
+#[test]
+fn analyze_any_interface_and_fmt_spread() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nimport \"fmt\"\n\nfunc wrap(value string) any {\n\treturn any(value)\n}\n\nfunc main() {\n\tvar args = []any{wrap(\"go\"), 7, nil}\n\tfmt.Println(args...)\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let program = analyze_package(&ast).expect("analysis should succeed");
+
+    match &program.functions[1].body.statements[0] {
+        CheckedStatement::VarDecl {
+            value: Some(value), ..
+        } => match &value.kind {
+            CheckedExpressionKind::SliceLiteral { elements } => {
+                assert!(matches!(elements[1].kind, CheckedExpressionKind::BoxAny(_)));
+                assert_eq!(elements[2].ty, Type::Any);
+            }
+            _ => panic!("expected slice literal"),
+        },
+        _ => panic!("expected variable declaration"),
+    }
+}
+
+#[test]
+fn reject_any_equality_against_concrete_slice() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc main() {\n\tvar value any = []int{1}\n\tprintln(value == []int{1})\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let error = analyze_package(&ast).expect_err("interface-to-slice equality should fail");
+
+    assert!(
+        error
+            .to_string()
+            .contains("requires matching operand types")
+    );
 }
 
 #[test]

@@ -60,8 +60,10 @@ pub fn resolve_type_ref(type_ref: &TypeRef) -> Option<Type> {
             "byte" => Some(Type::Byte),
             "bool" => Some(Type::Bool),
             "string" => Some(Type::String),
+            "any" => Some(Type::Any),
             _ => None,
         },
+        TypeRef::Interface => Some(Type::Any),
         TypeRef::Slice(element) => Some(Type::Slice(Box::new(resolve_type_ref(element)?))),
         TypeRef::Chan(element) => Some(Type::Chan(Box::new(resolve_type_ref(element)?))),
         TypeRef::Map { key, value } => Some(Type::Map {
@@ -72,10 +74,13 @@ pub fn resolve_type_ref(type_ref: &TypeRef) -> Option<Type> {
 }
 
 pub fn is_supported_named_type(name: &str) -> bool {
-    matches!(name, "int" | "byte" | "bool" | "string")
+    matches!(name, "int" | "byte" | "bool" | "string" | "any")
 }
 
 pub fn expect_type(expected: &Type, actual: &Type, context: &str) -> Result<(), SemanticError> {
+    if expected == &Type::Any && actual.produces_value() {
+        return Ok(());
+    }
     if expected == actual {
         Ok(())
     } else {
@@ -122,6 +127,17 @@ pub fn coerce_expression_to_type(
     if &actual.ty == expected {
         return Ok(actual);
     }
+    if expected == &Type::Any {
+        if actual.ty == Type::UntypedNil {
+            return Ok(zero_value_expression(Type::Any));
+        }
+        if actual.ty.produces_value() {
+            return Ok(CheckedExpression {
+                ty: Type::Any,
+                kind: CheckedExpressionKind::BoxAny(Box::new(actual)),
+            });
+        }
+    }
     if actual.ty == Type::UntypedNil && expected.supports_nil() {
         return Ok(zero_value_expression(expected.clone()));
     }
@@ -142,6 +158,15 @@ pub fn coerce_nil_equality_operands(
         (Type::UntypedNil, Type::UntypedNil) => Err(SemanticError::new(
             "equality expression does not support untyped `nil` operands",
         )),
+        (Type::Any, Type::UntypedNil) => Ok((left, zero_value_expression(Type::Any))),
+        (Type::UntypedNil, Type::Any) => Ok((zero_value_expression(Type::Any), right)),
+        (Type::Any, Type::Any) => Ok((left, right)),
+        (Type::Any, right_type) if supports_interface_concrete_equality(right_type) => {
+            Ok((left, right))
+        }
+        (left_type, Type::Any) if supports_interface_concrete_equality(left_type) => {
+            Ok((left, right))
+        }
         (Type::UntypedNil, right_type) if right_type.supports_nil() => {
             Ok((zero_value_expression(right_type.clone()), right))
         }
@@ -161,6 +186,10 @@ pub fn coerce_nil_equality_operands(
     }
 }
 
+fn supports_interface_concrete_equality(ty: &Type) -> bool {
+    matches!(ty, Type::Int | Type::Byte | Type::Bool | Type::String)
+}
+
 pub fn validate_runtime_type(ty: &Type, context: &str) -> Result<(), SemanticError> {
     match ty {
         Type::Slice(element) => validate_runtime_type(element, context),
@@ -177,9 +206,13 @@ pub fn validate_runtime_type(ty: &Type, context: &str) -> Result<(), SemanticErr
                 )))
             }
         }
-        Type::Int | Type::Byte | Type::Bool | Type::String | Type::UntypedNil | Type::Void => {
-            Ok(())
-        }
+        Type::Int
+        | Type::Byte
+        | Type::Bool
+        | Type::String
+        | Type::Any
+        | Type::UntypedNil
+        | Type::Void => Ok(()),
     }
 }
 
