@@ -25,6 +25,7 @@
 
 ## Related Plans
 
+- `2026-03-20-10-32-34-strings-bytes-clone-seams`: completed plan for staged `strings.Clone` / `bytes.Clone` package seams
 - `2026-03-20-10-21-19-strings-bytes-compare-seams`: completed plan for staged `strings.Compare` / `bytes.Compare` package seams
 - `2026-03-20-10-08-16-strings-bytes-last-index-byte-search`: completed plan for staged `strings` / `bytes` last-index and byte-search package seams
 - `2026-03-20-09-49-02-strings-bytes-index-trim`: completed plan for staged `strings` / `bytes` index, suffix, and trim package seams
@@ -59,11 +60,11 @@
 - Runtime-surface growth can sprawl quickly if types, builtins, imports, and control-flow work are mixed into the same plan.
 - Builtin additions can become hardcoded special cases unless their contracts stay centralized.
 - Supporting more realistic Go programs will require careful staging so the VM remains understandable.
-- The current runtime now has byte-oriented strings, slice allocation, narrow explicit string/byte conversions, staged map groundwork, staged map literals plus `delete`, explicit `nil` for slice/map/chan contexts, staged `range` loops over slices/maps, duplicate constant literal-key diagnostics, staged comma-ok lookups, staged `if` headers, staged expression `switch`, classic `for` clauses, unlabeled `break` / `continue`, staged multi-binding short declarations and assignments, explicit `++` / `--`, staged compound assignments, the first buffered `chan` slice, grouped imports, explicit import aliases, explicit multi-result function signatures / returns, staged variadic function declarations, explicit final-argument `...`, builtin `append` spread handling including `[]byte` plus `string...`, and package-backed `fmt` / `strings` / `bytes` seams including `Compare` and `Cut`; scheduler-aware blocking, channel directions, channel `range`, labels, broader `assign_op` coverage, real import graphs, wider package-backed runtime services, grouped parameter shorthand, and wider multi-result or interface-backed variadic consumption remain open.
+- The current runtime now has byte-oriented strings, slice allocation, narrow explicit string/byte conversions, staged map groundwork, staged map literals plus `delete`, explicit `nil` for slice/map/chan contexts, staged `range` loops over slices/maps, duplicate constant literal-key diagnostics, staged comma-ok lookups, staged `if` headers, staged expression `switch`, classic `for` clauses, unlabeled `break` / `continue`, staged multi-binding short declarations and assignments, explicit `++` / `--`, staged compound assignments, the first buffered `chan` slice, grouped imports, explicit import aliases, explicit multi-result function signatures / returns, staged variadic function declarations, explicit final-argument `...`, builtin `append` spread handling including `[]byte` plus `string...`, and package-backed `fmt` / `strings` / `bytes` seams including `Compare`, `Clone`, and `Cut`; scheduler-aware blocking, channel directions, channel `range`, labels, broader `assign_op` coverage, real import graphs, wider package-backed runtime services, grouped parameter shorthand, and wider multi-result or interface-backed variadic consumption remain open.
 
 ## Next-Round Recommendations
 
 - Open the next `M3` plan for another byte-oriented package/API slice or a quality-oriented refactor that reduces pressure on large integration and contract files without stalling feature progress.
 - If control-flow stays the next priority, reuse the explicit `ForStatement` / `CheckedForStatement` model and the compiler control-flow stack instead of lowering new targets through ad hoc jumps.
-- `Clone`-style helpers, another low-risk package-backed API slice, or a file-size governance pass are the strongest adjacent continuations; keep explicit `...` separate from the staged multi-result forwarding path and keep UTF-8-sequence-sensitive helpers deferred.
+- Another byte-oriented package-backed API slice or a file-size governance pass are the strongest adjacent continuations; keep explicit `...` separate from the staged multi-result forwarding path and keep UTF-8-sequence-sensitive helpers deferred.
 - Reuse the `docs/research/` flow before locking the next compatibility-sensitive slice.

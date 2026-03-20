@@ -34,6 +34,7 @@ This directory stores complete archives of closed plans. It serves historical co
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `2026-03-20-10-32-34-strings-bytes-clone-seams/`: archived M3 plan for staged `strings.Clone` / `bytes.Clone` package seams
 - `2026-03-20-10-21-19-strings-bytes-compare-seams/`: archived M3 plan for staged `strings.Compare` / `bytes.Compare` package seams
 - `2026-03-19-23-19-47-bootstrap-vm-foundation/`: archived bootstrap execution plan for milestone M1
 - `2026-03-19-23-37-05-semantic-functions-branches/`: archived M2 plan for semantic analysis, function calls, and branches

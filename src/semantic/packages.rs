@@ -26,11 +26,16 @@ const FMT_FUNCTIONS: [PackageFunctionContract; 3] = [
     },
 ];
 
-const STRINGS_FUNCTIONS: [PackageFunctionContract; 15] = [
+const STRINGS_FUNCTIONS: [PackageFunctionContract; 16] = [
     PackageFunctionContract {
         function: PackageFunction::StringsCompare,
         member_name: "Compare",
         validator: validate_strings_compare,
+    },
+    PackageFunctionContract {
+        function: PackageFunction::StringsClone,
+        member_name: "Clone",
+        validator: validate_strings_clone,
     },
     PackageFunctionContract {
         function: PackageFunction::StringsContains,
@@ -104,11 +109,16 @@ const STRINGS_FUNCTIONS: [PackageFunctionContract; 15] = [
     },
 ];
 
-const BYTES_FUNCTIONS: [PackageFunctionContract; 16] = [
+const BYTES_FUNCTIONS: [PackageFunctionContract; 17] = [
     PackageFunctionContract {
         function: PackageFunction::BytesCompare,
         member_name: "Compare",
         validator: validate_bytes_compare,
+    },
+    PackageFunctionContract {
+        function: PackageFunction::BytesClone,
+        member_name: "Clone",
+        validator: validate_bytes_clone,
     },
     PackageFunctionContract {
         function: PackageFunction::BytesEqual,
@@ -219,6 +229,7 @@ pub fn expected_argument_types(function: PackageFunction) -> Option<Vec<Type>> {
         PackageFunction::FmtPrint | PackageFunction::FmtPrintln | PackageFunction::FmtSprint => {
             None
         }
+        PackageFunction::StringsClone => Some(vec![Type::String]),
         PackageFunction::StringsCompare
         | PackageFunction::StringsContains
         | PackageFunction::StringsHasPrefix
@@ -239,6 +250,7 @@ pub fn expected_argument_types(function: PackageFunction) -> Option<Vec<Type>> {
             Some(vec![Type::Slice(Box::new(Type::String)), Type::String])
         }
         PackageFunction::StringsRepeat => Some(vec![Type::String, Type::Int]),
+        PackageFunction::BytesClone => Some(vec![byte_slice_type()]),
         PackageFunction::BytesCompare
         | PackageFunction::BytesEqual
         | PackageFunction::BytesContains
@@ -311,6 +323,17 @@ fn validate_strings_compare(argument_types: &[Type]) -> Result<Vec<Type>, String
         &argument_types[1],
     )?;
     Ok(vec![Type::Int])
+}
+
+fn validate_strings_clone(argument_types: &[Type]) -> Result<Vec<Type>, String> {
+    validate_exact_package_arity(PackageFunction::StringsClone, 1, argument_types.len())?;
+    expect_package_argument_type(
+        PackageFunction::StringsClone,
+        1,
+        &Type::String,
+        &argument_types[0],
+    )?;
+    Ok(vec![Type::String])
 }
 
 fn validate_strings_contains(argument_types: &[Type]) -> Result<Vec<Type>, String> {
@@ -572,6 +595,18 @@ fn validate_bytes_compare(argument_types: &[Type]) -> Result<Vec<Type>, String> 
         &argument_types[1],
     )?;
     Ok(vec![Type::Int])
+}
+
+fn validate_bytes_clone(argument_types: &[Type]) -> Result<Vec<Type>, String> {
+    validate_exact_package_arity(PackageFunction::BytesClone, 1, argument_types.len())?;
+    let byte_slice = byte_slice_type();
+    expect_package_argument_type(
+        PackageFunction::BytesClone,
+        1,
+        &byte_slice,
+        &argument_types[0],
+    )?;
+    Ok(vec![byte_slice])
 }
 
 fn validate_bytes_equal(argument_types: &[Type]) -> Result<Vec<Type>, String> {

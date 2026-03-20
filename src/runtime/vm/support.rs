@@ -161,6 +161,15 @@ pub(super) fn expect_byte_slice_value(
     }
 }
 
+pub(super) fn clone_byte_slice(value: &SliceValue) -> Result<SliceValue, ()> {
+    let bytes = value.byte_elements()?;
+    if value.is_nil() {
+        Ok(SliceValue::nil())
+    } else {
+        Ok(SliceValue::from_bytes(&bytes))
+    }
+}
+
 pub(super) fn expect_byte_slice_slice_package_argument(
     function: PackageFunction,
     position: usize,
@@ -212,6 +221,17 @@ pub(super) fn execute_bytes_package_function(
             let left = expect_byte_slice_package_argument(function, 1, left)?;
             let right = expect_byte_slice_package_argument(function, 2, right)?;
             Ok(vec![Value::Integer(compare_byte_sequences(&left, &right))])
+        }
+        PackageFunction::BytesClone => {
+            let [value] = expect_exact_package_arguments(function, arguments, 1)?;
+            let value = expect_byte_slice_value(function, 1, value)?;
+            let cloned = clone_byte_slice(&value).map_err(|_| {
+                RuntimeError::new(format!(
+                    "argument 1 in call to `{}` expected `[]byte`, found a non-byte slice",
+                    function.render()
+                ))
+            })?;
+            Ok(vec![Value::Slice(cloned)])
         }
         PackageFunction::BytesEqual => {
             let [left, right] = expect_exact_package_arguments(function, arguments, 2)?;
@@ -522,7 +542,8 @@ fn last_subslice_index(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::{compare_byte_sequences, last_subslice_index};
+    use super::{clone_byte_slice, compare_byte_sequences, last_subslice_index};
+    use crate::runtime::value::{SliceValue, Value};
 
     #[test]
     fn compare_byte_sequences_matches_go_style_lexicographic_results() {
@@ -536,6 +557,17 @@ mod tests {
         assert_eq!(compare_byte_sequences(b"", b""), 0);
         assert_eq!(compare_byte_sequences(b"", b"go"), -1);
         assert_eq!(compare_byte_sequences(b"vm", b""), 1);
+    }
+
+    #[test]
+    fn clone_byte_slice_preserves_nil_and_empty_distinction() {
+        let nil_clone = clone_byte_slice(&SliceValue::nil()).expect("nil slice should clone");
+        let empty_clone =
+            clone_byte_slice(&SliceValue::from_bytes(b"")).expect("empty slice should clone");
+
+        assert_eq!(nil_clone, SliceValue::nil());
+        assert_eq!(empty_clone.visible_elements(), Vec::<Value>::new());
+        assert_ne!(empty_clone, SliceValue::nil());
     }
 
     #[test]

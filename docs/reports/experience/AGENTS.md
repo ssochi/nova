@@ -34,6 +34,7 @@ This directory stores experience validation reports close to the real user path.
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `2026-03-20-strings-bytes-clone-seams-playtest.md`: records the CLI walkthrough for staged `strings.Clone` / `bytes.Clone` package helpers
 - `2026-03-20-strings-bytes-compare-seams-playtest.md`: records the CLI walkthrough for staged `strings.Compare` / `bytes.Compare` package helpers
 - `2026-03-20-strings-bytes-last-index-byte-search-playtest.md`: records the CLI walkthrough for staged `strings` / `bytes` last-index and byte-search package seams
 - `2026-03-20-strings-bytes-index-trim-seams-playtest.md`: records the CLI walkthrough for staged `strings` / `bytes` index, suffix, and trim package seams

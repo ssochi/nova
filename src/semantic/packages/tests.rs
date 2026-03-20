@@ -14,6 +14,14 @@ fn strings_compare_reports_integer_contract() {
 }
 
 #[test]
+fn strings_clone_reports_string_contract() {
+    let result = validate_package_call(PackageFunction::StringsClone, &[Type::String])
+        .expect("strings.Clone should accept one string");
+
+    assert_eq!(result, vec![Type::String]);
+}
+
+#[test]
 fn join_accepts_string_slices() {
     let result = validate_package_call(
         PackageFunction::StringsJoin,
@@ -98,6 +106,17 @@ fn bytes_compare_reports_integer_contract() {
     .expect("bytes.Compare should accept two []byte values");
 
     assert_eq!(result, vec![Type::Int]);
+}
+
+#[test]
+fn bytes_clone_reports_slice_contract() {
+    let result = validate_package_call(
+        PackageFunction::BytesClone,
+        &[Type::Slice(Box::new(Type::Byte))],
+    )
+    .expect("bytes.Clone should accept one []byte value");
+
+    assert_eq!(result, vec![Type::Slice(Box::new(Type::Byte))]);
 }
 
 #[test]

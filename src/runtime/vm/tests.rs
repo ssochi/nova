@@ -78,6 +78,46 @@ fn execute_compare_package_functions() {
 }
 
 #[test]
+fn execute_clone_package_functions() {
+    let program = Program {
+        package_name: "main".to_string(),
+        entry_function: "main".to_string(),
+        entry_function_index: 0,
+        functions: vec![CompiledFunction {
+            name: "main".to_string(),
+            parameter_count: 0,
+            variadic_element_type: None,
+            return_types: Vec::new(),
+            local_names: vec!["empty".to_string()],
+            instructions: vec![
+                Instruction::PushString("nova".to_string()),
+                Instruction::CallPackage(PackageFunction::StringsClone, 1),
+                Instruction::CallBuiltin(BuiltinFunction::Println, 1),
+                Instruction::PushNilSlice,
+                Instruction::CallPackage(PackageFunction::BytesClone, 1),
+                Instruction::PushNilSlice,
+                Instruction::Equal,
+                Instruction::CallBuiltin(BuiltinFunction::Println, 1),
+                Instruction::BuildSlice(0),
+                Instruction::StoreLocal(0),
+                Instruction::LoadLocal(0),
+                Instruction::CallPackage(PackageFunction::BytesClone, 1),
+                Instruction::PushNilSlice,
+                Instruction::Equal,
+                Instruction::CallBuiltin(BuiltinFunction::Println, 1),
+                Instruction::Return,
+            ],
+        }],
+    };
+
+    let output = VirtualMachine::new()
+        .execute(&program)
+        .expect("clone package functions should execute")
+        .render_output();
+
+    assert_eq!(output, "nova\ntrue\nfalse\n");
+}
+#[test]
 fn execute_strings_package_functions() {
     let program = Program {
         package_name: "main".to_string(),

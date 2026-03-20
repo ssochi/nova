@@ -244,6 +244,10 @@ impl SliceValue {
         self.len
     }
 
+    pub fn is_nil(&self) -> bool {
+        self.is_nil
+    }
+
     pub fn capacity(&self) -> usize {
         self.capacity
     }
@@ -737,6 +741,7 @@ mod tests {
     fn nil_slice_reports_zero_lengths_and_appends_into_real_storage() {
         let nil_slice = SliceValue::nil();
 
+        assert!(nil_slice.is_nil());
         assert_eq!(nil_slice.len(), 0);
         assert_eq!(nil_slice.capacity(), 0);
         assert_eq!(nil_slice.visible_elements(), Vec::<Value>::new());
@@ -747,6 +752,7 @@ mod tests {
             grown.visible_elements(),
             vec![Value::Integer(7), Value::Integer(8)]
         );
+        assert!(!grown.is_nil());
         assert_eq!(grown.capacity(), 2);
     }
 
@@ -806,6 +812,7 @@ mod tests {
         let value = SliceValue::from_bytes(b"nova-go");
         let nil_value = SliceValue::nil();
 
+        assert!(!value.is_nil());
         assert_eq!(value.byte_index_of(b"go"), Ok(Some(5)));
         assert_eq!(value.byte_index_of(b""), Ok(Some(0)));
         assert_eq!(value.has_byte_suffix(b"go"), Ok(true));

@@ -31,6 +31,7 @@ Describe the narrow import and package-function contract model introduced during
   - `fmt.Println(...value) -> void`
   - `fmt.Sprint(...value) -> string`
   - `strings.Compare(string, string) -> int`
+  - `strings.Clone(string) -> string`
   - `strings.Contains(string, string) -> bool`
   - `strings.HasPrefix(string, string) -> bool`
   - `strings.HasSuffix(string, string) -> bool`
@@ -46,6 +47,7 @@ Describe the narrow import and package-function contract model introduced during
   - `strings.Join([]string, string) -> string`
   - `strings.Repeat(string, int) -> string`
   - `bytes.Compare([]byte, []byte) -> int`
+  - `bytes.Clone([]byte) -> []byte`
   - `bytes.Equal([]byte, []byte) -> bool`
   - `bytes.Contains([]byte, []byte) -> bool`
   - `bytes.HasPrefix([]byte, []byte) -> bool`
@@ -88,6 +90,7 @@ Describe the narrow import and package-function contract model introduced during
   - `fmt.Println`: join rendered arguments with spaces and append a trailing newline
   - `fmt.Sprint`: join rendered arguments without separators and push the resulting string
   - `strings.Compare`: return `-1`, `0`, or `1` for lexicographic byte-oriented string comparison
+  - `strings.Clone`: return a byte-preserving copy of the input string
   - `strings.Contains`: return whether one string contains another
   - `strings.HasPrefix`: return whether one string begins with another
   - `strings.HasSuffix`: return whether one string ends with another
@@ -103,6 +106,7 @@ Describe the narrow import and package-function contract model introduced during
   - `strings.Join`: join `[]string` with a separator
   - `strings.Repeat`: repeat a string `count` times, with invalid counts surfaced as runtime errors
   - `bytes.Compare`: return `-1`, `0`, or `1` for lexicographic byte-slice comparison while treating nil and empty slices equivalently
+  - `bytes.Clone`: return a copied `[]byte` while preserving the nil-vs-empty distinction
   - `bytes.Equal`: compare byte-slice contents, treating nil and empty slices equivalently through the byte-slice view
   - `bytes.Contains`: search a `[]byte` haystack for a `[]byte` subslice
   - `bytes.HasPrefix`: test whether a `[]byte` value begins with a prefix

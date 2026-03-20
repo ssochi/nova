@@ -42,6 +42,11 @@ impl VirtualMachine {
                     right.as_bytes(),
                 )));
             }
+            PackageFunction::StringsClone => {
+                let [value] = expect_exact_package_arguments(function, arguments, 1)?;
+                let value = expect_string_package_argument(function, 1, value)?;
+                self.stack.push(Value::String(value.clone()));
+            }
             PackageFunction::StringsContains => {
                 let [haystack, needle] = expect_exact_package_arguments(function, arguments, 2)?;
                 let haystack = expect_string_package_argument(function, 1, haystack)?;
@@ -167,6 +172,7 @@ impl VirtualMachine {
                 self.stack.push(Value::String(value.repeat(repeat_count)));
             }
             PackageFunction::BytesCompare
+            | PackageFunction::BytesClone
             | PackageFunction::BytesEqual
             | PackageFunction::BytesContains
             | PackageFunction::BytesHasPrefix
