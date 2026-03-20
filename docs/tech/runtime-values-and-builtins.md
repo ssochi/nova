@@ -56,6 +56,7 @@ Describe the current runtime value categories and builtin execution model introd
   - `delete(map, key) -> void`
   - `close(chan) -> void`
   - `clear(slice|map) -> void`
+  - `panic(value) -> void`
   - `cap(slice|chan) -> int`
   - `copy(slice, slice|string) -> int`
   - `append(slice, ...element) -> slice`
@@ -65,11 +66,12 @@ Describe the current runtime value categories and builtin execution model introd
 - `delete` validates a map first argument and a key matching the map key type before lowering
 - `close` validates one channel target before lowering
 - `clear` validates one slice or map target before lowering
+- `panic` validates one argument and accepts both typed values and explicit untyped `nil`, leaving the runtime `panic(nil)` distinction explicit
 - `cap` validates one slice or channel target before lowering
 - `copy` validates destination and source slice types centrally before lowering, including the `[]byte` <- `string` special case
 - `append` validates a slice first argument and matching appended element types before lowering
 - `append` also validates explicit spread calls separately so `append(values, more...)`, typed `nil...`, and the narrow `append([]byte, string...)` rule stay explicit instead of weakening ordinary element checks
-- Builtins used by staged `defer` must also pass the real Go-style statement-context filter; currently `print`, `println`, `copy`, `delete`, `close`, and `clear` are allowed while result-producing builtins such as `len`, `cap`, `append`, and `make` remain invalid in deferred statement context
+- Builtins used by staged `defer` must also pass the real Go-style statement-context filter; currently `print`, `println`, `copy`, `delete`, `close`, `clear`, and `panic` are allowed while result-producing builtins such as `len`, `cap`, `append`, and `make` remain invalid in deferred statement context
 
 ## Package Contract Model
 
@@ -123,7 +125,7 @@ Describe the current runtime value categories and builtin execution model introd
 - Bytecode now also uses `push-nil-slice` / `push-nil-chan` / `push-nil-map` for typed zero-value declarations, `build-slice <count>` for slice literals, `build-map <type> <count>` for map literals, `make-slice <type>`, `make-chan <type>`, and `make-map <type>` for allocation, `send` / `receive <type>` for channel operations, `index <slice|string>` and `index-map <type>` for element reads, `lookup-map <type>` for comma-ok reads, `slice <slice|string>` for window creation, and `set-index` / `set-map-index` for indexed writes
 - Bytecode now also uses `convert string->[]byte` and `convert []byte->string` for the narrow explicit conversion surface
 - Bytecode now also records optional variadic function metadata plus explicit `call-function-spread` / `call-builtin-spread` instructions so `dump-bytecode` keeps variadic behavior readable
-- Bytecode now also records explicit `defer-builtin`, `defer-package`, `defer-function`, and `defer-function-spread` instructions so deferred execution stays visible instead of disappearing into synthetic tail blocks
+- Bytecode now also records explicit `panic`, `panic-nil`, `defer-panic`, and `defer-panic-nil` instructions plus the earlier `defer-builtin`, `defer-package`, `defer-function`, and `defer-function-spread` instructions so panic and deferred execution stay visible instead of disappearing into synthetic tail blocks
 - Explicit source-level `nil` is resolved in semantic analysis into typed nil-slice, nil-chan, or nil-map zero values before lowering
 - Staged `range` loops now lower by evaluating the source once, storing explicit hidden range locals, iterating slices through index/len loops, and iterating maps through a dedicated `map-keys` instruction plus key-slice traversal
 - Equality still reuses the generic value comparison path because runtime values are tagged; slice/map equality is only exposed through the explicit `nil` coercion path, while channel equality compares shared runtime identity plus nil
@@ -137,6 +139,7 @@ Describe the current runtime value categories and builtin execution model introd
 - `clear(slice)` mutates the visible slice window in place, zeroing each element without changing the slice length, capacity, or nil state
 - User-defined variadic calls materialize the tail arguments into a runtime slice local on function entry, and zero-tail calls produce a nil slice local
 - VM call frames now keep an explicit deferred-call stack plus pending return values, so staged `defer` evaluates arguments immediately, executes deferred calls in LIFO order, and drains them before frame removal
+- VM execution now also keeps an explicit pending-panic payload plus unwind depth, so panic-triggered unwinding can execute deferred user calls before continuing the panic across callers
 - `call-function-spread` expands a final slice value into the variadic tail for user-defined calls, while `call-builtin-spread append` expands either a matching slice or the narrow `string` source for `[]byte`
 - Deferred user-defined calls currently discard all return values through frame metadata instead of pushing them back onto the caller stack
 - `make([]T, len[, cap])` lowers into dedicated allocation bytecode instead of a generic runtime builtin call because its first argument is a type
@@ -153,8 +156,10 @@ Describe the current runtime value categories and builtin execution model introd
 - `for range slice` and `for range map` execute zero iterations when the source is nil
 - Map range currently iterates in deterministic sorted-key order because the runtime uses sorted storage for debugging
 - Channel send and receive currently surface runtime errors when the operation would block because the VM has no goroutines or scheduler yet
-- `close(chan)` succeeds once, fails on nil or already-closed channels, and closed channels yield zero values once their buffered elements are drained
-- Nil-map writes currently surface as runtime errors because the VM does not model Go panic yet
+- `close(chan)` succeeds once, but nil or already-closed channels now enter the staged panic path so deferred calls still run before the CLI reports the failure
+- Sending on a closed channel and assigning into a nil map also now enter the staged panic path, while nil or blocking channel operations still remain explicit runtime errors because the VM has no scheduler
+- Explicit builtin `panic(value)` now enters the same staged panic path, and `panic(nil)` renders as `panic: panic called with nil argument`
+- Final `run` failures now preserve buffered program output ahead of the panic/runtime message so deferred prints remain visible in CLI validation
 - `[]byte(string)` currently returns a non-nil byte slice with exact-length capacity; real Go leaves the capacity implementation-specific
 - `string([]byte)` copies the visible byte slice elements into a new runtime string value
 - Explicit typed local declarations are lowered into concrete zero-producing instructions, so `var total int`, `var marker byte`, `var ready bool`, `var label string`, `var values []int`, and `var counts map[string]int` all produce Go-like zero values without runtime type reflection
@@ -190,3 +195,4 @@ Describe the current runtime value categories and builtin execution model introd
 - If slice behavior expands beyond the current window / builtin subset, consider separating slice-specific lowering and VM helpers from the core scalar path
 - If map behavior expands further beyond the current duplicate-key diagnostics and comma-ok statements, keep nil-map semantics, explicit `nil` coercion, map-key validation, `lookup-map`, and `map-keys` range lowering centralized instead of scattering them across builtin and VM call sites
 - If channel behavior expands into directional channels, comma-ok receive, or channel `range`, keep send / receive / close semantics explicit in the checked model and bytecode instead of hiding them behind synthetic builtin rewrites
+- If panic behavior expands into `recover`, keep the panic payload explicit and attach recovery only after the type system can model `interface{}` / `any`

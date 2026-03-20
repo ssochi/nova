@@ -8,6 +8,7 @@ use crate::package::PackageFunction;
 
 mod clear;
 mod defer;
+mod panic;
 
 #[test]
 fn execute_builds_and_indexes_slices() {

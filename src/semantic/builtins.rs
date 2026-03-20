@@ -8,7 +8,7 @@ pub struct BuiltinContract {
     pub validator: fn(&[Type]) -> Result<Vec<Type>, String>,
 }
 
-const BUILTIN_CONTRACTS: [BuiltinContract; 10] = [
+const BUILTIN_CONTRACTS: [BuiltinContract; 11] = [
     BuiltinContract {
         builtin: BuiltinFunction::Print,
         name: "print",
@@ -58,6 +58,11 @@ const BUILTIN_CONTRACTS: [BuiltinContract; 10] = [
         builtin: BuiltinFunction::Clear,
         name: "clear",
         validator: validate_clear_builtin,
+    },
+    BuiltinContract {
+        builtin: BuiltinFunction::Panic,
+        name: "panic",
+        validator: validate_panic_builtin,
     },
 ];
 
@@ -122,6 +127,7 @@ pub fn builtin_permits_statement_context(builtin: BuiltinFunction) -> bool {
             | BuiltinFunction::Delete
             | BuiltinFunction::Close
             | BuiltinFunction::Clear
+            | BuiltinFunction::Panic
     )
 }
 
@@ -282,6 +288,14 @@ fn validate_clear_builtin(argument_types: &[Type]) -> Result<Vec<Type>, String> 
             target_type.render()
         ))
     }
+}
+
+fn validate_panic_builtin(argument_types: &[Type]) -> Result<Vec<Type>, String> {
+    validate_exact_arity("panic", 1, argument_types.len())?;
+    if argument_types[0] == Type::Void {
+        return Err("argument 1 in call to builtin `panic` requires a value".to_string());
+    }
+    Ok(Vec::new())
 }
 
 fn validate_exact_arity(name: &str, expected: usize, actual: usize) -> Result<(), String> {
@@ -601,5 +615,21 @@ mod tests {
             .expect_err("clear should reject strings");
 
         assert!(error.contains("requires `slice` or `map`"));
+    }
+
+    #[test]
+    fn panic_accepts_untyped_nil_argument() {
+        let result = validate_builtin_call(BuiltinFunction::Panic, &[Type::UntypedNil])
+            .expect("panic(nil) should be accepted");
+
+        assert_eq!(result, Vec::<Type>::new());
+    }
+
+    #[test]
+    fn panic_rejects_missing_argument() {
+        let error = validate_builtin_call(BuiltinFunction::Panic, &[])
+            .expect_err("panic should require one argument");
+
+        assert!(error.contains("expects 1 arguments"));
     }
 }

@@ -12,6 +12,7 @@ use crate::semantic::model::{
     CheckedValueSource, Type,
 };
 
+mod calls;
 mod simple_statements;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -524,6 +525,9 @@ impl<'a> FunctionCompiler<'a> {
     }
 
     fn compile_call(&mut self, call: &CheckedCall, context: &str) -> Result<(), CompileError> {
+        if matches!(call.target, CallTarget::Builtin(BuiltinFunction::Panic)) {
+            return self.compile_panic_call(call, context, false);
+        }
         self.compile_call_arguments(call, context)?;
 
         match &call.target {
@@ -560,6 +564,9 @@ impl<'a> FunctionCompiler<'a> {
     }
 
     fn compile_defer_call(&mut self, call: &CheckedCall) -> Result<(), CompileError> {
+        if matches!(call.target, CallTarget::Builtin(BuiltinFunction::Panic)) {
+            return self.compile_panic_call(call, "defer statement", true);
+        }
         self.compile_call_arguments(call, "defer statement")?;
 
         match &call.target {

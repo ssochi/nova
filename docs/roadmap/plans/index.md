@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-12-28-16-panic-aware-unwind-first-slice`
+- Opened `2026-03-20-12-28-16-panic-aware-unwind-first-slice` for staged builtin `panic`, panic-aware frame unwinding, and selected runtime-trap integration under `M3`
 - Completed and archived `2026-03-20-11-58-27-defer-first-slice`
 - Opened `2026-03-20-11-58-27-defer-first-slice` for the first staged `defer` statement slice under `M3`
 - Completed and archived `2026-03-20-11-23-19-named-result-parameters`

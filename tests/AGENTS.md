@@ -12,6 +12,8 @@
   - `cli_diagnostics.rs`: invalid-program and diagnostic coverage
   - `cli_builtin_clear.rs`: focused CLI coverage for builtin `clear(slice|map)`
   - `cli_builtin_clear_diagnostics.rs`: focused diagnostic coverage for mistyped builtin `clear` calls
+  - `cli_panic.rs`: focused CLI coverage for staged builtin `panic` plus panic-aware deferred unwinding
+  - `cli_panic_diagnostics.rs`: focused diagnostic coverage for invalid builtin `panic` calls
   - `cli_defer.rs`: focused CLI coverage for staged `defer` statements and explicit defer bytecode
   - `cli_defer_diagnostics.rs`: focused diagnostic coverage for invalid `defer` forms and builtin statement-context restrictions
   - `cli_grouped_parameters.rs`: focused CLI coverage for grouped parameter-name shorthand in function signatures

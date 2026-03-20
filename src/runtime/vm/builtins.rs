@@ -134,8 +134,12 @@ impl VirtualMachine {
                     }
                 };
                 channel.close().map_err(|error| match error {
-                    ChannelCloseError::Nil => RuntimeError::new("close of nil channel"),
-                    ChannelCloseError::Closed => RuntimeError::new("close of closed channel"),
+                    ChannelCloseError::Nil => {
+                        RuntimeError::user_panic_message("close of nil channel")
+                    }
+                    ChannelCloseError::Closed => {
+                        RuntimeError::user_panic_message("close of closed channel")
+                    }
                 })?;
                 Ok(Vec::new())
             }
@@ -152,6 +156,9 @@ impl VirtualMachine {
                 }
                 Ok(Vec::new())
             }
+            BuiltinFunction::Panic => Err(RuntimeError::new(
+                "builtin `panic` is lowered into explicit panic bytecode",
+            )),
         }
     }
 

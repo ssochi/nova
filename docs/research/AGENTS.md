@@ -33,6 +33,7 @@ This directory stores research notes that inform roadmap choices and implementat
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `2026-03-20-panic-aware-unwind-first-slice.md`: official behavior baseline for staged builtin `panic`, panic-aware defer unwinding, and the current `recover` deferral
 - `2026-03-20-defer-first-slice.md`: official behavior baseline for the first staged `defer` statement slice
 - `2026-03-20-named-result-parameters.md`: official behavior baseline for grouped named result declarations, result-slot initialization, and bare `return`
 - `2026-03-20-grouped-parameter-shorthand.md`: official behavior baseline for grouped input parameter declarations such as `func f(a, b int)`

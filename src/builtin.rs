@@ -10,6 +10,7 @@ pub enum BuiltinFunction {
     Delete,
     Close,
     Clear,
+    Panic,
 }
 
 impl BuiltinFunction {
@@ -25,6 +26,7 @@ impl BuiltinFunction {
             BuiltinFunction::Delete => "delete",
             BuiltinFunction::Close => "close",
             BuiltinFunction::Clear => "clear",
+            BuiltinFunction::Panic => "panic",
         }
     }
 }

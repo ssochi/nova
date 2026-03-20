@@ -1,0 +1,7 @@
+- [done] Re-read startup context, latest archive context, milestone state, active plan state, and applicable docs before selecting the next `M3` slice.
+- [done] Research staged builtin panic semantics, confirm the first-slice boundaries, and write the related design documents.
+- [done] Implement builtin `panic` contracts plus bytecode lowering that keeps panic behavior explicit in inspection surfaces.
+- [done] Add VM panic-state unwinding, route selected runtime traps through it, and keep file sizes within limits.
+- [done] Add focused examples, unit tests, CLI execution coverage, and CLI diagnostics for the staged panic surface.
+- [done] Run formatting, automated tests, serial CLI validation, and touched-file line-count checks.
+- [done] Update roadmap/docs/reports, archive the completed plan, sync `BOOT.md`, and commit the full working tree.

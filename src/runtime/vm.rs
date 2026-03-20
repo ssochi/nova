@@ -1,6 +1,7 @@
 use std::fmt;
 
 use self::support::{normalize_slice_bound, slice_bounds_error_message, zero_value_for_type};
+use self::unwind::{CallFrame, DeferredCall, PanicPayload, ReturnMode};
 use crate::bytecode::instruction::{Instruction, Program, SequenceKind, ValueType};
 use crate::conversion::ConversionKind;
 use crate::runtime::value::{
@@ -11,27 +12,76 @@ use crate::runtime::value::{
 mod builtins;
 mod packages;
 mod support;
+mod unwind;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeError {
-    message: String,
+    kind: RuntimeErrorKind,
 }
 
 impl RuntimeError {
     fn new(message: impl Into<String>) -> Self {
         Self {
-            message: message.into(),
+            kind: RuntimeErrorKind::Message(message.into()),
         }
+    }
+
+    fn user_panic_message(message: impl Into<String>) -> Self {
+        Self {
+            kind: RuntimeErrorKind::Panic(PanicPayload::Message(message.into())),
+        }
+    }
+
+    fn panic_value(value: Value) -> Self {
+        Self {
+            kind: RuntimeErrorKind::Panic(PanicPayload::Value(value)),
+        }
+    }
+
+    fn panic_nil() -> Self {
+        Self {
+            kind: RuntimeErrorKind::Panic(PanicPayload::NilArgument),
+        }
+    }
+
+    fn from_panic_payload(payload: PanicPayload) -> Self {
+        Self {
+            kind: RuntimeErrorKind::Panic(payload),
+        }
+    }
+
+    fn into_panic_payload(self) -> Option<PanicPayload> {
+        match self.kind {
+            RuntimeErrorKind::Message(_) => None,
+            RuntimeErrorKind::Panic(payload) => Some(payload),
+        }
+    }
+
+    fn with_output(self, output: String) -> Self {
+        if output.is_empty() {
+            return self;
+        }
+
+        Self::new(format!("{output}{self}"))
     }
 }
 
 impl fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.message)
+        match &self.kind {
+            RuntimeErrorKind::Message(message) => f.write_str(message),
+            RuntimeErrorKind::Panic(payload) => write!(f, "panic: {}", payload.render_message()),
+        }
     }
 }
 
 impl std::error::Error for RuntimeError {}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum RuntimeErrorKind {
+    Message(String),
+    Panic(PanicPayload),
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExecutionResult {
@@ -49,6 +99,8 @@ pub struct VirtualMachine {
     stack: Vec<Value>,
     frames: Vec<CallFrame>,
     output: String,
+    pending_panic: Option<PanicPayload>,
+    panic_depth: usize,
 }
 
 impl VirtualMachine {
@@ -57,6 +109,8 @@ impl VirtualMachine {
             stack: Vec::new(),
             frames: Vec::new(),
             output: String::new(),
+            pending_panic: None,
+            panic_depth: 0,
         }
     }
 
@@ -64,6 +118,8 @@ impl VirtualMachine {
         self.stack.clear();
         self.frames.clear();
         self.output.clear();
+        self.pending_panic = None;
+        self.panic_depth = 0;
 
         let entry = program
             .functions
@@ -76,6 +132,13 @@ impl VirtualMachine {
         ));
 
         while let Some(frame_index) = self.frames.len().checked_sub(1) {
+            if self.panic_ready_to_unwind() {
+                if let Some(error) = self.resume_panic_unwind(program)? {
+                    return Err(self.decorate_runtime_error(error));
+                }
+                continue;
+            }
+
             let function_index = self.frames[frame_index].function_index;
             let pc = self.frames[frame_index].pc;
             let function = program.functions.get(function_index).ok_or_else(|| {
@@ -89,231 +152,279 @@ impl VirtualMachine {
             })?;
 
             let mut advance_pc = true;
-            match instruction {
-                Instruction::PushInt(value) => self.stack.push(Value::Integer(value)),
-                Instruction::PushByte(value) => self.stack.push(Value::Byte(value)),
-                Instruction::PushBool(value) => self.stack.push(Value::Boolean(value)),
-                Instruction::PushString(value) => {
-                    self.stack.push(Value::String(StringValue::from(value)))
-                }
-                Instruction::PushNilSlice => self.stack.push(Value::Slice(SliceValue::nil())),
-                Instruction::PushNilChan => self.stack.push(Value::Chan(ChannelValue::nil())),
-                Instruction::PushNilMap => self.stack.push(Value::Map(MapValue::nil())),
-                Instruction::BuildSlice(count) => {
-                    let mut elements = Vec::with_capacity(count);
-                    for _ in 0..count {
-                        elements.push(self.pop_value()?);
+            let mut completed_execution = None;
+            let step_result = (|| -> Result<(), RuntimeError> {
+                match instruction {
+                    Instruction::PushInt(value) => self.stack.push(Value::Integer(value)),
+                    Instruction::PushByte(value) => self.stack.push(Value::Byte(value)),
+                    Instruction::PushBool(value) => self.stack.push(Value::Boolean(value)),
+                    Instruction::PushString(value) => {
+                        self.stack.push(Value::String(StringValue::from(value)))
                     }
-                    elements.reverse();
-                    self.stack.push(Value::Slice(SliceValue::new(elements)));
-                }
-                Instruction::BuildMap {
-                    map_type,
-                    entry_count,
-                } => self.build_map(&map_type, entry_count)?,
-                Instruction::MakeSlice {
-                    element_type,
-                    has_capacity,
-                } => self.make_slice(&element_type, has_capacity)?,
-                Instruction::MakeChan {
-                    element_type,
-                    has_buffer,
-                } => self.make_chan(&element_type, has_buffer)?,
-                Instruction::MakeMap { map_type, has_hint } => {
-                    self.make_map(&map_type, has_hint)?
-                }
-                Instruction::Convert(conversion) => self.convert_value(conversion)?,
-                Instruction::LoadLocal(index) => {
-                    let value = self.frames[frame_index]
-                        .locals
-                        .get(index)
-                        .cloned()
-                        .ok_or_else(|| RuntimeError::new(format!("invalid local slot {index}")))?;
-                    self.stack.push(value);
-                }
-                Instruction::StoreLocal(index) => {
-                    let value = self.pop_value()?;
-                    let slot = self.frames[frame_index]
-                        .locals
-                        .get_mut(index)
-                        .ok_or_else(|| RuntimeError::new(format!("invalid local slot {index}")))?;
-                    *slot = value;
-                }
-                Instruction::Add => self.binary_numeric_op(
-                    |left, right| left + right,
-                    |left, right| left.wrapping_add(right),
-                )?,
-                Instruction::Concat => self.concat_strings()?,
-                Instruction::Subtract => self.binary_numeric_op(
-                    |left, right| left - right,
-                    |left, right| left.wrapping_sub(right),
-                )?,
-                Instruction::Multiply => self.binary_numeric_op(
-                    |left, right| left * right,
-                    |left, right| left.wrapping_mul(right),
-                )?,
-                Instruction::Divide => self.binary_numeric_op_checked(
-                    |left, right| {
-                        if right == 0 {
-                            Err(RuntimeError::new("division by zero"))
-                        } else {
-                            Ok(left / right)
+                    Instruction::PushNilSlice => self.stack.push(Value::Slice(SliceValue::nil())),
+                    Instruction::PushNilChan => self.stack.push(Value::Chan(ChannelValue::nil())),
+                    Instruction::PushNilMap => self.stack.push(Value::Map(MapValue::nil())),
+                    Instruction::BuildSlice(count) => {
+                        let mut elements = Vec::with_capacity(count);
+                        for _ in 0..count {
+                            elements.push(self.pop_value()?);
                         }
-                    },
-                    |left, right| {
-                        if right == 0 {
-                            Err(RuntimeError::new("division by zero"))
-                        } else {
-                            Ok(left / right)
-                        }
-                    },
-                )?,
-                Instruction::Equal => self.binary_compare(|left, right| left == right)?,
-                Instruction::NotEqual => self.binary_compare(|left, right| left != right)?,
-                Instruction::Less => self.binary_integer_compare(|left, right| left < right)?,
-                Instruction::LessEqual => {
-                    self.binary_integer_compare(|left, right| left <= right)?
-                }
-                Instruction::Greater => self.binary_integer_compare(|left, right| left > right)?,
-                Instruction::GreaterEqual => {
-                    self.binary_integer_compare(|left, right| left >= right)?
-                }
-                Instruction::Index(target_kind) => self.index_value(target_kind)?,
-                Instruction::Slice {
-                    target_kind,
-                    has_low,
-                    has_high,
-                } => self.slice_value(target_kind, has_low, has_high)?,
-                Instruction::Receive(element_type) => self.receive(&element_type)?,
-                Instruction::IndexMap(map_type) => self.index_map(&map_type)?,
-                Instruction::LookupMap(map_type) => self.lookup_map(&map_type)?,
-                Instruction::MapKeys(key_type) => self.map_keys(&key_type)?,
-                Instruction::SetIndex => self.set_slice_index()?,
-                Instruction::SetMapIndex => self.set_map_index()?,
-                Instruction::Send => self.send()?,
-                Instruction::Jump(target) => {
-                    self.frames[frame_index].pc = target;
-                    advance_pc = false;
-                }
-                Instruction::JumpIfFalse(target) => {
-                    if !self.pop_bool()? {
+                        elements.reverse();
+                        self.stack.push(Value::Slice(SliceValue::new(elements)));
+                    }
+                    Instruction::BuildMap {
+                        map_type,
+                        entry_count,
+                    } => self.build_map(&map_type, entry_count)?,
+                    Instruction::MakeSlice {
+                        element_type,
+                        has_capacity,
+                    } => self.make_slice(&element_type, has_capacity)?,
+                    Instruction::MakeChan {
+                        element_type,
+                        has_buffer,
+                    } => self.make_chan(&element_type, has_buffer)?,
+                    Instruction::MakeMap { map_type, has_hint } => {
+                        self.make_map(&map_type, has_hint)?
+                    }
+                    Instruction::Convert(conversion) => self.convert_value(conversion)?,
+                    Instruction::LoadLocal(index) => {
+                        let value = self.frames[frame_index]
+                            .locals
+                            .get(index)
+                            .cloned()
+                            .ok_or_else(|| {
+                                RuntimeError::new(format!("invalid local slot {index}"))
+                            })?;
+                        self.stack.push(value);
+                    }
+                    Instruction::StoreLocal(index) => {
+                        let value = self.pop_value()?;
+                        let slot =
+                            self.frames[frame_index]
+                                .locals
+                                .get_mut(index)
+                                .ok_or_else(|| {
+                                    RuntimeError::new(format!("invalid local slot {index}"))
+                                })?;
+                        *slot = value;
+                    }
+                    Instruction::Add => self.binary_numeric_op(
+                        |left, right| left + right,
+                        |left, right| left.wrapping_add(right),
+                    )?,
+                    Instruction::Concat => self.concat_strings()?,
+                    Instruction::Subtract => self.binary_numeric_op(
+                        |left, right| left - right,
+                        |left, right| left.wrapping_sub(right),
+                    )?,
+                    Instruction::Multiply => self.binary_numeric_op(
+                        |left, right| left * right,
+                        |left, right| left.wrapping_mul(right),
+                    )?,
+                    Instruction::Divide => self.binary_numeric_op_checked(
+                        |left, right| {
+                            if right == 0 {
+                                Err(RuntimeError::new("division by zero"))
+                            } else {
+                                Ok(left / right)
+                            }
+                        },
+                        |left, right| {
+                            if right == 0 {
+                                Err(RuntimeError::new("division by zero"))
+                            } else {
+                                Ok(left / right)
+                            }
+                        },
+                    )?,
+                    Instruction::Equal => self.binary_compare(|left, right| left == right)?,
+                    Instruction::NotEqual => self.binary_compare(|left, right| left != right)?,
+                    Instruction::Less => self.binary_integer_compare(|left, right| left < right)?,
+                    Instruction::LessEqual => {
+                        self.binary_integer_compare(|left, right| left <= right)?
+                    }
+                    Instruction::Greater => {
+                        self.binary_integer_compare(|left, right| left > right)?
+                    }
+                    Instruction::GreaterEqual => {
+                        self.binary_integer_compare(|left, right| left >= right)?
+                    }
+                    Instruction::Index(target_kind) => self.index_value(target_kind)?,
+                    Instruction::Slice {
+                        target_kind,
+                        has_low,
+                        has_high,
+                    } => self.slice_value(target_kind, has_low, has_high)?,
+                    Instruction::Receive(element_type) => self.receive(&element_type)?,
+                    Instruction::IndexMap(map_type) => self.index_map(&map_type)?,
+                    Instruction::LookupMap(map_type) => self.lookup_map(&map_type)?,
+                    Instruction::MapKeys(key_type) => self.map_keys(&key_type)?,
+                    Instruction::SetIndex => self.set_slice_index()?,
+                    Instruction::SetMapIndex => self.set_map_index()?,
+                    Instruction::Send => self.send()?,
+                    Instruction::Jump(target) => {
                         self.frames[frame_index].pc = target;
                         advance_pc = false;
                     }
-                }
-                Instruction::Pop => {
-                    self.pop_value()?;
-                }
-                Instruction::CallBuiltin(builtin, arity) => self.call_builtin(builtin, arity)?,
-                Instruction::CallBuiltinSpread(builtin, prefix_arity) => {
-                    self.call_builtin_spread(builtin, prefix_arity)?
-                }
-                Instruction::CallPackage(function, arity) => {
-                    self.call_package_function(function, arity)?
-                }
-                Instruction::CallFunction(function_index, arity) => {
-                    let arguments = self.pop_arguments(arity)?;
-                    self.call_user_function(
-                        program,
-                        frame_index,
-                        function_index,
-                        arguments,
-                        ReturnMode::Normal,
-                        true,
-                    )?;
-                    advance_pc = false;
-                }
-                Instruction::CallFunctionSpread(function_index, prefix_arity) => {
-                    let spread = self.pop_value()?;
-                    let mut arguments = self.pop_arguments(prefix_arity)?;
-                    let spread_arguments = self.expand_user_function_spread_arguments(spread)?;
-                    arguments.extend(spread_arguments);
-                    self.call_user_function(
-                        program,
-                        frame_index,
-                        function_index,
-                        arguments,
-                        ReturnMode::Normal,
-                        true,
-                    )?;
-                    advance_pc = false;
-                }
-                Instruction::DeferBuiltin(builtin, arity) => {
-                    let arguments = self.pop_arguments(arity)?;
-                    self.frames[frame_index]
-                        .deferred_calls
-                        .push(DeferredCall::Builtin { builtin, arguments });
-                }
-                Instruction::DeferPackage(function, arity) => {
-                    let arguments = self.pop_arguments(arity)?;
-                    self.frames[frame_index]
-                        .deferred_calls
-                        .push(DeferredCall::Package {
-                            function,
-                            arguments,
-                        });
-                }
-                Instruction::DeferFunction(function_index, arity) => {
-                    let arguments = self.pop_arguments(arity)?;
-                    self.frames[frame_index]
-                        .deferred_calls
-                        .push(DeferredCall::UserDefined {
-                            function_index,
-                            arguments,
-                        });
-                }
-                Instruction::DeferFunctionSpread(function_index, prefix_arity) => {
-                    let spread = self.pop_value()?;
-                    let mut arguments = self.pop_arguments(prefix_arity)?;
-                    let spread_arguments = self.expand_user_function_spread_arguments(spread)?;
-                    arguments.extend(spread_arguments);
-                    self.frames[frame_index]
-                        .deferred_calls
-                        .push(DeferredCall::UserDefined {
-                            function_index,
-                            arguments,
-                        });
-                }
-                Instruction::Return => {
-                    if self.frames[frame_index].pending_return_values.is_none() {
-                        let mut return_values = Vec::with_capacity(function.return_types.len());
-                        for _ in 0..function.return_types.len() {
-                            return_values.push(self.pop_value()?);
+                    Instruction::JumpIfFalse(target) => {
+                        if !self.pop_bool()? {
+                            self.frames[frame_index].pc = target;
+                            advance_pc = false;
                         }
-                        return_values.reverse();
-                        self.frames[frame_index].pending_return_values = Some(return_values);
                     }
+                    Instruction::Pop => {
+                        self.pop_value()?;
+                    }
+                    Instruction::CallBuiltin(builtin, arity) => {
+                        self.call_builtin(builtin, arity)?
+                    }
+                    Instruction::CallBuiltinSpread(builtin, prefix_arity) => {
+                        self.call_builtin_spread(builtin, prefix_arity)?
+                    }
+                    Instruction::Panic => {
+                        let value = self.pop_value()?;
+                        return Err(RuntimeError::panic_value(value));
+                    }
+                    Instruction::PanicNil => return Err(RuntimeError::panic_nil()),
+                    Instruction::CallPackage(function, arity) => {
+                        self.call_package_function(function, arity)?
+                    }
+                    Instruction::CallFunction(function_index, arity) => {
+                        let arguments = self.pop_arguments(arity)?;
+                        self.call_user_function(
+                            program,
+                            frame_index,
+                            function_index,
+                            arguments,
+                            ReturnMode::Normal,
+                            true,
+                        )?;
+                        advance_pc = false;
+                    }
+                    Instruction::CallFunctionSpread(function_index, prefix_arity) => {
+                        let spread = self.pop_value()?;
+                        let mut arguments = self.pop_arguments(prefix_arity)?;
+                        let spread_arguments =
+                            self.expand_user_function_spread_arguments(spread)?;
+                        arguments.extend(spread_arguments);
+                        self.call_user_function(
+                            program,
+                            frame_index,
+                            function_index,
+                            arguments,
+                            ReturnMode::Normal,
+                            true,
+                        )?;
+                        advance_pc = false;
+                    }
+                    Instruction::DeferBuiltin(builtin, arity) => {
+                        let arguments = self.pop_arguments(arity)?;
+                        self.frames[frame_index]
+                            .deferred_calls
+                            .push(DeferredCall::Builtin { builtin, arguments });
+                    }
+                    Instruction::DeferPanic => {
+                        let value = self.pop_value()?;
+                        self.frames[frame_index]
+                            .deferred_calls
+                            .push(DeferredCall::PanicValue(value));
+                    }
+                    Instruction::DeferPanicNil => {
+                        self.frames[frame_index]
+                            .deferred_calls
+                            .push(DeferredCall::PanicNil);
+                    }
+                    Instruction::DeferPackage(function, arity) => {
+                        let arguments = self.pop_arguments(arity)?;
+                        self.frames[frame_index]
+                            .deferred_calls
+                            .push(DeferredCall::Package {
+                                function,
+                                arguments,
+                            });
+                    }
+                    Instruction::DeferFunction(function_index, arity) => {
+                        let arguments = self.pop_arguments(arity)?;
+                        self.frames[frame_index]
+                            .deferred_calls
+                            .push(DeferredCall::UserDefined {
+                                function_index,
+                                arguments,
+                            });
+                    }
+                    Instruction::DeferFunctionSpread(function_index, prefix_arity) => {
+                        let spread = self.pop_value()?;
+                        let mut arguments = self.pop_arguments(prefix_arity)?;
+                        let spread_arguments =
+                            self.expand_user_function_spread_arguments(spread)?;
+                        arguments.extend(spread_arguments);
+                        self.frames[frame_index]
+                            .deferred_calls
+                            .push(DeferredCall::UserDefined {
+                                function_index,
+                                arguments,
+                            });
+                    }
+                    Instruction::Return => {
+                        if self.frames[frame_index].pending_return_values.is_none() {
+                            let mut return_values = Vec::with_capacity(function.return_types.len());
+                            for _ in 0..function.return_types.len() {
+                                return_values.push(self.pop_value()?);
+                            }
+                            return_values.reverse();
+                            self.frames[frame_index].pending_return_values = Some(return_values);
+                        }
 
-                    let deferred_call = self.frames[frame_index].deferred_calls.pop();
+                        let deferred_call = self.frames[frame_index].deferred_calls.pop();
 
-                    if let Some(deferred_call) = deferred_call {
-                        self.execute_deferred_call(program, frame_index, deferred_call)?;
-                    } else {
-                        let frame = self
-                            .frames
-                            .pop()
-                            .ok_or_else(|| RuntimeError::new("return with no active call frame"))?;
-                        let return_values = frame
-                            .pending_return_values
-                            .ok_or_else(|| RuntimeError::new("return frame missing values"))?;
-                        if matches!(frame.return_mode, ReturnMode::Normal) {
-                            for value in return_values {
-                                self.stack.push(value);
+                        if let Some(deferred_call) = deferred_call {
+                            self.execute_deferred_call(program, frame_index, deferred_call)?;
+                        } else {
+                            let frame = self.frames.pop().ok_or_else(|| {
+                                RuntimeError::new("return with no active call frame")
+                            })?;
+                            let return_values = frame
+                                .pending_return_values
+                                .ok_or_else(|| RuntimeError::new("return frame missing values"))?;
+                            if matches!(frame.return_mode, ReturnMode::Normal) {
+                                for value in return_values {
+                                    self.stack.push(value);
+                                }
+                            }
+                            if self.frames.is_empty() {
+                                completed_execution = Some(ExecutionResult {
+                                    output: self.output.clone(),
+                                });
                             }
                         }
-                        if self.frames.is_empty() {
-                            return Ok(ExecutionResult {
-                                output: self.output.clone(),
-                            });
-                        }
+                        advance_pc = false;
                     }
-                    advance_pc = false;
+                }
+                Ok(())
+            })();
+
+            match step_result {
+                Ok(()) => {
+                    if let Some(result) = completed_execution {
+                        return Ok(result);
+                    }
+                    if advance_pc {
+                        self.frames[frame_index].pc += 1;
+                    }
+                }
+                Err(error) => {
+                    if let Some(payload) = error.clone().into_panic_payload() {
+                        self.begin_panic(payload);
+                        continue;
+                    }
+                    return Err(self.decorate_runtime_error(error));
                 }
             }
+        }
 
-            if advance_pc {
-                self.frames[frame_index].pc += 1;
-            }
+        if let Some(error) = self.finish_pending_panic() {
+            return Err(self.decorate_runtime_error(error));
         }
 
         Ok(ExecutionResult {
@@ -462,38 +573,6 @@ impl VirtualMachine {
         }
     }
 
-    fn execute_deferred_call(
-        &mut self,
-        program: &Program,
-        frame_index: usize,
-        deferred_call: DeferredCall,
-    ) -> Result<(), RuntimeError> {
-        match deferred_call {
-            DeferredCall::Builtin { builtin, arguments } => {
-                let _ = self.execute_builtin_call(builtin, arguments)?;
-                Ok(())
-            }
-            DeferredCall::Package {
-                function,
-                arguments,
-            } => {
-                let _ = self.execute_package_function(function, arguments)?;
-                Ok(())
-            }
-            DeferredCall::UserDefined {
-                function_index,
-                arguments,
-            } => self.call_user_function(
-                program,
-                frame_index,
-                function_index,
-                arguments,
-                ReturnMode::Discard,
-                false,
-            ),
-        }
-    }
-
     fn index_value(&mut self, target_kind: SequenceKind) -> Result<(), RuntimeError> {
         let index = self.pop_integer()?;
         if index < 0 {
@@ -602,7 +681,7 @@ impl VirtualMachine {
             _ => return Err(RuntimeError::new("index assignment target is not a map")),
         };
         map.insert(key, value)
-            .map_err(|_| RuntimeError::new("assignment to entry in nil map"))?;
+            .map_err(|_| RuntimeError::user_panic_message("assignment to entry in nil map"))?;
         Ok(())
     }
 
@@ -615,7 +694,7 @@ impl VirtualMachine {
         };
         channel.send(value).map_err(|error| match error {
             ChannelSendError::Nil => RuntimeError::new("send on nil channel would block"),
-            ChannelSendError::Closed => RuntimeError::new("send on closed channel"),
+            ChannelSendError::Closed => RuntimeError::user_panic_message("send on closed channel"),
             ChannelSendError::WouldBlock => {
                 RuntimeError::new("send would block in the current single-threaded VM")
             }
@@ -880,51 +959,6 @@ impl VirtualMachine {
             .pop()
             .ok_or_else(|| RuntimeError::new("stack underflow"))
     }
-}
-
-#[derive(Debug)]
-struct CallFrame {
-    function_index: usize,
-    pc: usize,
-    locals: Vec<Value>,
-    deferred_calls: Vec<DeferredCall>,
-    pending_return_values: Option<Vec<Value>>,
-    return_mode: ReturnMode,
-}
-
-impl CallFrame {
-    fn new(function_index: usize, local_count: usize, return_mode: ReturnMode) -> Self {
-        Self {
-            function_index,
-            pc: 0,
-            locals: vec![Value::default(); local_count],
-            deferred_calls: Vec::new(),
-            pending_return_values: None,
-            return_mode,
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-enum DeferredCall {
-    Builtin {
-        builtin: crate::builtin::BuiltinFunction,
-        arguments: Vec<Value>,
-    },
-    Package {
-        function: crate::package::PackageFunction,
-        arguments: Vec<Value>,
-    },
-    UserDefined {
-        function_index: usize,
-        arguments: Vec<Value>,
-    },
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ReturnMode {
-    Normal,
-    Discard,
 }
 
 #[cfg(test)]
