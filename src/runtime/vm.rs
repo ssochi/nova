@@ -2,7 +2,7 @@ use std::convert::TryFrom;
 use std::fmt;
 
 use self::support::{
-    expect_exact_builtin_arguments, expect_exact_package_arguments,
+    execute_bytes_package_function, expect_exact_builtin_arguments, expect_exact_package_arguments,
     expect_integer_package_argument, expect_string_package_argument,
     expect_string_slice_package_argument, normalize_slice_bound, render_builtin_arguments,
     render_package_arguments, slice_bounds_error_message, zero_value_for_type,
@@ -519,6 +519,14 @@ impl VirtualMachine {
                     ))
                 })?;
                 self.stack.push(Value::String(value.repeat(repeat_count)));
+            }
+            PackageFunction::BytesEqual
+            | PackageFunction::BytesContains
+            | PackageFunction::BytesHasPrefix
+            | PackageFunction::BytesJoin
+            | PackageFunction::BytesRepeat => {
+                self.stack
+                    .push(execute_bytes_package_function(function, arguments)?);
             }
         }
 

@@ -2,6 +2,7 @@
 pub enum ImportedPackage {
     Fmt,
     Strings,
+    Bytes,
 }
 
 impl ImportedPackage {
@@ -9,13 +10,15 @@ impl ImportedPackage {
         match self {
             ImportedPackage::Fmt => "fmt",
             ImportedPackage::Strings => "strings",
+            ImportedPackage::Bytes => "bytes",
         }
     }
 
-    pub fn binding_name(self) -> &'static str {
+    pub fn default_binding_name(self) -> &'static str {
         match self {
             ImportedPackage::Fmt => "fmt",
             ImportedPackage::Strings => "strings",
+            ImportedPackage::Bytes => "bytes",
         }
     }
 }
@@ -29,6 +32,11 @@ pub enum PackageFunction {
     StringsHasPrefix,
     StringsJoin,
     StringsRepeat,
+    BytesEqual,
+    BytesContains,
+    BytesHasPrefix,
+    BytesJoin,
+    BytesRepeat,
 }
 
 impl PackageFunction {
@@ -41,6 +49,11 @@ impl PackageFunction {
             PackageFunction::StringsHasPrefix => "strings.HasPrefix",
             PackageFunction::StringsJoin => "strings.Join",
             PackageFunction::StringsRepeat => "strings.Repeat",
+            PackageFunction::BytesEqual => "bytes.Equal",
+            PackageFunction::BytesContains => "bytes.Contains",
+            PackageFunction::BytesHasPrefix => "bytes.HasPrefix",
+            PackageFunction::BytesJoin => "bytes.Join",
+            PackageFunction::BytesRepeat => "bytes.Repeat",
         }
     }
 }

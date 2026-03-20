@@ -74,6 +74,8 @@ Describe the current runtime value categories and builtin execution model introd
 - Current imported package support:
   - `import "fmt"`
   - `import "strings"`
+  - `import "bytes"`
+  - grouped imports and explicit identifier aliases such as `import ("fmt"; b "bytes")`
 - Current package-backed function set:
   - `fmt.Print(...value) -> void`
   - `fmt.Println(...value) -> void`
@@ -82,7 +84,13 @@ Describe the current runtime value categories and builtin execution model introd
   - `strings.HasPrefix(string, string) -> bool`
   - `strings.Join([]string, string) -> string`
   - `strings.Repeat(string, int) -> string`
+  - `bytes.Equal([]byte, []byte) -> bool`
+  - `bytes.Contains([]byte, []byte) -> bool`
+  - `bytes.HasPrefix([]byte, []byte) -> bool`
+  - `bytes.Join([][]byte, []byte) -> []byte`
+  - `bytes.Repeat([]byte, int) -> []byte`
 - Selector calls require the package binding to be imported before semantic analysis will lower them
+- Alias imports resolve through the declared binding name, while grouped imports remain explicit in `dump-ast`
 - Unsupported import paths and unsupported package members fail during semantic analysis
 - Fixed-arity typed package functions can now coerce explicit `nil` into slice/map zero values when the signature provides enough type context, such as `strings.Join(nil, ":")`
 
@@ -126,6 +134,9 @@ Describe the current runtime value categories and builtin execution model introd
 - `strings` package functions now operate on the byte-oriented runtime string representation instead of converting through Rust-only string semantics
 - `strings.Join` currently requires a runtime `[]string` value and returns a joined string
 - `strings.Repeat` maps negative-count or repeated-size overflow failures into runtime errors because the VM does not model Go panic yet
+- `bytes.Equal`, `bytes.Contains`, and `bytes.HasPrefix` operate on the byte-slice view of runtime `[]byte` values
+- `bytes.Join` currently requires a runtime `[][]byte` value plus a `[]byte` separator and returns a fresh non-nil `[]byte`
+- `bytes.Repeat` maps negative-count or repeated-size overflow failures into runtime errors because the VM does not model Go panic yet
 
 ## Extension Hooks
 

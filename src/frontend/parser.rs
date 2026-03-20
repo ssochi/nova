@@ -1,8 +1,8 @@
 use std::fmt;
 
 use crate::frontend::ast::{
-    AssignmentTarget, BinaryOperator, Block, Expression, FunctionDecl, ImportDecl, MapLiteralEntry,
-    Parameter, SourceFileAst, TypeRef,
+    AssignmentTarget, BinaryOperator, Block, Expression, FunctionDecl, ImportDecl, ImportSpec,
+    MapLiteralEntry, Parameter, SourceFileAst, TypeRef,
 };
 use crate::frontend::token::{Token, TokenKind};
 
@@ -68,8 +68,39 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_import_decl(&mut self) -> Result<ImportDecl, ParseError> {
+        if self.match_kind(&TokenKind::LeftParen) {
+            self.skip_semicolons();
+            let mut specs = Vec::new();
+            while !self.check(&TokenKind::RightParen) {
+                if self.is_at_end() {
+                    return Err(self.error_at_current("unexpected end of file inside import group"));
+                }
+                specs.push(self.parse_import_spec()?);
+                self.skip_semicolons();
+            }
+            self.expect(TokenKind::RightParen)?;
+            return Ok(ImportDecl::Group(specs));
+        }
+
+        Ok(ImportDecl::Single(self.parse_import_spec()?))
+    }
+
+    fn parse_import_spec(&mut self) -> Result<ImportSpec, ParseError> {
+        if self.check(&TokenKind::Dot) {
+            return Err(self.error_at_current("dot imports are not supported"));
+        }
+
+        let binding = match &self.current_token().kind {
+            TokenKind::Identifier(name) if name == "_" => {
+                return Err(self.error_at_current("blank imports are not supported"));
+            }
+            TokenKind::Identifier(_) if matches!(self.peek_kind(), Some(TokenKind::String(_))) => {
+                Some(self.expect_identifier()?)
+            }
+            _ => None,
+        };
         let path = self.expect_string()?;
-        Ok(ImportDecl { path })
+        Ok(ImportSpec { binding, path })
     }
 
     fn parse_function_decl(&mut self) -> Result<FunctionDecl, ParseError> {

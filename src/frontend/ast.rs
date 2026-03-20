@@ -19,13 +19,39 @@ impl SourceFileAst {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ImportDecl {
-    pub path: String,
+pub enum ImportDecl {
+    Single(ImportSpec),
+    Group(Vec<ImportSpec>),
 }
 
 impl ImportDecl {
     fn render(&self) -> String {
-        format!("import {}", render_string_literal(&self.path))
+        match self {
+            ImportDecl::Single(spec) => format!("import {}", spec.render()),
+            ImportDecl::Group(specs) => {
+                let mut lines = vec!["import (".to_string()];
+                for spec in specs {
+                    lines.push(format!("    {}", spec.render()));
+                }
+                lines.push(")".to_string());
+                lines.join("\n")
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ImportSpec {
+    pub binding: Option<String>,
+    pub path: String,
+}
+
+impl ImportSpec {
+    fn render(&self) -> String {
+        match &self.binding {
+            Some(binding) => format!("{binding} {}", render_string_literal(&self.path)),
+            None => render_string_literal(&self.path),
+        }
     }
 }
 

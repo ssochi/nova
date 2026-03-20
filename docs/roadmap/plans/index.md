@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-07-46-15-import-aliases-and-bytes-package`
+- Opened `2026-03-20-07-46-15-import-aliases-and-bytes-package` for grouped imports, explicit import aliases, and the staged `bytes` package seam under `M3`
 - Completed and archived `2026-03-20-07-17-39-channel-runtime-first-slice`
 - Opened `2026-03-20-07-17-39-channel-runtime-first-slice` for the first staged `chan` runtime slice under `M3`
 - Completed and archived `2026-03-20-06-56-53-compound-assignments`

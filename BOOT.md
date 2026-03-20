@@ -61,6 +61,7 @@ Operational clarifications:
 26. When extending `chan`, keep send statements and receive expressions explicit in the AST / checked / bytecode pipeline instead of disguising them as fake builtins, and model nil-vs-allocated state explicitly from the first slice.
 27. Until goroutines or a scheduler exist, model would-block channel operations as explicit runtime errors and document that limit instead of implying concurrency the VM does not execute.
 28. Do not add channel `range` or comma-ok receive until the broader blocking and multi-result design has been planned deliberately.
+29. When extending imports, keep grouped import declarations and explicit alias bindings visible in the AST and import registry; do not erase binding names during parsing just because runtime lookup is metadata-backed.
 
 If no task is explicitly specified, you must proactively choose the most worthwhile piece of work to advance, with the following priorities:
 1. **Obvious gaps in functionality, core experience, or core flow** (search the web more, do research, refer to relevant experience from similar high-quality projects, and established methodologies)

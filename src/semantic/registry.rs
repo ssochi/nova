@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::frontend::ast::{FunctionDecl, SourceFileAst};
+use crate::frontend::ast::{FunctionDecl, ImportDecl, ImportSpec, SourceFileAst};
 use crate::package::ImportedPackage;
 use crate::semantic::analyzer::SemanticError;
 use crate::semantic::builtins::resolve_builtin;
@@ -105,14 +105,19 @@ impl ImportRegistry {
     pub(super) fn from_ast(ast: &SourceFileAst) -> Result<Self, SemanticError> {
         let mut bindings = HashMap::new();
         for import in &ast.imports {
-            let package = resolve_import_path(&import.path).ok_or_else(|| {
-                SemanticError::new(format!("unsupported import path `{}`", import.path))
-            })?;
-            let binding = package.binding_name().to_string();
-            if bindings.insert(binding.clone(), package).is_some() {
-                return Err(SemanticError::new(format!(
-                    "import binding `{binding}` is already defined"
-                )));
+            for spec in import_specs(import) {
+                let package = resolve_import_path(&spec.path).ok_or_else(|| {
+                    SemanticError::new(format!("unsupported import path `{}`", spec.path))
+                })?;
+                let binding = spec
+                    .binding
+                    .clone()
+                    .unwrap_or_else(|| package.default_binding_name().to_string());
+                if bindings.insert(binding.clone(), package).is_some() {
+                    return Err(SemanticError::new(format!(
+                        "import binding `{binding}` is already defined"
+                    )));
+                }
             }
         }
 
@@ -121,6 +126,13 @@ impl ImportRegistry {
 
     pub(super) fn lookup(&self, name: &str) -> Option<ImportedPackage> {
         self.bindings.get(name).copied()
+    }
+}
+
+fn import_specs(import: &ImportDecl) -> &[ImportSpec] {
+    match import {
+        ImportDecl::Single(spec) => std::slice::from_ref(spec),
+        ImportDecl::Group(specs) => specs.as_slice(),
     }
 }
 

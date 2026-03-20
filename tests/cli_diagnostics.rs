@@ -174,6 +174,32 @@ fn check_rejects_unsupported_import_member() {
 }
 
 #[test]
+fn check_rejects_dot_imports() {
+    let path = write_temp_source(
+        "check-dot-import",
+        "package main\n\nimport . \"fmt\"\n\nfunc main() {\n\tPrintln(1)\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("dot imports are not supported"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_blank_imports() {
+    let path = write_temp_source(
+        "check-blank-import",
+        "package main\n\nimport _ \"fmt\"\n\nfunc main() {}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("blank imports are not supported"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
 fn run_rejects_missing_return_on_value_function() {
     let path = write_temp_source(
         "check-missing-return",
@@ -273,6 +299,34 @@ fn check_rejects_unsupported_strings_member() {
     let path = write_temp_source(
         "check-bad-strings-member",
         "package main\n\nimport \"strings\"\n\nfunc main() {\n\tprintln(strings.ToUpper(\"nova\"))\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("does not export supported member `ToUpper`"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_bad_bytes_join_argument_type() {
+    let path = write_temp_source(
+        "check-bad-bytes-join",
+        "package main\n\nimport b \"bytes\"\n\nfunc main() {\n\tprintln(b.Join([]byte(\"oops\"), []byte(\",\")))\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(
+        error.contains("argument 1 in call to `bytes.Join` requires `[][]byte`, found `[]byte`")
+    );
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_unsupported_bytes_member() {
+    let path = write_temp_source(
+        "check-bad-bytes-member",
+        "package main\n\nimport b \"bytes\"\n\nfunc main() {\n\tprintln(b.ToUpper([]byte(\"nova\")))\n}\n",
     );
 
     let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");

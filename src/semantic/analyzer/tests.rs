@@ -539,6 +539,21 @@ fn analyze_explicit_nil_for_slices_maps_and_typed_calls() {
 }
 
 #[test]
+fn analyze_grouped_import_aliases_and_bytes_package_calls() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nimport (\n\tb \"bytes\"\n\t\"fmt\"\n)\n\nfunc main() {\n\tvar joined = b.Join([][]byte{[]byte(\"go\"), []byte(\"vm\")}, []byte(\"-\"))\n\tfmt.Println(string(joined), b.Equal(nil, []byte{}), b.Contains(joined, []byte(\"vm\")), b.HasPrefix(joined, []byte(\"go\")))\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let program = analyze_package(&ast).expect("analysis should succeed");
+
+    assert_eq!(program.functions.len(), 1);
+}
+
+#[test]
 fn reject_untyped_nil_without_context() {
     let source = SourceFile {
         path: "test.go".into(),

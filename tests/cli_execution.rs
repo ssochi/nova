@@ -58,6 +58,12 @@ fn run_executes_strings_package_calls() {
 }
 
 #[test]
+fn run_executes_grouped_import_aliases_and_bytes_package_calls() {
+    let output = run_cli(&["run", "examples/imports_bytes.go"]).expect("program should run");
+    assert_eq!(output, "nova-gogo\ntrue\ntrue\ntrue\n");
+}
+
+#[test]
 fn run_executes_slice_windows_and_index_assignment() {
     let output = run_cli(&["run", "examples/slice_windows.go"]).expect("program should run");
     assert_eq!(output, "3 9 7\n1 9 3 7\n");
@@ -231,6 +237,17 @@ fn dump_tokens_show_imports_and_selector_calls() {
 }
 
 #[test]
+fn dump_tokens_show_grouped_import_alias_tokens() {
+    let output =
+        run_cli(&["dump-tokens", "examples/imports_bytes.go"]).expect("tokens should be rendered");
+
+    assert!(output.contains("import"));
+    assert!(output.contains("identifier(b)"));
+    assert!(output.contains("string(\"bytes\")"));
+    assert!(output.contains("string(\"fmt\")"));
+}
+
+#[test]
 fn dump_tokens_show_slice_syntax() {
     let output =
         run_cli(&["dump-tokens", "examples/slices.go"]).expect("tokens should be rendered");
@@ -383,6 +400,18 @@ fn dump_ast_renders_strings_package_calls() {
     assert!(output.contains("import \"strings\""));
     assert!(output.contains("return strings.Join(parts, \"-\")"));
     assert!(output.contains("strings.HasPrefix(joined, \"nova\")"));
+}
+
+#[test]
+fn dump_ast_renders_grouped_import_aliases_and_bytes_calls() {
+    let output =
+        run_cli(&["dump-ast", "examples/imports_bytes.go"]).expect("ast should be rendered");
+
+    assert!(output.contains("import ("));
+    assert!(output.contains("    b \"bytes\""));
+    assert!(output.contains("    \"fmt\""));
+    assert!(output.contains("var joined = b.Join(parts, []byte(\"-\"))"));
+    assert!(output.contains("fmt.Println(string(joined))"));
 }
 
 #[test]
@@ -604,6 +633,18 @@ fn dump_bytecode_shows_strings_package_calls() {
     assert!(output.contains("call-package strings.Join 2"));
     assert!(output.contains("call-package strings.Contains 2"));
     assert!(output.contains("call-package strings.HasPrefix 2"));
+}
+
+#[test]
+fn dump_bytecode_shows_bytes_package_calls() {
+    let output = run_cli(&["dump-bytecode", "examples/imports_bytes.go"])
+        .expect("bytecode should be generated");
+
+    assert!(output.contains("call-package bytes.Repeat 2"));
+    assert!(output.contains("call-package bytes.Join 2"));
+    assert!(output.contains("call-package bytes.Equal 2"));
+    assert!(output.contains("call-package bytes.Contains 2"));
+    assert!(output.contains("call-package bytes.HasPrefix 2"));
 }
 
 #[test]

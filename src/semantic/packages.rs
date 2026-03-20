@@ -49,10 +49,39 @@ const STRINGS_FUNCTIONS: [PackageFunctionContract; 4] = [
     },
 ];
 
+const BYTES_FUNCTIONS: [PackageFunctionContract; 5] = [
+    PackageFunctionContract {
+        function: PackageFunction::BytesEqual,
+        member_name: "Equal",
+        validator: validate_bytes_equal,
+    },
+    PackageFunctionContract {
+        function: PackageFunction::BytesContains,
+        member_name: "Contains",
+        validator: validate_bytes_contains,
+    },
+    PackageFunctionContract {
+        function: PackageFunction::BytesHasPrefix,
+        member_name: "HasPrefix",
+        validator: validate_bytes_has_prefix,
+    },
+    PackageFunctionContract {
+        function: PackageFunction::BytesJoin,
+        member_name: "Join",
+        validator: validate_bytes_join,
+    },
+    PackageFunctionContract {
+        function: PackageFunction::BytesRepeat,
+        member_name: "Repeat",
+        validator: validate_bytes_repeat,
+    },
+];
+
 pub fn resolve_import_path(path: &str) -> Option<ImportedPackage> {
     match path {
         "fmt" => Some(ImportedPackage::Fmt),
         "strings" => Some(ImportedPackage::Strings),
+        "bytes" => Some(ImportedPackage::Bytes),
         _ => None,
     }
 }
@@ -87,6 +116,11 @@ pub fn expected_argument_types(function: PackageFunction) -> Option<Vec<Type>> {
             Some(vec![Type::Slice(Box::new(Type::String)), Type::String])
         }
         PackageFunction::StringsRepeat => Some(vec![Type::String, Type::Int]),
+        PackageFunction::BytesEqual
+        | PackageFunction::BytesContains
+        | PackageFunction::BytesHasPrefix => Some(vec![byte_slice_type(), byte_slice_type()]),
+        PackageFunction::BytesJoin => Some(vec![byte_slice_slice_type(), byte_slice_type()]),
+        PackageFunction::BytesRepeat => Some(vec![byte_slice_type(), Type::Int]),
     }
 }
 
@@ -94,6 +128,7 @@ fn package_functions(package: ImportedPackage) -> &'static [PackageFunctionContr
     match package {
         ImportedPackage::Fmt => &FMT_FUNCTIONS,
         ImportedPackage::Strings => &STRINGS_FUNCTIONS,
+        ImportedPackage::Bytes => &BYTES_FUNCTIONS,
     }
 }
 
@@ -101,6 +136,7 @@ fn package_function_contract(function: PackageFunction) -> &'static PackageFunct
     FMT_FUNCTIONS
         .iter()
         .chain(STRINGS_FUNCTIONS.iter())
+        .chain(BYTES_FUNCTIONS.iter())
         .find(|contract| contract.function == function)
         .expect("all package functions must have contracts")
 }
@@ -192,6 +228,100 @@ fn validate_strings_repeat(argument_types: &[Type]) -> Result<Type, String> {
     Ok(Type::String)
 }
 
+fn validate_bytes_equal(argument_types: &[Type]) -> Result<Type, String> {
+    validate_exact_package_arity(PackageFunction::BytesEqual, 2, argument_types.len())?;
+    let byte_slice = byte_slice_type();
+    expect_package_argument_type(
+        PackageFunction::BytesEqual,
+        1,
+        &byte_slice,
+        &argument_types[0],
+    )?;
+    expect_package_argument_type(
+        PackageFunction::BytesEqual,
+        2,
+        &byte_slice,
+        &argument_types[1],
+    )?;
+    Ok(Type::Bool)
+}
+
+fn validate_bytes_contains(argument_types: &[Type]) -> Result<Type, String> {
+    validate_exact_package_arity(PackageFunction::BytesContains, 2, argument_types.len())?;
+    let byte_slice = byte_slice_type();
+    expect_package_argument_type(
+        PackageFunction::BytesContains,
+        1,
+        &byte_slice,
+        &argument_types[0],
+    )?;
+    expect_package_argument_type(
+        PackageFunction::BytesContains,
+        2,
+        &byte_slice,
+        &argument_types[1],
+    )?;
+    Ok(Type::Bool)
+}
+
+fn validate_bytes_has_prefix(argument_types: &[Type]) -> Result<Type, String> {
+    validate_exact_package_arity(PackageFunction::BytesHasPrefix, 2, argument_types.len())?;
+    let byte_slice = byte_slice_type();
+    expect_package_argument_type(
+        PackageFunction::BytesHasPrefix,
+        1,
+        &byte_slice,
+        &argument_types[0],
+    )?;
+    expect_package_argument_type(
+        PackageFunction::BytesHasPrefix,
+        2,
+        &byte_slice,
+        &argument_types[1],
+    )?;
+    Ok(Type::Bool)
+}
+
+fn validate_bytes_join(argument_types: &[Type]) -> Result<Type, String> {
+    validate_exact_package_arity(PackageFunction::BytesJoin, 2, argument_types.len())?;
+    let slices = byte_slice_slice_type();
+    let separator = byte_slice_type();
+    expect_package_argument_type(PackageFunction::BytesJoin, 1, &slices, &argument_types[0])?;
+    expect_package_argument_type(
+        PackageFunction::BytesJoin,
+        2,
+        &separator,
+        &argument_types[1],
+    )?;
+    Ok(byte_slice_type())
+}
+
+fn validate_bytes_repeat(argument_types: &[Type]) -> Result<Type, String> {
+    validate_exact_package_arity(PackageFunction::BytesRepeat, 2, argument_types.len())?;
+    let byte_slice = byte_slice_type();
+    expect_package_argument_type(
+        PackageFunction::BytesRepeat,
+        1,
+        &byte_slice,
+        &argument_types[0],
+    )?;
+    expect_package_argument_type(
+        PackageFunction::BytesRepeat,
+        2,
+        &Type::Int,
+        &argument_types[1],
+    )?;
+    Ok(byte_slice)
+}
+
+fn byte_slice_type() -> Type {
+    Type::Slice(Box::new(Type::Byte))
+}
+
+fn byte_slice_slice_type() -> Type {
+    Type::Slice(Box::new(byte_slice_type()))
+}
+
 fn validate_exact_package_arity(
     function: PackageFunction,
     expected: usize,
@@ -250,6 +380,32 @@ mod tests {
         let error =
             validate_package_call(PackageFunction::StringsRepeat, &[Type::String, Type::Bool])
                 .expect_err("strings.Repeat should reject non-int counts");
+
+        assert!(error.contains("argument 2"));
+        assert!(error.contains("requires `int`"));
+    }
+
+    #[test]
+    fn bytes_join_accepts_nested_byte_slices() {
+        let result = validate_package_call(
+            PackageFunction::BytesJoin,
+            &[
+                Type::Slice(Box::new(Type::Slice(Box::new(Type::Byte)))),
+                Type::Slice(Box::new(Type::Byte)),
+            ],
+        )
+        .expect("bytes.Join should accept [][]byte and []byte");
+
+        assert_eq!(result, Type::Slice(Box::new(Type::Byte)));
+    }
+
+    #[test]
+    fn bytes_repeat_rejects_non_integer_count() {
+        let error = validate_package_call(
+            PackageFunction::BytesRepeat,
+            &[Type::Slice(Box::new(Type::Byte)), Type::Bool],
+        )
+        .expect_err("bytes.Repeat should reject non-int counts");
 
         assert!(error.contains("argument 2"));
         assert!(error.contains("requires `int`"));

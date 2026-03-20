@@ -1,7 +1,7 @@
 use super::parse_source_file;
 use crate::frontend::ast::{
     AssignmentTarget, Binding, BindingMode, ElseBranch, Expression, ForPostStatement,
-    HeaderStatement, Statement, SwitchClause, TypeRef,
+    HeaderStatement, ImportDecl, Statement, SwitchClause, TypeRef,
 };
 use crate::frontend::lexer::lex;
 use crate::source::SourceFile;
@@ -38,6 +38,34 @@ fn parse_slice_literal_and_index_expression() {
         }
         _ => panic!("expected call expression"),
     }
+}
+
+#[test]
+fn parse_grouped_imports_and_aliases() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nimport (\n\tb \"bytes\"\n\t\"fmt\"\n)\n\nfunc main() {}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+
+    match &ast.imports[0] {
+        ImportDecl::Group(specs) => {
+            assert_eq!(specs.len(), 2);
+            assert_eq!(specs[0].binding.as_deref(), Some("b"));
+            assert_eq!(specs[0].path, "bytes");
+            assert_eq!(specs[1].binding, None);
+            assert_eq!(specs[1].path, "fmt");
+        }
+        _ => panic!("expected grouped import"),
+    }
+
+    let rendered = ast.render();
+    assert!(rendered.contains("import ("));
+    assert!(rendered.contains("    b \"bytes\""));
+    assert!(rendered.contains("    \"fmt\""));
 }
 
 #[test]

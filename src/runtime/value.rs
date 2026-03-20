@@ -294,6 +294,10 @@ impl SliceValue {
         Self::new(value.as_bytes().iter().copied().map(Value::Byte).collect())
     }
 
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        Self::new(bytes.iter().copied().map(Value::Byte).collect())
+    }
+
     pub fn append(&self, rest: &[Value]) -> Self {
         if rest.is_empty() {
             return self.clone();

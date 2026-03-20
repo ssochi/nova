@@ -34,6 +34,7 @@ This directory stores experience validation reports close to the real user path.
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `2026-03-20-import-aliases-and-bytes-package-playtest.md`: records the CLI walkthrough for grouped imports, explicit import aliases, and the staged `bytes` package seam
 - `2026-03-20-loop-control-flow-playtest.md`: records the CLI walkthrough for classic `for` clauses plus unlabeled `break` / `continue`
 - `2026-03-20-switch-statements-playtest.md`: records the CLI walkthrough for staged expression `switch`, tagless `switch`, shared header scope, and duplicate-clause diagnostics
 - `2026-03-20-if-statement-headers-playtest.md`: records the CLI walkthrough for staged `if` statement initializers, shared header scoping, and `else if` chains

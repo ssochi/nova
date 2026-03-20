@@ -33,6 +33,7 @@ This directory stores research notes that inform roadmap choices and implementat
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `2026-03-20-import-aliases-and-bytes-package.md`: official behavior baseline for grouped imports, explicit import aliases, and the staged `bytes` package seam
 - `2026-03-20-loop-control-flow.md`: official behavior baseline for staged classic `for` clauses, omitted conditions, and unlabeled `break` / `continue`
 - `2026-03-20-switch-statements.md`: official behavior baseline for staged expression `switch` statements, tagless `switch`, shared header scope, and duplicate-clause diagnostics
 - `2026-03-20-if-statement-headers.md`: official behavior baseline for `if` statement initializers, scope visibility, and `else if` chains

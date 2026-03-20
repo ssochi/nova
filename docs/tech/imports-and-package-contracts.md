@@ -6,10 +6,15 @@ Describe the narrow import and package-function contract model introduced during
 
 ## Frontend Boundary
 
-- `SourceFileAst` now keeps top-level `import "path"` declarations before function declarations.
+- `SourceFileAst` now keeps top-level import declarations before function declarations.
+- Import declarations stay explicit in the AST:
+  - single imports such as `import "fmt"`
+  - alias imports such as `import b "bytes"`
+  - grouped imports such as `import ("fmt"; b "bytes")`
 - Expressions now support selector-call syntax such as `fmt.Println(message)`.
 - The parser remains intentionally narrow:
-  - imports are single-line declarations only
+  - imports support grouped declarations and explicit identifier aliases
+  - dot imports and blank imports are rejected explicitly
   - selector expressions are only useful as call targets
   - package paths are string literals, not filesystem lookups
 
@@ -19,6 +24,7 @@ Describe the narrow import and package-function contract model introduced during
 - Current imported package set:
   - `fmt`
   - `strings`
+  - `bytes`
 - Shared package-function identity also lives in `src/package.rs`
 - Current package-function set:
   - `fmt.Print(...value) -> void`
@@ -28,12 +34,18 @@ Describe the narrow import and package-function contract model introduced during
   - `strings.HasPrefix(string, string) -> bool`
   - `strings.Join([]string, string) -> string`
   - `strings.Repeat(string, int) -> string`
+  - `bytes.Equal([]byte, []byte) -> bool`
+  - `bytes.Contains([]byte, []byte) -> bool`
+  - `bytes.HasPrefix([]byte, []byte) -> bool`
+  - `bytes.Join([][]byte, []byte) -> []byte`
+  - `bytes.Repeat([]byte, int) -> []byte`
 
 ## Semantic Contract Model
 
 - Semantic import lookup and package-function contracts live in `src/semantic/packages.rs`
 - Import validation is metadata-backed:
   - unsupported import paths fail during semantic analysis
+  - selector calls resolve through the declared binding name, so alias imports reuse the existing package-call path
   - selector calls require the target package binding to be imported first
   - unsupported package members fail during semantic analysis before lowering
 - Builtin contracts and package contracts stay separate:
@@ -42,6 +54,7 @@ Describe the narrow import and package-function contract model introduced during
 - Package-function validation is now per-function instead of package-wide:
   - `fmt` keeps variadic any-value contracts
   - `strings` introduces typed fixed-arity contracts
+  - `bytes` introduces typed byte-slice and nested-byte-slice contracts
   - later packages should add new validators instead of hardcoding type rules in the analyzer
 
 ## Runtime Execution Notes
@@ -55,8 +68,14 @@ Describe the narrow import and package-function contract model introduced during
   - `strings.HasPrefix`: return whether one string begins with another
   - `strings.Join`: join `[]string` with a separator
   - `strings.Repeat`: repeat a string `count` times, with invalid counts surfaced as runtime errors
+  - `bytes.Equal`: compare byte-slice contents, treating nil and empty slices equivalently through the byte-slice view
+  - `bytes.Contains`: search a `[]byte` haystack for a `[]byte` subslice
+  - `bytes.HasPrefix`: test whether a `[]byte` value begins with a prefix
+  - `bytes.Join`: join `[][]byte` with a separator into a fresh `[]byte`
+  - `bytes.Repeat`: repeat a `[]byte` value `count` times, with invalid counts surfaced as runtime errors
 - The `fmt` behavior is intentionally approximate and does not yet implement Go formatting verbs
 - The `strings` seam is intentionally narrow and does not yet model the full Go panic surface
+- The `bytes` seam is intentionally narrow and does not yet model panic/recover-accurate failures
 
 ## Extension Hooks
 

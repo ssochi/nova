@@ -325,7 +325,7 @@ impl<'a> FunctionAnalyzer<'a> {
             resolve_package_function(imported_package, member).ok_or_else(|| {
                 SemanticError::new(format!(
                     "package `{}` does not export supported member `{member}`",
-                    imported_package.binding_name()
+                    package_name
                 ))
             })?;
         let checked_arguments = coerce_package_call_arguments(package_function, checked_arguments)?;

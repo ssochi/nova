@@ -112,6 +112,146 @@ pub(super) fn expect_string_slice_package_argument(
     Ok(strings)
 }
 
+pub(super) fn expect_byte_slice_package_argument(
+    function: PackageFunction,
+    position: usize,
+    value: Value,
+) -> Result<Vec<u8>, RuntimeError> {
+    let slice = match value {
+        Value::Slice(slice) => slice,
+        other => {
+            return Err(RuntimeError::new(format!(
+                "argument {} in call to `{}` expected `[]byte`, found `{}`",
+                position,
+                function.render(),
+                runtime_type_name(&other)
+            )));
+        }
+    };
+
+    slice.byte_elements().map_err(|_| {
+        RuntimeError::new(format!(
+            "argument {} in call to `{}` expected `[]byte`, found a non-byte slice",
+            position,
+            function.render()
+        ))
+    })
+}
+
+pub(super) fn expect_byte_slice_slice_package_argument(
+    function: PackageFunction,
+    position: usize,
+    value: Value,
+) -> Result<Vec<Vec<u8>>, RuntimeError> {
+    let elements = match value {
+        Value::Slice(slice) => slice.visible_elements(),
+        other => {
+            return Err(RuntimeError::new(format!(
+                "argument {} in call to `{}` expected `[][]byte`, found `{}`",
+                position,
+                function.render(),
+                runtime_type_name(&other)
+            )));
+        }
+    };
+
+    let mut slices = Vec::with_capacity(elements.len());
+    for element in elements {
+        match element {
+            Value::Slice(slice) => slices.push(slice.byte_elements().map_err(|_| {
+                RuntimeError::new(format!(
+                    "argument {} in call to `{}` expected `[][]byte`, found a slice with non-byte elements",
+                    position,
+                    function.render()
+                ))
+            })?),
+            other => {
+                return Err(RuntimeError::new(format!(
+                    "argument {} in call to `{}` expected `[][]byte`, found `[]{}`",
+                    position,
+                    function.render(),
+                    runtime_type_name(&other)
+                )));
+            }
+        }
+    }
+
+    Ok(slices)
+}
+
+pub(super) fn execute_bytes_package_function(
+    function: PackageFunction,
+    arguments: Vec<Value>,
+) -> Result<Value, RuntimeError> {
+    match function {
+        PackageFunction::BytesEqual => {
+            let [left, right] = expect_exact_package_arguments(function, arguments, 2)?;
+            let left = expect_byte_slice_package_argument(function, 1, left)?;
+            let right = expect_byte_slice_package_argument(function, 2, right)?;
+            Ok(Value::Boolean(left == right))
+        }
+        PackageFunction::BytesContains => {
+            let [haystack, needle] = expect_exact_package_arguments(function, arguments, 2)?;
+            let haystack = expect_byte_slice_package_argument(function, 1, haystack)?;
+            let needle = expect_byte_slice_package_argument(function, 2, needle)?;
+            let found = if needle.is_empty() {
+                true
+            } else {
+                haystack
+                    .windows(needle.len())
+                    .any(|window| window == needle.as_slice())
+            };
+            Ok(Value::Boolean(found))
+        }
+        PackageFunction::BytesHasPrefix => {
+            let [value, prefix] = expect_exact_package_arguments(function, arguments, 2)?;
+            let value = expect_byte_slice_package_argument(function, 1, value)?;
+            let prefix = expect_byte_slice_package_argument(function, 2, prefix)?;
+            Ok(Value::Boolean(value.starts_with(prefix.as_slice())))
+        }
+        PackageFunction::BytesJoin => {
+            let [elements, separator] = expect_exact_package_arguments(function, arguments, 2)?;
+            let elements = expect_byte_slice_slice_package_argument(function, 1, elements)?;
+            let separator = expect_byte_slice_package_argument(function, 2, separator)?;
+            Ok(Value::Slice(SliceValue::from_bytes(&join_byte_slices(
+                &elements, &separator,
+            ))))
+        }
+        PackageFunction::BytesRepeat => {
+            let [value, count] = expect_exact_package_arguments(function, arguments, 2)?;
+            let value = expect_byte_slice_package_argument(function, 1, value)?;
+            let count = expect_integer_package_argument(function, 2, count)?;
+            if count < 0 {
+                return Err(RuntimeError::new(format!(
+                    "package function `{}` requires a non-negative repeat count",
+                    function.render()
+                )));
+            }
+            let repeat_count = usize::try_from(count).map_err(|_| {
+                RuntimeError::new(format!(
+                    "package function `{}` could not convert repeat count",
+                    function.render()
+                ))
+            })?;
+            value.len().checked_mul(repeat_count).ok_or_else(|| {
+                RuntimeError::new(format!(
+                    "package function `{}` overflowed the repeated byte slice size",
+                    function.render()
+                ))
+            })?;
+            let mut repeated = Vec::with_capacity(value.len() * repeat_count);
+            for _ in 0..repeat_count {
+                repeated.extend_from_slice(&value);
+            }
+            Ok(Value::Slice(SliceValue::from_bytes(&repeated)))
+        }
+        _ => Err(RuntimeError::new(format!(
+            "package function `{}` is not a staged bytes function",
+            function.render()
+        ))),
+    }
+}
+
 pub(super) fn expect_exact_builtin_arguments<const N: usize>(
     arguments: Vec<Value>,
     expected: usize,
@@ -173,4 +313,21 @@ pub(super) fn normalize_slice_bound(
 
 pub(super) fn slice_bounds_error_message(low: usize, high: usize) -> String {
     format!("slice bounds [{low}:{high}] are out of range")
+}
+
+fn join_byte_slices(elements: &[Vec<u8>], separator: &[u8]) -> Vec<u8> {
+    if elements.is_empty() {
+        return Vec::new();
+    }
+
+    let total_separator_bytes = separator.len() * elements.len().saturating_sub(1);
+    let total_element_bytes = elements.iter().map(Vec::len).sum::<usize>();
+    let mut joined = Vec::with_capacity(total_element_bytes + total_separator_bytes);
+    for (index, element) in elements.iter().enumerate() {
+        if index > 0 {
+            joined.extend_from_slice(separator);
+        }
+        joined.extend_from_slice(element);
+    }
+    joined
 }
