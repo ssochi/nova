@@ -65,6 +65,7 @@ Operational clarifications:
 30. When extending multi-result behavior, keep it explicit as function-signature, checked-source, and bytecode metadata; do not introduce first-class tuple runtime values just to move several results through the VM.
 31. When extending multi-result call consumption, follow the real Go rule verified locally: a multi-result call may feed another call only when it is the entire argument list by itself; prefixed forms like `f(1, pair())` must remain invalid single-value contexts unless a new research note proves otherwise.
 32. When extending variadic functions or explicit `...`, keep the final spread argument explicit in the AST / checked / bytecode pipeline, and preserve the real Go rule that a spread call may include only the fixed non-variadic prefix before `slice...`; do not mix extra discrete variadic arguments ahead of the spread value.
+33. When extending package-backed `strings` / `bytes` helpers, do not add APIs whose empty-input semantics depend on UTF-8 sequence or rune behavior until that runtime model exists; keep helpers such as `Split` / `SplitN` explicitly deferred instead of approximating them with byte-only logic.
 
 If no task is explicitly specified, you must proactively choose the most worthwhile piece of work to advance, with the following priorities:
 1. **Obvious gaps in functionality, core experience, or core flow** (search the web more, do research, refer to relevant experience from similar high-quality projects, and established methodologies)

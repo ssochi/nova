@@ -64,6 +64,16 @@ fn run_executes_grouped_import_aliases_and_bytes_package_calls() {
 }
 
 #[test]
+fn run_executes_strings_and_bytes_search_trim_package_calls() {
+    let output =
+        run_cli(&["run", "examples/strings_bytes_search_trim.go"]).expect("program should run");
+    assert_eq!(
+        output,
+        "5\ntrue\ngo-go\nnova-go\ntrue 0\n5\ntrue\ngo\nnova\n"
+    );
+}
+
+#[test]
 fn run_executes_multi_result_functions_and_cut_package_calls() {
     let output = run_cli(&["run", "examples/multi_results.go"]).expect("program should run");
     assert_eq!(
@@ -294,6 +304,17 @@ fn dump_tokens_show_grouped_import_alias_tokens() {
 }
 
 #[test]
+fn dump_tokens_show_strings_and_bytes_search_trim_tokens() {
+    let output = run_cli(&["dump-tokens", "examples/strings_bytes_search_trim.go"])
+        .expect("tokens should be rendered");
+
+    assert!(output.contains("identifier(Index)"));
+    assert!(output.contains("identifier(TrimPrefix)"));
+    assert!(output.contains("identifier(TrimSuffix)"));
+    assert!(output.contains("identifier(HasSuffix)"));
+}
+
+#[test]
 fn dump_tokens_show_slice_syntax() {
     let output =
         run_cli(&["dump-tokens", "examples/slices.go"]).expect("tokens should be rendered");
@@ -453,6 +474,17 @@ fn dump_ast_renders_strings_package_calls() {
     assert!(output.contains("import \"strings\""));
     assert!(output.contains("return strings.Join(parts, \"-\")"));
     assert!(output.contains("strings.HasPrefix(joined, \"nova\")"));
+}
+
+#[test]
+fn dump_ast_renders_strings_and_bytes_search_trim_calls() {
+    let output = run_cli(&["dump-ast", "examples/strings_bytes_search_trim.go"])
+        .expect("ast should be rendered");
+
+    assert!(output.contains("strings.Index(text, \"go\")"));
+    assert!(output.contains("strings.TrimSuffix(text, \"-go\")"));
+    assert!(output.contains("bytes.TrimPrefix(raw, []byte(\"\"))"));
+    assert!(output.contains("bytes.HasSuffix(value, []byte(\"go\"))"));
 }
 
 #[test]
@@ -686,6 +718,21 @@ fn dump_bytecode_shows_strings_package_calls() {
     assert!(output.contains("call-package strings.Join 2"));
     assert!(output.contains("call-package strings.Contains 2"));
     assert!(output.contains("call-package strings.HasPrefix 2"));
+}
+
+#[test]
+fn dump_bytecode_shows_strings_and_bytes_search_trim_calls() {
+    let output = run_cli(&["dump-bytecode", "examples/strings_bytes_search_trim.go"])
+        .expect("bytecode should be generated");
+
+    assert!(output.contains("call-package strings.Index 2"));
+    assert!(output.contains("call-package strings.HasSuffix 2"));
+    assert!(output.contains("call-package strings.TrimPrefix 2"));
+    assert!(output.contains("call-package strings.TrimSuffix 2"));
+    assert!(output.contains("call-package bytes.Index 2"));
+    assert!(output.contains("call-package bytes.HasSuffix 2"));
+    assert!(output.contains("call-package bytes.TrimPrefix 2"));
+    assert!(output.contains("call-package bytes.TrimSuffix 2"));
 }
 
 #[test]

@@ -45,12 +45,46 @@ impl VirtualMachine {
                 let prefix = expect_string_package_argument(function, 2, prefix)?;
                 self.stack.push(Value::Boolean(value.has_prefix(&prefix)));
             }
+            PackageFunction::StringsHasSuffix => {
+                let [value, suffix] = expect_exact_package_arguments(function, arguments, 2)?;
+                let value = expect_string_package_argument(function, 1, value)?;
+                let suffix = expect_string_package_argument(function, 2, suffix)?;
+                self.stack.push(Value::Boolean(value.has_suffix(&suffix)));
+            }
+            PackageFunction::StringsIndex => {
+                let [value, needle] = expect_exact_package_arguments(function, arguments, 2)?;
+                let value = expect_string_package_argument(function, 1, value)?;
+                let needle = expect_string_package_argument(function, 2, needle)?;
+                let index = value
+                    .index_of(&needle)
+                    .map(|offset| offset as i64)
+                    .unwrap_or(-1);
+                self.stack.push(Value::Integer(index));
+            }
             PackageFunction::StringsCut => self.execute_strings_cut(function, arguments)?,
             PackageFunction::StringsCutPrefix => {
                 self.execute_strings_cut_prefix(function, arguments)?
             }
             PackageFunction::StringsCutSuffix => {
                 self.execute_strings_cut_suffix(function, arguments)?
+            }
+            PackageFunction::StringsTrimPrefix => {
+                let [value, prefix] = expect_exact_package_arguments(function, arguments, 2)?;
+                let value = expect_string_package_argument(function, 1, value)?;
+                let prefix = expect_string_package_argument(function, 2, prefix)?;
+                let trimmed = value.trim_prefix(&prefix).map_err(|_| {
+                    RuntimeError::new("strings.TrimPrefix produced an invalid suffix")
+                })?;
+                self.stack.push(Value::String(trimmed));
+            }
+            PackageFunction::StringsTrimSuffix => {
+                let [value, suffix] = expect_exact_package_arguments(function, arguments, 2)?;
+                let value = expect_string_package_argument(function, 1, value)?;
+                let suffix = expect_string_package_argument(function, 2, suffix)?;
+                let trimmed = value.trim_suffix(&suffix).map_err(|_| {
+                    RuntimeError::new("strings.TrimSuffix produced an invalid prefix")
+                })?;
+                self.stack.push(Value::String(trimmed));
             }
             PackageFunction::StringsJoin => {
                 let [elements, separator] = expect_exact_package_arguments(function, arguments, 2)?;
@@ -86,9 +120,13 @@ impl VirtualMachine {
             PackageFunction::BytesEqual
             | PackageFunction::BytesContains
             | PackageFunction::BytesHasPrefix
+            | PackageFunction::BytesHasSuffix
+            | PackageFunction::BytesIndex
             | PackageFunction::BytesCut
             | PackageFunction::BytesCutPrefix
             | PackageFunction::BytesCutSuffix
+            | PackageFunction::BytesTrimPrefix
+            | PackageFunction::BytesTrimSuffix
             | PackageFunction::BytesJoin
             | PackageFunction::BytesRepeat => {
                 for value in execute_bytes_package_function(function, arguments)? {
@@ -108,14 +146,7 @@ impl VirtualMachine {
         let [value, separator] = expect_exact_package_arguments(function, arguments, 2)?;
         let value = expect_string_package_argument(function, 1, value)?;
         let separator = expect_string_package_argument(function, 2, separator)?;
-        let found_index = if separator.as_bytes().is_empty() {
-            Some(0)
-        } else {
-            value
-                .as_bytes()
-                .windows(separator.len())
-                .position(|window| window == separator.as_bytes())
-        };
+        let found_index = value.index_of(&separator);
         if let Some(index) = found_index {
             let before = value
                 .slice(0, index)
@@ -144,7 +175,7 @@ impl VirtualMachine {
         let prefix = expect_string_package_argument(function, 2, prefix)?;
         if prefix.as_bytes().is_empty() || value.has_prefix(&prefix) {
             let after = value
-                .slice(prefix.len(), value.len())
+                .trim_prefix(&prefix)
                 .map_err(|_| RuntimeError::new("strings.CutPrefix produced an invalid suffix"))?;
             self.stack.push(Value::String(after));
             self.stack.push(Value::Boolean(true));
@@ -163,11 +194,9 @@ impl VirtualMachine {
         let [value, suffix] = expect_exact_package_arguments(function, arguments, 2)?;
         let value = expect_string_package_argument(function, 1, value)?;
         let suffix = expect_string_package_argument(function, 2, suffix)?;
-        let bytes = value.as_bytes();
-        let suffix_bytes = suffix.as_bytes();
-        if suffix_bytes.is_empty() || bytes.ends_with(suffix_bytes) {
+        if suffix.as_bytes().is_empty() || value.has_suffix(&suffix) {
             let before = value
-                .slice(0, value.len() - suffix.len())
+                .trim_suffix(&suffix)
                 .map_err(|_| RuntimeError::new("strings.CutSuffix produced an invalid prefix"))?;
             self.stack.push(Value::String(before));
             self.stack.push(Value::Boolean(true));

@@ -83,11 +83,19 @@ Describe the current runtime value categories and builtin execution model introd
   - `fmt.Sprint(...value) -> string`
   - `strings.Contains(string, string) -> bool`
   - `strings.HasPrefix(string, string) -> bool`
+  - `strings.HasSuffix(string, string) -> bool`
+  - `strings.Index(string, string) -> int`
+  - `strings.TrimPrefix(string, string) -> string`
+  - `strings.TrimSuffix(string, string) -> string`
   - `strings.Join([]string, string) -> string`
   - `strings.Repeat(string, int) -> string`
   - `bytes.Equal([]byte, []byte) -> bool`
   - `bytes.Contains([]byte, []byte) -> bool`
   - `bytes.HasPrefix([]byte, []byte) -> bool`
+  - `bytes.HasSuffix([]byte, []byte) -> bool`
+  - `bytes.Index([]byte, []byte) -> int`
+  - `bytes.TrimPrefix([]byte, []byte) -> []byte`
+  - `bytes.TrimSuffix([]byte, []byte) -> []byte`
   - `bytes.Join([][]byte, []byte) -> []byte`
   - `bytes.Repeat([]byte, int) -> []byte`
 - Selector calls require the package binding to be imported before semantic analysis will lower them
@@ -137,9 +145,11 @@ Describe the current runtime value categories and builtin execution model introd
 - `fmt.Sprint` returns a runtime string value without mutating the output buffer
 - `fmt` formatting is intentionally approximate and does not yet support format verbs
 - `strings` package functions now operate on the byte-oriented runtime string representation instead of converting through Rust-only string semantics
+- `strings.Index` returns the first byte offset match and `-1` on misses, while `strings.HasSuffix`, `strings.TrimPrefix`, and `strings.TrimSuffix` reuse the same byte-oriented representation without pretending rune-aware semantics
 - `strings.Join` currently requires a runtime `[]string` value and returns a joined string
 - `strings.Repeat` maps negative-count or repeated-size overflow failures into runtime errors because the VM does not model Go panic yet
-- `bytes.Equal`, `bytes.Contains`, and `bytes.HasPrefix` operate on the byte-slice view of runtime `[]byte` values
+- `bytes.Equal`, `bytes.Contains`, `bytes.HasPrefix`, `bytes.HasSuffix`, and `bytes.Index` operate on the byte-slice view of runtime `[]byte` values
+- `bytes.TrimPrefix` and `bytes.TrimSuffix` preserve the staged nil-vs-empty distinction and return shared slice views on matches instead of eagerly copying
 - `bytes.Join` currently requires a runtime `[][]byte` value plus a `[]byte` separator and returns a fresh non-nil `[]byte`
 - `bytes.Repeat` maps negative-count or repeated-size overflow failures into runtime errors because the VM does not model Go panic yet
 
@@ -152,6 +162,7 @@ Describe the current runtime value categories and builtin execution model introd
 - If output behavior becomes more realistic or package-backed, extract builtin execution helpers from `src/runtime/vm.rs`
 - Keep package-function validation metadata centralized; do not reintroduce package-specific ad hoc type checks inside `src/semantic/analyzer.rs`
 - If string behavior expands into broader conversions, rune-aware iteration, or invalid-UTF-8-preserving printing, add that on top of the current byte-oriented representation instead of reverting to Rust `String`-only storage
+- Keep UTF-8-sequence-sensitive helpers such as `Split` deferred until the runtime models those semantics deliberately instead of approximating them with byte-only behavior
 - If slice behavior expands beyond the current window / builtin subset, consider separating slice-specific lowering and VM helpers from the core scalar path
 - If map behavior expands further beyond the current duplicate-key diagnostics and comma-ok statements, keep nil-map semantics, explicit `nil` coercion, map-key validation, `lookup-map`, and `map-keys` range lowering centralized instead of scattering them across builtin and VM call sites
 - If channel behavior expands into directional channels, comma-ok receive, or channel `range`, keep send / receive / close semantics explicit in the checked model and bytecode instead of hiding them behind synthetic builtin rewrites

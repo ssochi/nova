@@ -25,6 +25,7 @@
 
 ## Related Plans
 
+- `2026-03-20-09-49-02-strings-bytes-index-trim`: completed plan for staged `strings` / `bytes` index, suffix, and trim package seams
 - `2026-03-20-09-21-38-variadic-functions-ellipsis`: completed plan for staged variadic function declarations, explicit final-argument `...`, and builtin `append` spread semantics
 - `2026-03-20-08-55-11-call-argument-multi-result-forwarding`: completed plan for staged call-argument multi-result forwarding plus `strings` / `bytes` `CutPrefix` / `CutSuffix` seams
 - `2026-03-20-08-14-13-multi-result-functions-cut-seams`: completed plan for the first staged multi-result model plus `strings.Cut` / `bytes.Cut`
@@ -60,7 +61,7 @@
 
 ## Next-Round Recommendations
 
-- Open the next `M3` plan for the next staged package or syntax slice that spends the new variadic/spread groundwork on more realistic Go code.
+- Open the next `M3` plan for either grouped parameter-name shorthand or the next package/API slice that avoids rune-sensitive behavior until the runtime models it deliberately.
 - If control-flow stays the next priority, reuse the explicit `ForStatement` / `CheckedForStatement` model and the compiler control-flow stack instead of lowering new targets through ad hoc jumps.
-- Grouped parameter-name shorthand or the next package-backed API slice are now the strongest adjacent continuations; keep explicit `...` separate from the staged multi-result forwarding path.
+- Grouped parameter-name shorthand, `LastIndex`-style search helpers, or another package-backed API slice are the strongest adjacent continuations; keep explicit `...` separate from the staged multi-result forwarding path and keep UTF-8-sequence-sensitive helpers deferred.
 - Reuse the `docs/research/` flow before locking the next compatibility-sensitive slice.

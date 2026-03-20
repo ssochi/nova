@@ -127,6 +127,65 @@ fn execute_cut_prefix_and_suffix_package_functions() {
 }
 
 #[test]
+fn execute_index_suffix_and_trim_package_functions() {
+    let program = Program {
+        package_name: "main".to_string(),
+        entry_function: "main".to_string(),
+        entry_function_index: 0,
+        functions: vec![CompiledFunction {
+            name: "main".to_string(),
+            parameter_count: 0,
+            variadic_element_type: None,
+            return_types: Vec::new(),
+            local_names: vec!["raw".to_string()],
+            instructions: vec![
+                Instruction::PushString("nova-go-go".to_string()),
+                Instruction::PushString("go".to_string()),
+                Instruction::CallPackage(PackageFunction::StringsIndex, 2),
+                Instruction::CallBuiltin(BuiltinFunction::Println, 1),
+                Instruction::PushString("nova-go-go".to_string()),
+                Instruction::PushString("go".to_string()),
+                Instruction::CallPackage(PackageFunction::StringsHasSuffix, 2),
+                Instruction::CallBuiltin(BuiltinFunction::Println, 1),
+                Instruction::PushString("nova-go-go".to_string()),
+                Instruction::PushString("nova-".to_string()),
+                Instruction::CallPackage(PackageFunction::StringsTrimPrefix, 2),
+                Instruction::CallBuiltin(BuiltinFunction::Println, 1),
+                Instruction::PushNilSlice,
+                Instruction::StoreLocal(0),
+                Instruction::LoadLocal(0),
+                Instruction::PushNilSlice,
+                Instruction::CallPackage(PackageFunction::BytesTrimPrefix, 2),
+                Instruction::PushNilSlice,
+                Instruction::Equal,
+                Instruction::CallBuiltin(BuiltinFunction::Println, 1),
+                Instruction::PushByte(b'n'),
+                Instruction::PushByte(b'o'),
+                Instruction::PushByte(b'v'),
+                Instruction::PushByte(b'a'),
+                Instruction::PushByte(b'-'),
+                Instruction::PushByte(b'g'),
+                Instruction::PushByte(b'o'),
+                Instruction::BuildSlice(7),
+                Instruction::PushByte(b'g'),
+                Instruction::PushByte(b'o'),
+                Instruction::BuildSlice(2),
+                Instruction::CallPackage(PackageFunction::BytesIndex, 2),
+                Instruction::CallBuiltin(BuiltinFunction::Println, 1),
+                Instruction::Return,
+            ],
+        }],
+    };
+
+    let output = VirtualMachine::new()
+        .execute(&program)
+        .expect("index/suffix/trim package functions should execute")
+        .render_output();
+
+    assert_eq!(output, "5\ntrue\ngo-go\ntrue\n5\n");
+}
+
+#[test]
 fn execute_slice_windows_and_index_assignment() {
     let program = Program {
         package_name: "main".to_string(),

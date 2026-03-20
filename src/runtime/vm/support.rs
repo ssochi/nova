@@ -215,23 +215,38 @@ pub(super) fn execute_bytes_package_function(
             let prefix = expect_byte_slice_package_argument(function, 2, prefix)?;
             Ok(vec![Value::Boolean(value.starts_with(prefix.as_slice()))])
         }
+        PackageFunction::BytesHasSuffix => {
+            let [value, suffix] = expect_exact_package_arguments(function, arguments, 2)?;
+            let value = expect_byte_slice_package_argument(function, 1, value)?;
+            let suffix = expect_byte_slice_package_argument(function, 2, suffix)?;
+            Ok(vec![Value::Boolean(value.ends_with(suffix.as_slice()))])
+        }
+        PackageFunction::BytesIndex => {
+            let [value, needle] = expect_exact_package_arguments(function, arguments, 2)?;
+            let value = expect_byte_slice_value(function, 1, value)?;
+            let needle = expect_byte_slice_package_argument(function, 2, needle)?;
+            let index = value
+                .byte_index_of(&needle)
+                .map_err(|_| {
+                    RuntimeError::new(format!(
+                        "argument 1 in call to `{}` expected `[]byte`, found a non-byte slice",
+                        function.render()
+                    ))
+                })?
+                .map(|offset| offset as i64)
+                .unwrap_or(-1);
+            Ok(vec![Value::Integer(index)])
+        }
         PackageFunction::BytesCut => {
             let [value, separator] = expect_exact_package_arguments(function, arguments, 2)?;
             let value = expect_byte_slice_value(function, 1, value)?;
             let separator = expect_byte_slice_package_argument(function, 2, separator)?;
-            let bytes = value.byte_elements().map_err(|_| {
+            let found_index = value.byte_index_of(&separator).map_err(|_| {
                 RuntimeError::new(format!(
                     "argument 1 in call to `{}` expected `[]byte`, found a non-byte slice",
                     function.render()
                 ))
             })?;
-            let found_index = if separator.is_empty() {
-                Some(0)
-            } else {
-                bytes
-                    .windows(separator.len())
-                    .position(|window| window == separator.as_slice())
-            };
             if let Some(index) = found_index {
                 let before = value
                     .slice(0, index)
@@ -256,14 +271,15 @@ pub(super) fn execute_bytes_package_function(
             let [value, prefix] = expect_exact_package_arguments(function, arguments, 2)?;
             let value = expect_byte_slice_value(function, 1, value)?;
             let prefix = expect_byte_slice_package_argument(function, 2, prefix)?;
-            let bytes = value.byte_elements().map_err(|_| {
-                RuntimeError::new(format!(
-                    "argument 1 in call to `{}` expected `[]byte`, found a non-byte slice",
-                    function.render()
-                ))
-            })?;
-            if prefix.is_empty() || bytes.starts_with(prefix.as_slice()) {
-                let after = value.slice(prefix.len(), value.len()).map_err(|_| {
+            if prefix.is_empty()
+                || value.has_byte_prefix(&prefix).map_err(|_| {
+                    RuntimeError::new(format!(
+                        "argument 1 in call to `{}` expected `[]byte`, found a non-byte slice",
+                        function.render()
+                    ))
+                })?
+            {
+                let after = value.trim_byte_prefix(&prefix).map_err(|_| {
                     RuntimeError::new("bytes.CutPrefix produced an invalid suffix slice")
                 })?;
                 Ok(vec![Value::Slice(after), Value::Boolean(true)])
@@ -275,20 +291,39 @@ pub(super) fn execute_bytes_package_function(
             let [value, suffix] = expect_exact_package_arguments(function, arguments, 2)?;
             let value = expect_byte_slice_value(function, 1, value)?;
             let suffix = expect_byte_slice_package_argument(function, 2, suffix)?;
-            let bytes = value.byte_elements().map_err(|_| {
-                RuntimeError::new(format!(
-                    "argument 1 in call to `{}` expected `[]byte`, found a non-byte slice",
-                    function.render()
-                ))
-            })?;
-            if suffix.is_empty() || bytes.ends_with(suffix.as_slice()) {
-                let before = value.slice(0, value.len() - suffix.len()).map_err(|_| {
+            if suffix.is_empty()
+                || value.has_byte_suffix(&suffix).map_err(|_| {
+                    RuntimeError::new(format!(
+                        "argument 1 in call to `{}` expected `[]byte`, found a non-byte slice",
+                        function.render()
+                    ))
+                })?
+            {
+                let before = value.trim_byte_suffix(&suffix).map_err(|_| {
                     RuntimeError::new("bytes.CutSuffix produced an invalid prefix slice")
                 })?;
                 Ok(vec![Value::Slice(before), Value::Boolean(true)])
             } else {
                 Ok(vec![Value::Slice(value), Value::Boolean(false)])
             }
+        }
+        PackageFunction::BytesTrimPrefix => {
+            let [value, prefix] = expect_exact_package_arguments(function, arguments, 2)?;
+            let value = expect_byte_slice_value(function, 1, value)?;
+            let prefix = expect_byte_slice_package_argument(function, 2, prefix)?;
+            let trimmed = value.trim_byte_prefix(&prefix).map_err(|_| {
+                RuntimeError::new("bytes.TrimPrefix produced an invalid suffix slice")
+            })?;
+            Ok(vec![Value::Slice(trimmed)])
+        }
+        PackageFunction::BytesTrimSuffix => {
+            let [value, suffix] = expect_exact_package_arguments(function, arguments, 2)?;
+            let value = expect_byte_slice_value(function, 1, value)?;
+            let suffix = expect_byte_slice_package_argument(function, 2, suffix)?;
+            let trimmed = value.trim_byte_suffix(&suffix).map_err(|_| {
+                RuntimeError::new("bytes.TrimSuffix produced an invalid prefix slice")
+            })?;
+            Ok(vec![Value::Slice(trimmed)])
         }
         PackageFunction::BytesJoin => {
             let [elements, separator] = expect_exact_package_arguments(function, arguments, 2)?;

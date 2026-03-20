@@ -323,6 +323,37 @@ fn check_rejects_bad_bytes_join_argument_type() {
 }
 
 #[test]
+fn check_rejects_bad_strings_index_argument_type() {
+    let path = write_temp_source(
+        "check-bad-strings-index",
+        "package main\n\nimport \"strings\"\n\nfunc main() {\n\tprintln(strings.Index([]byte(\"nova\"), \"go\"))\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(
+        error.contains("argument 1 in call to `strings.Index` requires `string`, found `[]byte`")
+    );
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_bad_bytes_trim_suffix_argument_type() {
+    let path = write_temp_source(
+        "check-bad-bytes-trim-suffix",
+        "package main\n\nimport \"bytes\"\n\nfunc main() {\n\tprintln(bytes.TrimSuffix([]byte(\"nova\"), \"go\"))\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(
+        error
+            .contains("argument 2 in call to `bytes.TrimSuffix` requires `[]byte`, found `string`")
+    );
+
+    cleanup_temp_source(path);
+}
+
+#[test]
 fn check_rejects_unsupported_bytes_member() {
     let path = write_temp_source(
         "check-bad-bytes-member",

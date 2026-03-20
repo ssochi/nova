@@ -103,17 +103,41 @@ impl StringValue {
     }
 
     pub fn contains(&self, needle: &Self) -> bool {
-        if needle.bytes.is_empty() {
-            return true;
-        }
-
-        self.bytes
-            .windows(needle.bytes.len())
-            .any(|window| window == needle.as_bytes())
+        self.index_of(needle).is_some()
     }
 
     pub fn has_prefix(&self, prefix: &Self) -> bool {
         self.bytes.starts_with(prefix.as_bytes())
+    }
+
+    pub fn has_suffix(&self, suffix: &Self) -> bool {
+        self.bytes.ends_with(suffix.as_bytes())
+    }
+
+    pub fn index_of(&self, needle: &Self) -> Option<usize> {
+        if needle.bytes.is_empty() {
+            return Some(0);
+        }
+
+        self.bytes
+            .windows(needle.bytes.len())
+            .position(|window| window == needle.as_bytes())
+    }
+
+    pub fn trim_prefix(&self, prefix: &Self) -> Result<Self, ()> {
+        if prefix.as_bytes().is_empty() || self.has_prefix(prefix) {
+            self.slice(prefix.len(), self.len())
+        } else {
+            Ok(self.clone())
+        }
+    }
+
+    pub fn trim_suffix(&self, suffix: &Self) -> Result<Self, ()> {
+        if suffix.as_bytes().is_empty() || self.has_suffix(suffix) {
+            self.slice(0, self.len() - suffix.len())
+        } else {
+            Ok(self.clone())
+        }
     }
 
     pub fn repeat(&self, count: usize) -> Self {
@@ -288,6 +312,41 @@ impl SliceValue {
                 _ => Err(()),
             })
             .collect()
+    }
+
+    pub fn byte_index_of(&self, needle: &[u8]) -> Result<Option<usize>, ()> {
+        if needle.is_empty() {
+            return Ok(Some(0));
+        }
+
+        let bytes = self.byte_elements()?;
+        Ok(bytes
+            .windows(needle.len())
+            .position(|window| window == needle))
+    }
+
+    pub fn has_byte_prefix(&self, prefix: &[u8]) -> Result<bool, ()> {
+        Ok(self.byte_elements()?.starts_with(prefix))
+    }
+
+    pub fn has_byte_suffix(&self, suffix: &[u8]) -> Result<bool, ()> {
+        Ok(self.byte_elements()?.ends_with(suffix))
+    }
+
+    pub fn trim_byte_prefix(&self, prefix: &[u8]) -> Result<Self, ()> {
+        if prefix.is_empty() || self.has_byte_prefix(prefix)? {
+            self.slice(prefix.len(), self.len())
+        } else {
+            Ok(self.clone())
+        }
+    }
+
+    pub fn trim_byte_suffix(&self, suffix: &[u8]) -> Result<Self, ()> {
+        if suffix.is_empty() || self.has_byte_suffix(suffix)? {
+            self.slice(0, self.len() - suffix.len())
+        } else {
+            Ok(self.clone())
+        }
     }
 
     pub fn from_string(value: &StringValue) -> Self {
@@ -610,6 +669,20 @@ mod tests {
 
         assert!(joined.contains(&StringValue::from("va-g")));
         assert!(joined.has_prefix(&StringValue::from("nova")));
+        assert!(joined.has_suffix(&StringValue::from("-go")));
+        assert_eq!(joined.index_of(&StringValue::from("go")), Some(5));
+        assert_eq!(
+            joined
+                .trim_prefix(&StringValue::from("nova-"))
+                .expect("trimmed prefix should succeed"),
+            StringValue::from("go")
+        );
+        assert_eq!(
+            joined
+                .trim_suffix(&StringValue::from("-go"))
+                .expect("trimmed suffix should succeed"),
+            StringValue::from("nova")
+        );
         assert_eq!(joined, StringValue::from("nova-go"));
     }
 
@@ -726,6 +799,34 @@ mod tests {
             ]
         );
         assert_eq!(string, StringValue::from("nova"));
+    }
+
+    #[test]
+    fn byte_slices_support_index_suffix_and_trim_views() {
+        let value = SliceValue::from_bytes(b"nova-go");
+        let nil_value = SliceValue::nil();
+
+        assert_eq!(value.byte_index_of(b"go"), Ok(Some(5)));
+        assert_eq!(value.byte_index_of(b""), Ok(Some(0)));
+        assert_eq!(value.has_byte_suffix(b"go"), Ok(true));
+        assert_eq!(
+            value
+                .trim_byte_prefix(b"nova-")
+                .expect("trimmed prefix should succeed")
+                .byte_elements(),
+            Ok(b"go".to_vec())
+        );
+        assert_eq!(
+            value
+                .trim_byte_suffix(b"-go")
+                .expect("trimmed suffix should succeed")
+                .byte_elements(),
+            Ok(b"nova".to_vec())
+        );
+        let trimmed_nil = nil_value
+            .trim_byte_prefix(b"")
+            .expect("nil empty trim should succeed");
+        assert_eq!(trimmed_nil, SliceValue::nil());
     }
 
     #[test]

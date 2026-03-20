@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-09-49-02-strings-bytes-index-trim`
+- Opened `2026-03-20-09-49-02-strings-bytes-index-trim` for staged `strings` / `bytes` index, suffix, and trim package seams under `M3`
 - Completed and archived `2026-03-20-09-21-38-variadic-functions-ellipsis`
 - Opened `2026-03-20-09-21-38-variadic-functions-ellipsis` for staged variadic declarations, explicit final-argument `...`, and append spread semantics under `M3`
 - Completed and archived `2026-03-20-08-55-11-call-argument-multi-result-forwarding`
