@@ -42,9 +42,10 @@ Describe the concrete execution pipeline shipped in the bootstrap milestone, inc
 - Local variables must be declared before assignment or use, with nested block scopes mapped to fixed slots during analysis.
 - Builtin calls, user-defined function calls, and metadata-backed `fmt` / `strings` / `bytes` package seams are supported.
 - Current builtin coverage includes `print`, `println`, `len`, `cap`, `append`, `copy`, `delete`, `close`, and typed `make` handling.
-- Current imported package coverage is `fmt.Print`, `fmt.Println`, `fmt.Sprint`, `strings.Join`, `strings.Contains`, `strings.HasPrefix`, `strings.Cut`, `strings.Repeat`, `bytes.Equal`, `bytes.Contains`, `bytes.HasPrefix`, `bytes.Cut`, `bytes.Join`, and `bytes.Repeat`.
+- Current imported package coverage is `fmt.Print`, `fmt.Println`, `fmt.Sprint`, `strings.Join`, `strings.Contains`, `strings.HasPrefix`, `strings.Cut`, `strings.CutPrefix`, `strings.CutSuffix`, `strings.Repeat`, `bytes.Equal`, `bytes.Contains`, `bytes.HasPrefix`, `bytes.Cut`, `bytes.CutPrefix`, `bytes.CutSuffix`, `bytes.Join`, and `bytes.Repeat`.
 - Compiled-function metadata now records explicit result lists instead of a boolean `returns_value` flag, so the VM can return zero, one, or several values through the same stack-frame path.
-- The current multi-result model is explicit rather than tuple-based: staged `return`, multi-binding `:=` / `=`, and package seams can consume multi-result calls, while unsupported single-value contexts still fail during semantic analysis.
+- The current multi-result model is explicit rather than tuple-based: staged `return`, multi-binding `:=` / `=`, single-call-argument forwarding, and package seams can consume multi-result calls, while unsupported single-value contexts still fail during semantic analysis.
+- Runtime dispatch inside `src/runtime/vm/` is now split between `builtins.rs`, `packages.rs`, and `support.rs` so package growth does not keep accumulating in one VM file.
 - Branch and loop conditions must produce boolean values, staged control-flow headers run before condition or clause dispatch, and expression-switch tags are evaluated once before clause comparison.
 - The current branch model supports `if`, `else`, explicit `else if`, and staged expression `switch` lowering with header scopes chosen during semantic analysis.
 - Single-expression short declarations, staged compound assignments, and explicit `++` / `--` are now explicit statement forms that survive semantic analysis and lower directly instead of pretending to be expressions.

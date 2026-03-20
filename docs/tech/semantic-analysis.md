@@ -32,7 +32,7 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 - Validate staged `if` statement headers centrally, including the current simple-statement subset, dedicated header scopes shared by the condition / `then` / `else` path, and explicit `else if` chaining.
 - Validate staged expression `switch` statements centrally, including shared header scopes, tagless `switch`, clause-local scopes, duplicate `default` rejection, and the current duplicate scalar literal-case diagnostics.
 - Validate staged short declarations centrally so they remain explicit, support the current same-block redeclaration rules when at least one named binding is new, and keep multi-binding result flow separate from plain assignment targets.
-- Validate staged multi-result returns and assignment-like call usage centrally so broader package seams can reuse the same non-tuple result model.
+- Validate staged multi-result returns, assignment-like usage, and single-call-argument forwarding centrally so broader package seams can reuse the same non-tuple result model.
 - Validate staged compound assignments centrally so they remain explicit, reuse assignable-target checking, keep operator support aligned with the modeled runtime surface, and preserve single-evaluation index semantics during lowering.
 - Validate staged classic `for` clauses centrally, including dedicated init scope, optional condition / post handling, and the current post-statement subset.
 - Validate explicit `++` / `--` centrally so they remain statement-only and only apply to assignable `int` / `byte` targets.
@@ -62,6 +62,8 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
   - local-slot or call target resolution
 - `CheckedValueSource`
   - explicit expression list or explicit multi-result call source used by staged `return`, `:=`, and `=` forms
+- `CheckedCall`
+  - explicit ordinary-arguments vs expanded-call-argument source so call forwarding does not disappear into flat expression lists too early
 
 ## Driver Contract
 
@@ -77,6 +79,7 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 - Termination analysis remains conservative: infinite or literal-`true` loops only count as non-fallthrough when no modeled `break` can escape the loop, and terminating `switch` clauses fail that classification when a clause can `break`.
 - Builtin coverage is still intentionally small, and conversions are now deliberately modeled outside the builtin table.
 - Function and package calls now support zero, one, or multiple results explicitly, but those results are still not first-class tuple expressions.
+- Call forwarding is still staged: a multi-result call may feed another call only when it is the entire argument list by itself, while prefixed forms such as `f(1, pair())` remain invalid single-value contexts.
 - Slice support is still staged: simple slice expressions on `[]T` and `string` are supported, while full slice expressions remain deferred.
 - Map support is still staged: explicit `nil`, map literals, duplicate constant literal-key diagnostics, single-result indexing, statement-scoped comma-ok lookups, `len`, nil-map zero values, `make`, `delete`, index assignment, `nil` equality, and staged `range` loops are supported, while general tuple expressions, broader constant folding, and richer lookup contexts remain deferred.
 - Channel support is now staged: bidirectional `chan T`, `make`, `len`, `cap`, builtin `close`, send statements, receive expressions, `nil` equality, and same-type channel equality are supported, while directions, channel `range`, comma-ok receive, and scheduler-aware blocking semantics remain deferred.

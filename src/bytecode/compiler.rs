@@ -6,9 +6,10 @@ use crate::bytecode::instruction::{
 };
 use crate::semantic::model::{
     CallTarget, CheckedBinaryOperator, CheckedBinding, CheckedBlock, CheckedCall,
-    CheckedElseBranch, CheckedExpression, CheckedExpressionKind, CheckedForStatement,
-    CheckedFunction, CheckedIfStatement, CheckedMapLiteralEntry, CheckedProgram, CheckedStatement,
-    CheckedSwitchClause, CheckedSwitchStatement, CheckedValueSource, Type,
+    CheckedCallArguments, CheckedElseBranch, CheckedExpression, CheckedExpressionKind,
+    CheckedForStatement, CheckedFunction, CheckedIfStatement, CheckedMapLiteralEntry,
+    CheckedProgram, CheckedStatement, CheckedSwitchClause, CheckedSwitchStatement,
+    CheckedValueSource, Type,
 };
 
 mod simple_statements;
@@ -504,24 +505,31 @@ impl<'a> FunctionCompiler<'a> {
     }
 
     fn compile_call(&mut self, call: &CheckedCall, context: &str) -> Result<(), CompileError> {
-        for argument in &call.arguments {
-            self.compile_expression(argument)?;
-            self.expect_value(&argument.ty, context)?;
+        match &call.arguments {
+            CheckedCallArguments::Expressions(arguments) => {
+                for argument in arguments {
+                    self.compile_expression(argument)?;
+                    self.expect_value(&argument.ty, context)?;
+                }
+            }
+            CheckedCallArguments::ExpandedCall(expanded_call) => {
+                self.compile_call(expanded_call, context)?;
+            }
         }
 
         match &call.target {
             CallTarget::Builtin(builtin) => {
                 self.instructions
-                    .push(Instruction::CallBuiltin(*builtin, call.arguments.len()));
+                    .push(Instruction::CallBuiltin(*builtin, call.argument_count()));
             }
             CallTarget::PackageFunction(function) => {
                 self.instructions
-                    .push(Instruction::CallPackage(*function, call.arguments.len()));
+                    .push(Instruction::CallPackage(*function, call.argument_count()));
             }
             CallTarget::UserDefined { function_index, .. } => {
                 self.instructions.push(Instruction::CallFunction(
                     *function_index,
-                    call.arguments.len(),
+                    call.argument_count(),
                 ));
             }
         }

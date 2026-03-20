@@ -73,6 +73,15 @@ fn run_executes_multi_result_functions_and_cut_package_calls() {
 }
 
 #[test]
+fn run_executes_call_argument_multi_result_forwarding() {
+    let output = run_cli(&["run", "examples/call_forwarding.go"]).expect("program should run");
+    assert_eq!(
+        output,
+        "nova:go\nnova|go|true\ngo:true\nnova:true\ngo:true\nnova:true\nnova  false\n[110 111 118 97] false\n"
+    );
+}
+
+#[test]
 fn run_executes_slice_windows_and_index_assignment() {
     let output = run_cli(&["run", "examples/slice_windows.go"]).expect("program should run");
     assert_eq!(output, "3 9 7\n1 9 3 7\n");
@@ -674,6 +683,23 @@ fn dump_bytecode_shows_multi_result_call_metadata() {
     assert!(output.contains("returns=string, string, bool"));
     assert!(output.contains("call-package strings.Cut 2"));
     assert!(output.contains("call-package bytes.Cut 2"));
+}
+
+#[test]
+fn dump_bytecode_shows_call_argument_forwarding_and_cut_variants() {
+    let output = run_cli(&["dump-bytecode", "examples/call_forwarding.go"])
+        .expect("bytecode should be generated");
+
+    assert!(output.contains("call-function 0 0"));
+    assert!(output.contains("call-function 1 2"));
+    assert!(output.contains("call-function 2 3"));
+    assert!(output.contains("call-package strings.CutPrefix 2"));
+    assert!(output.contains("call-package strings.CutSuffix 2"));
+    assert!(output.contains("call-package bytes.CutPrefix 2"));
+    assert!(output.contains("call-package bytes.CutSuffix 2"));
+    assert!(output.contains("call-package fmt.Println 1"));
+    assert!(output.contains("call-package fmt.Println 3"));
+    assert!(output.contains("call-package fmt.Println 2"));
 }
 
 #[test]

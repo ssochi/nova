@@ -5,8 +5,8 @@ use crate::frontend::ast::{BinaryOperator, Expression, TypeRef};
 use crate::semantic::analyzer::{FunctionAnalyzer, SemanticError};
 use crate::semantic::builtins::{resolve_builtin, validate_builtin_call, validate_make_call};
 use crate::semantic::model::{
-    CallTarget, CheckedBinaryOperator, CheckedCall, CheckedExpression, CheckedExpressionKind,
-    CheckedMapLiteralEntry, Type,
+    CallTarget, CheckedBinaryOperator, CheckedCall, CheckedCallArguments, CheckedExpression,
+    CheckedExpressionKind, CheckedMapLiteralEntry, Type,
 };
 use crate::semantic::packages::{resolve_package_function, validate_package_call};
 use crate::semantic::support::{
@@ -162,11 +162,7 @@ impl<'a> FunctionAnalyzer<'a> {
                 })
             }
             Expression::Call { callee, arguments } => {
-                let checked_arguments = arguments
-                    .iter()
-                    .map(|argument| self.analyze_expression(argument))
-                    .collect::<Result<Vec<_>, _>>()?;
-                self.analyze_call_expression(callee, checked_arguments)
+                self.analyze_call_expression(callee, arguments)
             }
         }
     }
@@ -178,11 +174,7 @@ impl<'a> FunctionAnalyzer<'a> {
         let Expression::Call { callee, arguments } = expression else {
             return Ok(None);
         };
-        let checked_arguments = arguments
-            .iter()
-            .map(|argument| self.analyze_expression(argument))
-            .collect::<Result<Vec<_>, _>>()?;
-        let call = self.analyze_call(callee, checked_arguments)?;
+        let call = self.analyze_call(callee, arguments)?;
         if call.result_types.len() > 1 {
             Ok(Some(call))
         } else {
@@ -193,9 +185,9 @@ impl<'a> FunctionAnalyzer<'a> {
     fn analyze_call_expression(
         &mut self,
         callee: &Expression,
-        checked_arguments: Vec<CheckedExpression>,
+        arguments: &[Expression],
     ) -> Result<CheckedExpression, SemanticError> {
-        let call = self.analyze_call(callee, checked_arguments)?;
+        let call = self.analyze_call(callee, arguments)?;
         if call.result_types.len() != 1 {
             return Err(SemanticError::new(format!(
                 "call to `{}` produces `{}` and cannot be used in a single-value expression",
@@ -212,8 +204,9 @@ impl<'a> FunctionAnalyzer<'a> {
     pub(super) fn analyze_call(
         &mut self,
         callee: &Expression,
-        checked_arguments: Vec<CheckedExpression>,
+        arguments: &[Expression],
     ) -> Result<CheckedCall, SemanticError> {
+        let checked_arguments = self.analyze_call_arguments(arguments)?;
         match callee {
             Expression::Identifier(name) => self.analyze_identifier_call(name, checked_arguments),
             Expression::Selector { target, member } => {
@@ -228,13 +221,10 @@ impl<'a> FunctionAnalyzer<'a> {
     fn analyze_identifier_call(
         &mut self,
         callee: &str,
-        checked_arguments: Vec<CheckedExpression>,
+        checked_arguments: CheckedCallArguments,
     ) -> Result<CheckedCall, SemanticError> {
         if let Some(builtin) = resolve_builtin(callee) {
-            let argument_types = checked_arguments
-                .iter()
-                .map(|argument| argument.ty.clone())
-                .collect::<Vec<_>>();
+            let argument_types = checked_call_argument_types(&checked_arguments);
             let result_types =
                 validate_builtin_call(builtin, &argument_types).map_err(SemanticError::new)?;
             return Ok(CheckedCall {
@@ -249,26 +239,11 @@ impl<'a> FunctionAnalyzer<'a> {
             .lookup(callee)
             .ok_or_else(|| SemanticError::new(format!("unknown function `{callee}`")))?;
         let signature = self.registry.signature(function_index);
-        if checked_arguments.len() != signature.parameters.len() {
-            return Err(SemanticError::new(format!(
-                "function `{callee}` expects {} arguments, found {}",
-                signature.parameters.len(),
-                checked_arguments.len()
-            )));
-        }
-
-        let checked_arguments = checked_arguments
-            .into_iter()
-            .zip(signature.parameters.iter())
-            .enumerate()
-            .map(|(index, (argument, expected))| {
-                coerce_expression_to_type(
-                    expected,
-                    argument,
-                    &format!("argument {} in call to `{callee}`", index + 1),
-                )
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let checked_arguments = self.coerce_user_defined_call_arguments(
+            callee,
+            &signature.parameters,
+            checked_arguments,
+        )?;
 
         Ok(CheckedCall {
             target: CallTarget::UserDefined {
@@ -342,7 +317,7 @@ impl<'a> FunctionAnalyzer<'a> {
         &mut self,
         target: &Expression,
         member: &str,
-        checked_arguments: Vec<CheckedExpression>,
+        checked_arguments: CheckedCallArguments,
     ) -> Result<CheckedCall, SemanticError> {
         let package_name = match target {
             Expression::Identifier(name) => name.as_str(),
@@ -362,11 +337,9 @@ impl<'a> FunctionAnalyzer<'a> {
                     package_name
                 ))
             })?;
-        let checked_arguments = coerce_package_call_arguments(package_function, checked_arguments)?;
-        let argument_types = checked_arguments
-            .iter()
-            .map(|argument| argument.ty.clone())
-            .collect::<Vec<_>>();
+        let checked_arguments =
+            self.coerce_package_call_arguments(package_function, checked_arguments)?;
+        let argument_types = checked_call_argument_types(&checked_arguments);
         let result_types =
             validate_package_call(package_function, &argument_types).map_err(SemanticError::new)?;
         Ok(CheckedCall {
@@ -374,6 +347,111 @@ impl<'a> FunctionAnalyzer<'a> {
             arguments: checked_arguments,
             result_types,
         })
+    }
+
+    fn analyze_call_arguments(
+        &mut self,
+        arguments: &[Expression],
+    ) -> Result<CheckedCallArguments, SemanticError> {
+        if let [argument] = arguments {
+            if let Some(call) = self.try_analyze_multi_result_call(argument)? {
+                return Ok(CheckedCallArguments::ExpandedCall(Box::new(call)));
+            }
+        }
+
+        let checked_arguments = arguments
+            .iter()
+            .map(|argument| self.analyze_expression(argument))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(CheckedCallArguments::Expressions(checked_arguments))
+    }
+
+    fn coerce_user_defined_call_arguments(
+        &mut self,
+        callee: &str,
+        expected_arguments: &[Type],
+        checked_arguments: CheckedCallArguments,
+    ) -> Result<CheckedCallArguments, SemanticError> {
+        match checked_arguments {
+            CheckedCallArguments::Expressions(arguments) => {
+                if arguments.len() != expected_arguments.len() {
+                    return Err(SemanticError::new(format!(
+                        "function `{callee}` expects {} arguments, found {}",
+                        expected_arguments.len(),
+                        arguments.len()
+                    )));
+                }
+                let arguments = arguments
+                    .into_iter()
+                    .zip(expected_arguments.iter())
+                    .enumerate()
+                    .map(|(index, (argument, expected))| {
+                        coerce_expression_to_type(
+                            expected,
+                            argument,
+                            &format!("argument {} in call to `{callee}`", index + 1),
+                        )
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(CheckedCallArguments::Expressions(arguments))
+            }
+            CheckedCallArguments::ExpandedCall(call) => {
+                if call.result_types.len() != expected_arguments.len() {
+                    return Err(SemanticError::new(format!(
+                        "function `{callee}` expects {} arguments, found {}",
+                        expected_arguments.len(),
+                        call.result_types.len()
+                    )));
+                }
+                for (index, (actual, expected)) in call
+                    .result_types
+                    .iter()
+                    .zip(expected_arguments.iter())
+                    .enumerate()
+                {
+                    expect_type(
+                        expected,
+                        actual,
+                        &format!("argument {} in call to `{callee}`", index + 1),
+                    )?;
+                }
+                Ok(CheckedCallArguments::ExpandedCall(call))
+            }
+        }
+    }
+
+    fn coerce_package_call_arguments(
+        &mut self,
+        function: crate::package::PackageFunction,
+        checked_arguments: CheckedCallArguments,
+    ) -> Result<CheckedCallArguments, SemanticError> {
+        let Some(expected_arguments) = crate::semantic::packages::expected_argument_types(function)
+        else {
+            return Ok(checked_arguments);
+        };
+        match checked_arguments {
+            CheckedCallArguments::Expressions(arguments) => {
+                if arguments.len() != expected_arguments.len() {
+                    return Ok(CheckedCallArguments::Expressions(arguments));
+                }
+                let arguments = arguments
+                    .into_iter()
+                    .zip(expected_arguments.iter())
+                    .enumerate()
+                    .map(|(index, (argument, expected))| {
+                        coerce_expression_to_type(
+                            expected,
+                            argument,
+                            &format!("argument {} in call to `{}`", index + 1, function.render()),
+                        )
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(CheckedCallArguments::Expressions(arguments))
+            }
+            CheckedCallArguments::ExpandedCall(call) => {
+                Ok(CheckedCallArguments::ExpandedCall(call))
+            }
+        }
     }
 
     fn analyze_conversion_expression(
@@ -610,29 +688,14 @@ fn analyze_binary_operator(
     }
 }
 
-fn coerce_package_call_arguments(
-    function: crate::package::PackageFunction,
-    checked_arguments: Vec<CheckedExpression>,
-) -> Result<Vec<CheckedExpression>, SemanticError> {
-    let Some(expected_arguments) = crate::semantic::packages::expected_argument_types(function)
-    else {
-        return Ok(checked_arguments);
-    };
-    if checked_arguments.len() != expected_arguments.len() {
-        return Ok(checked_arguments);
+fn checked_call_argument_types(arguments: &CheckedCallArguments) -> Vec<Type> {
+    match arguments {
+        CheckedCallArguments::Expressions(arguments) => arguments
+            .iter()
+            .map(|argument| argument.ty.clone())
+            .collect(),
+        CheckedCallArguments::ExpandedCall(call) => call.result_types.clone(),
     }
-    checked_arguments
-        .into_iter()
-        .zip(expected_arguments.iter())
-        .enumerate()
-        .map(|(index, (argument, expected))| {
-            coerce_expression_to_type(
-                expected,
-                argument,
-                &format!("argument {} in call to `{}`", index + 1, function.render()),
-            )
-        })
-        .collect()
 }
 
 fn render_call_target(target: &CallTarget) -> String {

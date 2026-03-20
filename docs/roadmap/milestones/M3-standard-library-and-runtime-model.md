@@ -25,6 +25,7 @@
 
 ## Related Plans
 
+- `2026-03-20-08-55-11-call-argument-multi-result-forwarding`: completed plan for staged call-argument multi-result forwarding plus `strings` / `bytes` `CutPrefix` / `CutSuffix` seams
 - `2026-03-20-08-14-13-multi-result-functions-cut-seams`: completed plan for the first staged multi-result model plus `strings.Cut` / `bytes.Cut`
 - `2026-03-20-07-46-15-import-aliases-and-bytes-package`: completed plan for grouped imports, explicit import aliases, and the staged `bytes` package seam
 - `2026-03-20-07-17-39-channel-runtime-first-slice`: completed staged buffered `chan` support with explicit send / receive / close behavior, nil-channel zero values, and channel-aware `len` / `cap`
@@ -58,6 +59,6 @@
 
 ## Next-Round Recommendations
 
-- Open the next `M3` plan for the next staged multi-result consumer slice or package seam so the new result-list plumbing keeps paying down package/runtime gaps instead of stagnating as an isolated feature.
+- Open the next `M3` plan for the next staged package or syntax slice that spends the new single-call-argument forwarding path on more realistic Go code.
 - If control-flow stays the next priority, reuse the explicit `ForStatement` / `CheckedForStatement` model and the compiler control-flow stack instead of lowering new targets through ad hoc jumps.
 - Reuse the `docs/research/` flow before locking the next compatibility-sensitive slice.

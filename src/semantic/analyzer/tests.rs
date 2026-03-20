@@ -624,6 +624,21 @@ fn analyze_multi_result_functions_and_cut_calls() {
 }
 
 #[test]
+fn analyze_call_argument_forwarding_and_cut_variants() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nimport (\n\t\"bytes\"\n\t\"strings\"\n)\n\nfunc pair() (string, string) {\n\treturn \"nova\", \"go\"\n}\n\nfunc joinPair(left string, right string) string {\n\treturn left + right\n}\n\nfunc describeStringFlag(value string, found bool) string {\n\tif found {\n\t\treturn value\n\t}\n\treturn \"missing\"\n}\n\nfunc describeBytesFlag(value []byte, found bool) string {\n\tif found {\n\t\treturn string(value)\n\t}\n\treturn \"missing\"\n}\n\nfunc main() {\n\tprintln(joinPair(pair()))\n\tprintln(strings.Cut(\"nova-go\", \"-\"))\n\tprintln(describeStringFlag(strings.CutPrefix(\"nova-go\", \"nova-\")))\n\tprintln(describeStringFlag(strings.CutSuffix(\"nova-go\", \"-go\")))\n\tprintln(describeBytesFlag(bytes.CutPrefix([]byte(\"nova-go\"), []byte(\"nova-\"))))\n\tprintln(describeBytesFlag(bytes.CutSuffix([]byte(\"nova-go\"), []byte(\"-go\"))))\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let program = analyze_package(&ast).expect("analysis should succeed");
+
+    assert_eq!(program.functions.len(), 5);
+}
+
+#[test]
 fn reject_break_outside_breakable_statement() {
     let source = SourceFile {
         path: "test.go".into(),

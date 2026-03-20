@@ -81,6 +81,49 @@ fn execute_strings_package_functions() {
 }
 
 #[test]
+fn execute_cut_prefix_and_suffix_package_functions() {
+    let program = Program {
+        package_name: "main".to_string(),
+        entry_function: "main".to_string(),
+        entry_function_index: 0,
+        functions: vec![CompiledFunction {
+            name: "main".to_string(),
+            parameter_count: 0,
+            return_types: Vec::new(),
+            local_names: vec![],
+            instructions: vec![
+                Instruction::PushString("nova-go".to_string()),
+                Instruction::PushString("nova-".to_string()),
+                Instruction::CallPackage(PackageFunction::StringsCutPrefix, 2),
+                Instruction::CallBuiltin(BuiltinFunction::Println, 2),
+                Instruction::PushString("nova-go".to_string()),
+                Instruction::PushString("-go".to_string()),
+                Instruction::CallPackage(PackageFunction::StringsCutSuffix, 2),
+                Instruction::CallBuiltin(BuiltinFunction::Println, 2),
+                Instruction::PushByte(b'n'),
+                Instruction::PushByte(b'o'),
+                Instruction::PushByte(b'v'),
+                Instruction::PushByte(b'a'),
+                Instruction::BuildSlice(4),
+                Instruction::PushByte(b'g'),
+                Instruction::PushByte(b'o'),
+                Instruction::BuildSlice(2),
+                Instruction::CallPackage(PackageFunction::BytesCutPrefix, 2),
+                Instruction::CallBuiltin(BuiltinFunction::Println, 2),
+                Instruction::Return,
+            ],
+        }],
+    };
+
+    let output = VirtualMachine::new()
+        .execute(&program)
+        .expect("cut prefix/suffix functions should execute")
+        .render_output();
+
+    assert_eq!(output, "go true\nnova true\n[110 111 118 97] false\n");
+}
+
+#[test]
 fn execute_slice_windows_and_index_assignment() {
     let program = Program {
         package_name: "main".to_string(),

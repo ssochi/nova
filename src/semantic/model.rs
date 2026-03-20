@@ -301,8 +301,33 @@ impl CheckedValueSource {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CheckedCall {
     pub target: CallTarget,
-    pub arguments: Vec<CheckedExpression>,
+    pub arguments: CheckedCallArguments,
     pub result_types: Vec<Type>,
+}
+
+impl CheckedCall {
+    pub fn argument_count(&self) -> usize {
+        match &self.arguments {
+            CheckedCallArguments::Expressions(arguments) => arguments.len(),
+            CheckedCallArguments::ExpandedCall(call) => call.result_types.len(),
+        }
+    }
+
+    pub fn argument_types(&self) -> Vec<Type> {
+        match &self.arguments {
+            CheckedCallArguments::Expressions(arguments) => arguments
+                .iter()
+                .map(|argument| argument.ty.clone())
+                .collect(),
+            CheckedCallArguments::ExpandedCall(call) => call.result_types.clone(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CheckedCallArguments {
+    Expressions(Vec<CheckedExpression>),
+    ExpandedCall(Box<CheckedCall>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

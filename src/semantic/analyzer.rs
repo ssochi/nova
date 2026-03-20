@@ -337,11 +337,7 @@ impl<'a> FunctionAnalyzer<'a> {
         expression: &crate::frontend::ast::Expression,
     ) -> Result<CheckedStatement, SemanticError> {
         if let crate::frontend::ast::Expression::Call { callee, arguments } = expression {
-            let checked_arguments = arguments
-                .iter()
-                .map(|argument| self.analyze_expression(argument))
-                .collect::<Result<Vec<_>, _>>()?;
-            let call = self.analyze_call(callee, checked_arguments)?;
+            let call = self.analyze_call(callee, arguments)?;
             if call.result_types.len() > 1 {
                 return Err(SemanticError::new(format!(
                     "expression statement cannot discard multi-result call to `{}`",

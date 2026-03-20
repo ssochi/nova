@@ -63,6 +63,7 @@ Operational clarifications:
 28. Do not add channel `range` or comma-ok receive until the broader blocking and multi-result design has been planned deliberately.
 29. When extending imports, keep grouped import declarations and explicit alias bindings visible in the AST and import registry; do not erase binding names during parsing just because runtime lookup is metadata-backed.
 30. When extending multi-result behavior, keep it explicit as function-signature, checked-source, and bytecode metadata; do not introduce first-class tuple runtime values just to move several results through the VM.
+31. When extending multi-result call consumption, follow the real Go rule verified locally: a multi-result call may feed another call only when it is the entire argument list by itself; prefixed forms like `f(1, pair())` must remain invalid single-value contexts unless a new research note proves otherwise.
 
 If no task is explicitly specified, you must proactively choose the most worthwhile piece of work to advance, with the following priorities:
 1. **Obvious gaps in functionality, core experience, or core flow** (search the web more, do research, refer to relevant experience from similar high-quality projects, and established methodologies)

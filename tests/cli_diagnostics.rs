@@ -739,7 +739,7 @@ fn check_rejects_close_on_non_channel() {
 fn check_rejects_multi_result_call_in_single_value_context() {
     let path = write_temp_source(
         "check-bad-multi-result-single-context",
-        "package main\n\nfunc pair() (int, int) {\n\treturn 1, 2\n}\n\nfunc main() {\n\tprintln(pair())\n}\n",
+        "package main\n\nfunc pair() (int, int) {\n\treturn 1, 2\n}\n\nfunc take(a int, b int, c int) {}\n\nfunc main() {\n\ttake(1, pair())\n}\n",
     );
 
     let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");

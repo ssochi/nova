@@ -34,6 +34,7 @@ This directory stores validation evidence that "proves the change holds."
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `2026-03-20-call-argument-multi-result-forwarding.md`: validates staged call-argument multi-result forwarding plus the `strings` / `bytes` `CutPrefix` / `CutSuffix` seams across the full CLI and VM stack
 - `2026-03-20-multi-result-functions-and-cut-package-seams.md`: validates unnamed multi-result functions, staged multi-binding statements, and the `strings.Cut` / `bytes.Cut` seams across the full CLI and VM stack
 - `2026-03-20-import-aliases-and-bytes-package.md`: validates grouped imports, explicit import aliases, and the staged `bytes` package seam across the full CLI and VM stack
 - `2026-03-20-loop-control-flow.md`: validates staged classic `for` clauses, unlabeled `break` / `continue`, and conservative loop termination analysis

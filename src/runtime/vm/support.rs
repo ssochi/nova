@@ -252,6 +252,44 @@ pub(super) fn execute_bytes_package_function(
                 ])
             }
         }
+        PackageFunction::BytesCutPrefix => {
+            let [value, prefix] = expect_exact_package_arguments(function, arguments, 2)?;
+            let value = expect_byte_slice_value(function, 1, value)?;
+            let prefix = expect_byte_slice_package_argument(function, 2, prefix)?;
+            let bytes = value.byte_elements().map_err(|_| {
+                RuntimeError::new(format!(
+                    "argument 1 in call to `{}` expected `[]byte`, found a non-byte slice",
+                    function.render()
+                ))
+            })?;
+            if prefix.is_empty() || bytes.starts_with(prefix.as_slice()) {
+                let after = value.slice(prefix.len(), value.len()).map_err(|_| {
+                    RuntimeError::new("bytes.CutPrefix produced an invalid suffix slice")
+                })?;
+                Ok(vec![Value::Slice(after), Value::Boolean(true)])
+            } else {
+                Ok(vec![Value::Slice(value), Value::Boolean(false)])
+            }
+        }
+        PackageFunction::BytesCutSuffix => {
+            let [value, suffix] = expect_exact_package_arguments(function, arguments, 2)?;
+            let value = expect_byte_slice_value(function, 1, value)?;
+            let suffix = expect_byte_slice_package_argument(function, 2, suffix)?;
+            let bytes = value.byte_elements().map_err(|_| {
+                RuntimeError::new(format!(
+                    "argument 1 in call to `{}` expected `[]byte`, found a non-byte slice",
+                    function.render()
+                ))
+            })?;
+            if suffix.is_empty() || bytes.ends_with(suffix.as_slice()) {
+                let before = value.slice(0, value.len() - suffix.len()).map_err(|_| {
+                    RuntimeError::new("bytes.CutSuffix produced an invalid prefix slice")
+                })?;
+                Ok(vec![Value::Slice(before), Value::Boolean(true)])
+            } else {
+                Ok(vec![Value::Slice(value), Value::Boolean(false)])
+            }
+        }
         PackageFunction::BytesJoin => {
             let [elements, separator] = expect_exact_package_arguments(function, arguments, 2)?;
             let elements = expect_byte_slice_slice_package_argument(function, 1, elements)?;

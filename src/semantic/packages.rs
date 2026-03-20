@@ -26,7 +26,7 @@ const FMT_FUNCTIONS: [PackageFunctionContract; 3] = [
     },
 ];
 
-const STRINGS_FUNCTIONS: [PackageFunctionContract; 5] = [
+const STRINGS_FUNCTIONS: [PackageFunctionContract; 7] = [
     PackageFunctionContract {
         function: PackageFunction::StringsContains,
         member_name: "Contains",
@@ -43,6 +43,16 @@ const STRINGS_FUNCTIONS: [PackageFunctionContract; 5] = [
         validator: validate_strings_cut,
     },
     PackageFunctionContract {
+        function: PackageFunction::StringsCutPrefix,
+        member_name: "CutPrefix",
+        validator: validate_strings_cut_prefix,
+    },
+    PackageFunctionContract {
+        function: PackageFunction::StringsCutSuffix,
+        member_name: "CutSuffix",
+        validator: validate_strings_cut_suffix,
+    },
+    PackageFunctionContract {
         function: PackageFunction::StringsJoin,
         member_name: "Join",
         validator: validate_strings_join,
@@ -54,7 +64,7 @@ const STRINGS_FUNCTIONS: [PackageFunctionContract; 5] = [
     },
 ];
 
-const BYTES_FUNCTIONS: [PackageFunctionContract; 6] = [
+const BYTES_FUNCTIONS: [PackageFunctionContract; 8] = [
     PackageFunctionContract {
         function: PackageFunction::BytesEqual,
         member_name: "Equal",
@@ -74,6 +84,16 @@ const BYTES_FUNCTIONS: [PackageFunctionContract; 6] = [
         function: PackageFunction::BytesCut,
         member_name: "Cut",
         validator: validate_bytes_cut,
+    },
+    PackageFunctionContract {
+        function: PackageFunction::BytesCutPrefix,
+        member_name: "CutPrefix",
+        validator: validate_bytes_cut_prefix,
+    },
+    PackageFunctionContract {
+        function: PackageFunction::BytesCutSuffix,
+        member_name: "CutSuffix",
+        validator: validate_bytes_cut_suffix,
     },
     PackageFunctionContract {
         function: PackageFunction::BytesJoin,
@@ -121,7 +141,9 @@ pub fn expected_argument_types(function: PackageFunction) -> Option<Vec<Type>> {
         }
         PackageFunction::StringsContains
         | PackageFunction::StringsHasPrefix
-        | PackageFunction::StringsCut => Some(vec![Type::String, Type::String]),
+        | PackageFunction::StringsCut
+        | PackageFunction::StringsCutPrefix
+        | PackageFunction::StringsCutSuffix => Some(vec![Type::String, Type::String]),
         PackageFunction::StringsJoin => {
             Some(vec![Type::Slice(Box::new(Type::String)), Type::String])
         }
@@ -129,7 +151,9 @@ pub fn expected_argument_types(function: PackageFunction) -> Option<Vec<Type>> {
         PackageFunction::BytesEqual
         | PackageFunction::BytesContains
         | PackageFunction::BytesHasPrefix
-        | PackageFunction::BytesCut => Some(vec![byte_slice_type(), byte_slice_type()]),
+        | PackageFunction::BytesCut
+        | PackageFunction::BytesCutPrefix
+        | PackageFunction::BytesCutSuffix => Some(vec![byte_slice_type(), byte_slice_type()]),
         PackageFunction::BytesJoin => Some(vec![byte_slice_slice_type(), byte_slice_type()]),
         PackageFunction::BytesRepeat => Some(vec![byte_slice_type(), Type::Int]),
     }
@@ -219,6 +243,40 @@ fn validate_strings_cut(argument_types: &[Type]) -> Result<Vec<Type>, String> {
         &argument_types[1],
     )?;
     Ok(vec![Type::String, Type::String, Type::Bool])
+}
+
+fn validate_strings_cut_prefix(argument_types: &[Type]) -> Result<Vec<Type>, String> {
+    validate_exact_package_arity(PackageFunction::StringsCutPrefix, 2, argument_types.len())?;
+    expect_package_argument_type(
+        PackageFunction::StringsCutPrefix,
+        1,
+        &Type::String,
+        &argument_types[0],
+    )?;
+    expect_package_argument_type(
+        PackageFunction::StringsCutPrefix,
+        2,
+        &Type::String,
+        &argument_types[1],
+    )?;
+    Ok(vec![Type::String, Type::Bool])
+}
+
+fn validate_strings_cut_suffix(argument_types: &[Type]) -> Result<Vec<Type>, String> {
+    validate_exact_package_arity(PackageFunction::StringsCutSuffix, 2, argument_types.len())?;
+    expect_package_argument_type(
+        PackageFunction::StringsCutSuffix,
+        1,
+        &Type::String,
+        &argument_types[0],
+    )?;
+    expect_package_argument_type(
+        PackageFunction::StringsCutSuffix,
+        2,
+        &Type::String,
+        &argument_types[1],
+    )?;
+    Ok(vec![Type::String, Type::Bool])
 }
 
 fn validate_strings_join(argument_types: &[Type]) -> Result<Vec<Type>, String> {
@@ -326,6 +384,42 @@ fn validate_bytes_cut(argument_types: &[Type]) -> Result<Vec<Type>, String> {
         &argument_types[1],
     )?;
     Ok(vec![byte_slice.clone(), byte_slice, Type::Bool])
+}
+
+fn validate_bytes_cut_prefix(argument_types: &[Type]) -> Result<Vec<Type>, String> {
+    validate_exact_package_arity(PackageFunction::BytesCutPrefix, 2, argument_types.len())?;
+    let byte_slice = byte_slice_type();
+    expect_package_argument_type(
+        PackageFunction::BytesCutPrefix,
+        1,
+        &byte_slice,
+        &argument_types[0],
+    )?;
+    expect_package_argument_type(
+        PackageFunction::BytesCutPrefix,
+        2,
+        &byte_slice,
+        &argument_types[1],
+    )?;
+    Ok(vec![byte_slice, Type::Bool])
+}
+
+fn validate_bytes_cut_suffix(argument_types: &[Type]) -> Result<Vec<Type>, String> {
+    validate_exact_package_arity(PackageFunction::BytesCutSuffix, 2, argument_types.len())?;
+    let byte_slice = byte_slice_type();
+    expect_package_argument_type(
+        PackageFunction::BytesCutSuffix,
+        1,
+        &byte_slice,
+        &argument_types[0],
+    )?;
+    expect_package_argument_type(
+        PackageFunction::BytesCutSuffix,
+        2,
+        &byte_slice,
+        &argument_types[1],
+    )?;
+    Ok(vec![byte_slice, Type::Bool])
 }
 
 fn validate_bytes_join(argument_types: &[Type]) -> Result<Vec<Type>, String> {
@@ -441,6 +535,17 @@ mod tests {
     }
 
     #[test]
+    fn cut_prefix_reports_multi_result_contract() {
+        let result = validate_package_call(
+            PackageFunction::StringsCutPrefix,
+            &[Type::String, Type::String],
+        )
+        .expect("strings.CutPrefix should accept two strings");
+
+        assert_eq!(result, vec![Type::String, Type::Bool]);
+    }
+
+    #[test]
     fn bytes_join_accepts_nested_byte_slices() {
         let result = validate_package_call(
             PackageFunction::BytesJoin,
@@ -485,5 +590,19 @@ mod tests {
                 Type::Bool
             ]
         );
+    }
+
+    #[test]
+    fn bytes_cut_suffix_reports_multi_result_contract() {
+        let result = validate_package_call(
+            PackageFunction::BytesCutSuffix,
+            &[
+                Type::Slice(Box::new(Type::Byte)),
+                Type::Slice(Box::new(Type::Byte)),
+            ],
+        )
+        .expect("bytes.CutSuffix should accept two []byte values");
+
+        assert_eq!(result, vec![Type::Slice(Box::new(Type::Byte)), Type::Bool]);
     }
 }
