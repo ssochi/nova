@@ -64,6 +64,15 @@ fn run_executes_grouped_import_aliases_and_bytes_package_calls() {
 }
 
 #[test]
+fn run_executes_multi_result_functions_and_cut_package_calls() {
+    let output = run_cli(&["run", "examples/multi_results.go"]).expect("program should run");
+    assert_eq!(
+        output,
+        "nova go true\nnova  false\nvm loop true\nvm true false\nalpha 4\nalpha 0\n"
+    );
+}
+
+#[test]
 fn run_executes_slice_windows_and_index_assignment() {
     let output = run_cli(&["run", "examples/slice_windows.go"]).expect("program should run");
     assert_eq!(output, "3 9 7\n1 9 3 7\n");
@@ -205,6 +214,16 @@ fn dump_ast_renders_short_declarations_and_inc_dec_statements() {
     assert!(output.contains("for i := 0; (i < len(values)); i++ {"));
     assert!(output.contains("counts[\"go\"]++"));
     assert!(output.contains("switch probe := current; {"));
+}
+
+#[test]
+fn dump_ast_renders_multi_result_signatures_and_bindings() {
+    let output =
+        run_cli(&["dump-ast", "examples/multi_results.go"]).expect("ast should be rendered");
+
+    assert!(output.contains("func splitTag(value string) (string, string, bool) {"));
+    assert!(output.contains("head, tail, found := splitTag(value)"));
+    assert!(output.contains("byteHead, byteTail, byteFound = splitBytes([]byte(\"vm\"))"));
 }
 
 #[test]
@@ -645,6 +664,16 @@ fn dump_bytecode_shows_bytes_package_calls() {
     assert!(output.contains("call-package bytes.Equal 2"));
     assert!(output.contains("call-package bytes.Contains 2"));
     assert!(output.contains("call-package bytes.HasPrefix 2"));
+}
+
+#[test]
+fn dump_bytecode_shows_multi_result_call_metadata() {
+    let output = run_cli(&["dump-bytecode", "examples/multi_results.go"])
+        .expect("bytecode should be generated");
+
+    assert!(output.contains("returns=string, string, bool"));
+    assert!(output.contains("call-package strings.Cut 2"));
+    assert!(output.contains("call-package bytes.Cut 2"));
 }
 
 #[test]

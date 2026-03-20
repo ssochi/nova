@@ -239,13 +239,13 @@ impl VirtualMachine {
                     advance_pc = false;
                 }
                 Instruction::Return => {
-                    let return_value = if function.returns_value {
-                        Some(self.pop_value()?)
-                    } else {
-                        None
-                    };
+                    let mut return_values = Vec::with_capacity(function.return_types.len());
+                    for _ in 0..function.return_types.len() {
+                        return_values.push(self.pop_value()?);
+                    }
+                    return_values.reverse();
                     self.frames.pop();
-                    if let Some(value) = return_value {
+                    for value in return_values {
                         self.stack.push(value);
                     }
                     if self.frames.is_empty() {
@@ -489,6 +489,34 @@ impl VirtualMachine {
                 let prefix = expect_string_package_argument(function, 2, prefix)?;
                 self.stack.push(Value::Boolean(value.has_prefix(&prefix)));
             }
+            PackageFunction::StringsCut => {
+                let [value, separator] = expect_exact_package_arguments(function, arguments, 2)?;
+                let value = expect_string_package_argument(function, 1, value)?;
+                let separator = expect_string_package_argument(function, 2, separator)?;
+                let found_index = if separator.as_bytes().is_empty() {
+                    Some(0)
+                } else {
+                    value
+                        .as_bytes()
+                        .windows(separator.len())
+                        .position(|window| window == separator.as_bytes())
+                };
+                if let Some(index) = found_index {
+                    let before = value
+                        .slice(0, index)
+                        .map_err(|_| RuntimeError::new("strings.Cut produced an invalid prefix"))?;
+                    let after = value
+                        .slice(index + separator.len(), value.len())
+                        .map_err(|_| RuntimeError::new("strings.Cut produced an invalid suffix"))?;
+                    self.stack.push(Value::String(before));
+                    self.stack.push(Value::String(after));
+                    self.stack.push(Value::Boolean(true));
+                } else {
+                    self.stack.push(Value::String(value));
+                    self.stack.push(Value::String(StringValue::from("")));
+                    self.stack.push(Value::Boolean(false));
+                }
+            }
             PackageFunction::StringsJoin => {
                 let [elements, separator] = expect_exact_package_arguments(function, arguments, 2)?;
                 let elements = expect_string_slice_package_argument(function, 1, elements)?;
@@ -523,10 +551,12 @@ impl VirtualMachine {
             PackageFunction::BytesEqual
             | PackageFunction::BytesContains
             | PackageFunction::BytesHasPrefix
+            | PackageFunction::BytesCut
             | PackageFunction::BytesJoin
             | PackageFunction::BytesRepeat => {
-                self.stack
-                    .push(execute_bytes_package_function(function, arguments)?);
+                for value in execute_bytes_package_function(function, arguments)? {
+                    self.stack.push(value);
+                }
             }
         }
 

@@ -9,6 +9,8 @@
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-08-14-13-multi-result-functions-cut-seams`
+- Opened `2026-03-20-08-14-13-multi-result-functions-cut-seams` for the first staged multi-result model plus `strings.Cut` / `bytes.Cut` under `M3`
 - Completed and archived `2026-03-20-07-46-15-import-aliases-and-bytes-package`
 - Opened `2026-03-20-07-46-15-import-aliases-and-bytes-package` for grouped imports, explicit import aliases, and the staged `bytes` package seam under `M3`
 - Completed and archived `2026-03-20-07-17-39-channel-runtime-first-slice`

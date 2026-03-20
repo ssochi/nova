@@ -36,13 +36,15 @@ Describe the concrete execution pipeline shipped in the bootstrap milestone, inc
 
 ## Current Semantic Rules
 
-- Package analysis validates duplicate function names, variable scopes, call arity, and return compatibility.
+- Package analysis validates duplicate function names, variable scopes, call arity, and zero/one/multi-result return compatibility.
 - Package analysis also validates supported import paths and selector calls to imported package members.
 - Execution additionally requires the configured package and entry function to exist, and the entry function must be `func main()`.
 - Local variables must be declared before assignment or use, with nested block scopes mapped to fixed slots during analysis.
-- Builtin calls, user-defined function calls, and metadata-backed `fmt` / `strings` package seams are supported.
+- Builtin calls, user-defined function calls, and metadata-backed `fmt` / `strings` / `bytes` package seams are supported.
 - Current builtin coverage includes `print`, `println`, `len`, `cap`, `append`, `copy`, `delete`, `close`, and typed `make` handling.
-- Current imported package coverage is `fmt.Print`, `fmt.Println`, `fmt.Sprint`, `strings.Join`, `strings.Contains`, `strings.HasPrefix`, and `strings.Repeat`.
+- Current imported package coverage is `fmt.Print`, `fmt.Println`, `fmt.Sprint`, `strings.Join`, `strings.Contains`, `strings.HasPrefix`, `strings.Cut`, `strings.Repeat`, `bytes.Equal`, `bytes.Contains`, `bytes.HasPrefix`, `bytes.Cut`, `bytes.Join`, and `bytes.Repeat`.
+- Compiled-function metadata now records explicit result lists instead of a boolean `returns_value` flag, so the VM can return zero, one, or several values through the same stack-frame path.
+- The current multi-result model is explicit rather than tuple-based: staged `return`, multi-binding `:=` / `=`, and package seams can consume multi-result calls, while unsupported single-value contexts still fail during semantic analysis.
 - Branch and loop conditions must produce boolean values, staged control-flow headers run before condition or clause dispatch, and expression-switch tags are evaluated once before clause comparison.
 - The current branch model supports `if`, `else`, explicit `else if`, and staged expression `switch` lowering with header scopes chosen during semantic analysis.
 - Single-expression short declarations, staged compound assignments, and explicit `++` / `--` are now explicit statement forms that survive semantic analysis and lower directly instead of pretending to be expressions.
@@ -54,7 +56,7 @@ Describe the concrete execution pipeline shipped in the bootstrap milestone, inc
 
 ## Near-Term Extension Path
 
-1. Decide whether the next `M3` slice should deepen channel semantics with scheduler-adjacent groundwork or return to broader package-backed standard-library helpers.
-2. Do not add channel `range` or comma-ok receive opportunistically; pair them with the multi-result and blocking-model design they actually need.
+1. Decide whether the next `M3` slice should deepen the staged multi-result surface or spend that new plumbing on broader package-backed helpers.
+2. Do not add channel `range` or comma-ok receive opportunistically; pair them with the blocking-model design they still need on top of the new multi-result path.
 3. Keep package-backed services growing without collapsing into ad hoc dispatch tables spread across the VM.
 4. Separate bytecode IR from runtime-specific instruction encoding if the VM grows significantly.

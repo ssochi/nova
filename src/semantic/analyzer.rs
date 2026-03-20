@@ -7,13 +7,14 @@ use crate::frontend::ast::{
     Statement, TypeRef,
 };
 use crate::semantic::model::{
-    CheckedAssignmentTarget, CheckedBlock, CheckedCompoundAssignOperator, CheckedExpression,
-    CheckedFunction, CheckedIncDecOperator, CheckedProgram, CheckedStatement, Type,
+    CheckedAssignmentTarget, CheckedBinding, CheckedBlock, CheckedCompoundAssignOperator,
+    CheckedExpression, CheckedFunction, CheckedIncDecOperator, CheckedProgram, CheckedStatement,
+    CheckedValueSource, Type,
 };
 use crate::semantic::registry::{FunctionRegistry, ImportRegistry};
 use crate::semantic::support::{
-    block_guarantees_return, coerce_expression_to_type, expect_type, resolve_type_ref,
-    validate_runtime_type, zero_value_expression,
+    block_guarantees_return, coerce_expression_to_type, expect_type, render_type_list,
+    resolve_type_ref, validate_runtime_type, zero_value_expression,
 };
 
 mod expressions;
@@ -86,7 +87,7 @@ pub fn analyze_program(
             config.entry_function
         )));
     }
-    if entry_signature.return_type != Type::Void {
+    if !entry_signature.return_types.is_empty() {
         return Err(SemanticError::new(format!(
             "entry function `{}` must not return a value",
             config.entry_function
@@ -140,18 +141,18 @@ impl<'a> FunctionAnalyzer<'a> {
         let body = self.analyze_block(&self.function.body, false)?;
         let signature = self.registry.signature(self.function_index);
 
-        if signature.return_type != Type::Void && !block_guarantees_return(&body) {
+        if !signature.return_types.is_empty() && !block_guarantees_return(&body) {
             return Err(SemanticError::new(format!(
                 "function `{}` must return a `{}` on every path",
                 self.function.name,
-                signature.return_type.render()
+                render_type_list(&signature.return_types)
             )));
         }
 
         Ok(CheckedFunction {
             name: self.function.name.clone(),
             parameter_count: self.function.parameters.len(),
-            return_type: signature.return_type.clone(),
+            return_types: signature.return_types.clone(),
             local_names: self.local_names,
             body,
         })
@@ -196,8 +197,11 @@ impl<'a> FunctionAnalyzer<'a> {
         statement: &Statement,
     ) -> Result<CheckedStatement, SemanticError> {
         match statement {
-            Statement::ShortVarDecl { name, value } => {
-                self.analyze_short_var_decl_statement(name, value)
+            Statement::ShortVarDecl { bindings, values } => {
+                self.analyze_short_var_decl_statement(bindings, values)
+            }
+            Statement::MultiAssign { bindings, values } => {
+                self.analyze_multi_assign_statement(bindings, values)
             }
             Statement::VarDecl {
                 name,
@@ -232,33 +236,7 @@ impl<'a> FunctionAnalyzer<'a> {
             }
             Statement::Break => self.analyze_break_statement(),
             Statement::Continue => self.analyze_continue_statement(),
-            Statement::Return(value) => {
-                let expected = self
-                    .registry
-                    .signature(self.function_index)
-                    .return_type
-                    .clone();
-                match (&expected, value) {
-                    (Type::Void, None) => Ok(CheckedStatement::Return(None)),
-                    (Type::Void, Some(_)) => Err(SemanticError::new(format!(
-                        "function `{}` does not return a value",
-                        self.function.name
-                    ))),
-                    (_, Some(expression)) => {
-                        let expression = coerce_expression_to_type(
-                            &expected,
-                            self.analyze_expression(expression)?,
-                            "return statement",
-                        )?;
-                        Ok(CheckedStatement::Return(Some(expression)))
-                    }
-                    (_, None) => Err(SemanticError::new(format!(
-                        "function `{}` must return a `{}` value",
-                        self.function.name,
-                        expected.render()
-                    ))),
-                }
-            }
+            Statement::Return(values) => self.analyze_return_statement(values),
         }
     }
 
@@ -309,37 +287,38 @@ impl<'a> FunctionAnalyzer<'a> {
 
     pub(super) fn analyze_short_var_decl_statement(
         &mut self,
-        name: &str,
-        value: &crate::frontend::ast::Expression,
+        bindings: &[crate::frontend::ast::Binding],
+        values: &[crate::frontend::ast::Expression],
     ) -> Result<CheckedStatement, SemanticError> {
-        if name == "_" {
-            return Err(SemanticError::new(
-                "short declaration `:=` requires at least one named variable",
-            ));
-        }
-        if self.current_scope().contains_key(name) {
-            return Err(SemanticError::new(format!(
-                "short declaration `:=` requires a new variable name, but `{name}` already exists in the current scope"
-            )));
-        }
-
-        let value = self.analyze_expression(value)?;
-        if value.ty == Type::UntypedNil {
-            return Err(SemanticError::new(format!(
-                "short declaration `{name}` requires a typed value, found `nil`"
-            )));
-        }
-        if !value.ty.produces_value() {
-            return Err(SemanticError::new(format!(
-                "short declaration `{name}` requires a value-producing expression"
-            )));
-        }
-
-        let slot = self.allocate_local(name.to_string(), value.ty.clone());
+        let value_source =
+            self.analyze_value_source(values, Some(bindings.len()), "short declaration")?;
+        let result_types = value_source.result_types();
+        let bindings =
+            self.resolve_short_decl_bindings(bindings, &result_types, "short declaration `:=`")?;
         Ok(CheckedStatement::ShortVarDecl {
-            slot,
-            name: name.to_string(),
-            value,
+            bindings,
+            values: value_source,
+        })
+    }
+
+    pub(super) fn analyze_multi_assign_statement(
+        &mut self,
+        bindings: &[crate::frontend::ast::Binding],
+        values: &[crate::frontend::ast::Expression],
+    ) -> Result<CheckedStatement, SemanticError> {
+        let binding_targets = self.resolve_assignment_bindings(bindings, "assignment")?;
+        let expected_types = binding_targets
+            .iter()
+            .map(|binding| match binding {
+                CheckedBinding::Local { slot, name: _ } => self.local_type(*slot).clone(),
+                CheckedBinding::Discard => Type::Void,
+            })
+            .collect::<Vec<_>>();
+        let value_source =
+            self.analyze_typed_value_source(values, &expected_types, "assignment")?;
+        Ok(CheckedStatement::MultiAssign {
+            bindings: binding_targets,
+            values: value_source,
         })
     }
 
@@ -357,6 +336,34 @@ impl<'a> FunctionAnalyzer<'a> {
         &mut self,
         expression: &crate::frontend::ast::Expression,
     ) -> Result<CheckedStatement, SemanticError> {
+        if let crate::frontend::ast::Expression::Call { callee, arguments } = expression {
+            let checked_arguments = arguments
+                .iter()
+                .map(|argument| self.analyze_expression(argument))
+                .collect::<Result<Vec<_>, _>>()?;
+            let call = self.analyze_call(callee, checked_arguments)?;
+            if call.result_types.len() > 1 {
+                return Err(SemanticError::new(format!(
+                    "expression statement cannot discard multi-result call to `{}`",
+                    match &call.target {
+                        crate::semantic::model::CallTarget::Builtin(builtin) => {
+                            builtin.render().to_string()
+                        }
+                        crate::semantic::model::CallTarget::PackageFunction(function) => {
+                            function.render().to_string()
+                        }
+                        crate::semantic::model::CallTarget::UserDefined { name, .. } => {
+                            name.clone()
+                        }
+                    }
+                )));
+            }
+            let ty = call.result_types.first().cloned().unwrap_or(Type::Void);
+            return Ok(CheckedStatement::Expr(CheckedExpression {
+                ty,
+                kind: crate::semantic::model::CheckedExpressionKind::Call(call),
+            }));
+        }
         let expression = self.analyze_expression(expression)?;
         if expression.ty == Type::UntypedNil {
             return Err(SemanticError::new(
@@ -384,6 +391,38 @@ impl<'a> FunctionAnalyzer<'a> {
             "send statement",
         )?;
         Ok(CheckedStatement::Send { channel, value })
+    }
+
+    pub(super) fn analyze_return_statement(
+        &mut self,
+        values: &[crate::frontend::ast::Expression],
+    ) -> Result<CheckedStatement, SemanticError> {
+        let expected = self
+            .registry
+            .signature(self.function_index)
+            .return_types
+            .clone();
+        if expected.is_empty() && values.is_empty() {
+            return Ok(CheckedStatement::Return(CheckedValueSource::Expressions(
+                Vec::new(),
+            )));
+        }
+        if expected.is_empty() {
+            return Err(SemanticError::new(format!(
+                "function `{}` does not return a value",
+                self.function.name
+            )));
+        }
+        if values.is_empty() {
+            return Err(SemanticError::new(format!(
+                "function `{}` must return a `{}` value",
+                self.function.name,
+                render_type_list(&expected)
+            )));
+        }
+
+        let values = self.analyze_typed_value_source(values, &expected, "return statement")?;
+        Ok(CheckedStatement::Return(values))
     }
 
     pub(super) fn analyze_compound_assign_statement(
@@ -483,6 +522,194 @@ impl<'a> FunctionAnalyzer<'a> {
         }
     }
 
+    fn analyze_value_source(
+        &mut self,
+        values: &[crate::frontend::ast::Expression],
+        expected_count: Option<usize>,
+        context: &str,
+    ) -> Result<CheckedValueSource, SemanticError> {
+        if let Some(expected_count) = expected_count {
+            if let [expression] = values {
+                if let Some(call) = self.try_analyze_multi_result_call(expression)? {
+                    if call.result_types.len() != expected_count {
+                        return Err(SemanticError::new(format!(
+                            "{context} expects {} values, found {}",
+                            expected_count,
+                            call.result_types.len()
+                        )));
+                    }
+                    return Ok(CheckedValueSource::Call(call));
+                }
+            }
+            if values.len() != expected_count {
+                return Err(SemanticError::new(format!(
+                    "{context} expects {} values, found {}",
+                    expected_count,
+                    values.len()
+                )));
+            }
+        }
+
+        let checked_values = values
+            .iter()
+            .map(|value| self.analyze_expression(value))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(CheckedValueSource::Expressions(checked_values))
+    }
+
+    fn analyze_typed_value_source(
+        &mut self,
+        values: &[crate::frontend::ast::Expression],
+        expected_types: &[Type],
+        context: &str,
+    ) -> Result<CheckedValueSource, SemanticError> {
+        if let [expression] = values {
+            if let Some(call) = self.try_analyze_multi_result_call(expression)? {
+                if call.result_types.len() != expected_types.len() {
+                    return Err(SemanticError::new(format!(
+                        "{context} expects `{}`, found `{}`",
+                        render_type_list(expected_types),
+                        render_type_list(&call.result_types)
+                    )));
+                }
+                for (actual, expected) in call.result_types.iter().zip(expected_types) {
+                    expect_type(expected, actual, context)?;
+                }
+                return Ok(CheckedValueSource::Call(call));
+            }
+        }
+
+        if values.len() != expected_types.len() {
+            return Err(SemanticError::new(format!(
+                "{context} expects {} values, found {}",
+                expected_types.len(),
+                values.len()
+            )));
+        }
+
+        let checked_values = values
+            .iter()
+            .zip(expected_types.iter())
+            .enumerate()
+            .map(|(index, (value, expected))| {
+                let checked = self.analyze_expression(value)?;
+                if expected == &Type::Void {
+                    if checked.ty == Type::UntypedNil {
+                        return Err(SemanticError::new(format!(
+                            "{context} value {} requires a typed value, found `nil`",
+                            index + 1
+                        )));
+                    }
+                    if !checked.ty.produces_value() {
+                        return Err(SemanticError::new(format!(
+                            "{context} value {} requires a value-producing expression",
+                            index + 1
+                        )));
+                    }
+                    Ok(checked)
+                } else {
+                    coerce_expression_to_type(
+                        expected,
+                        checked,
+                        &format!("{context} value {}", index + 1),
+                    )
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(CheckedValueSource::Expressions(checked_values))
+    }
+
+    fn resolve_short_decl_bindings(
+        &mut self,
+        bindings: &[crate::frontend::ast::Binding],
+        result_types: &[Type],
+        context: &str,
+    ) -> Result<Vec<CheckedBinding>, SemanticError> {
+        if bindings.len() != result_types.len() {
+            return Err(SemanticError::new(format!(
+                "{context} expects {} bindings, found {}",
+                result_types.len(),
+                bindings.len()
+            )));
+        }
+
+        let mut seen = HashMap::new();
+        let mut has_new_named_binding = false;
+        let mut resolved = Vec::with_capacity(bindings.len());
+        for (binding, result_type) in bindings.iter().zip(result_types.iter()) {
+            resolved.push(match binding {
+                crate::frontend::ast::Binding::Blank => CheckedBinding::Discard,
+                crate::frontend::ast::Binding::Identifier(name) => {
+                    if seen.insert(name.as_str(), ()).is_some() {
+                        return Err(SemanticError::new(format!(
+                            "{context} declares `{name}` more than once"
+                        )));
+                    }
+                    if result_type == &Type::UntypedNil {
+                        return Err(SemanticError::new(format!(
+                            "{context} `{name}` requires a typed value, found `nil`"
+                        )));
+                    }
+                    if let Some(binding) = self.current_scope().get(name).cloned() {
+                        if binding.ty != *result_type {
+                            return Err(SemanticError::new(format!(
+                                "{context} redeclaration of `{name}` requires `{}`, found `{}`",
+                                binding.ty.render(),
+                                result_type.render()
+                            )));
+                        }
+                        CheckedBinding::Local {
+                            slot: binding.slot,
+                            name: name.clone(),
+                        }
+                    } else {
+                        has_new_named_binding = true;
+                        let slot = self.allocate_local(name.clone(), result_type.clone());
+                        CheckedBinding::Local {
+                            slot,
+                            name: name.clone(),
+                        }
+                    }
+                }
+            });
+        }
+
+        if !has_new_named_binding {
+            return Err(SemanticError::new(
+                "short declaration `:=` requires at least one new named variable",
+            ));
+        }
+
+        Ok(resolved)
+    }
+
+    fn resolve_assignment_bindings(
+        &mut self,
+        bindings: &[crate::frontend::ast::Binding],
+        context: &str,
+    ) -> Result<Vec<CheckedBinding>, SemanticError> {
+        let mut seen = HashMap::new();
+        let mut resolved = Vec::with_capacity(bindings.len());
+        for binding in bindings {
+            resolved.push(match binding {
+                crate::frontend::ast::Binding::Blank => CheckedBinding::Discard,
+                crate::frontend::ast::Binding::Identifier(name) => {
+                    if seen.insert(name.as_str(), ()).is_some() {
+                        return Err(SemanticError::new(format!(
+                            "{context} assigns `{name}` more than once"
+                        )));
+                    }
+                    let binding = self.lookup_local(name)?;
+                    CheckedBinding::Local {
+                        slot: binding.slot,
+                        name: name.clone(),
+                    }
+                }
+            });
+        }
+        Ok(resolved)
+    }
+
     fn checked_assignment_target_type(
         &self,
         target: &CheckedAssignmentTarget,
@@ -509,6 +736,15 @@ impl<'a> FunctionAnalyzer<'a> {
 
     fn current_scope_mut(&mut self) -> &mut HashMap<String, LocalBinding> {
         self.scopes.last_mut().expect("at least one scope exists")
+    }
+
+    fn local_type(&self, slot: usize) -> &Type {
+        self.scopes
+            .iter()
+            .flat_map(|scope| scope.values())
+            .find(|binding| binding.slot == slot)
+            .map(|binding| &binding.ty)
+            .expect("local slot should resolve to a tracked type")
     }
 
     fn allocate_local(&mut self, name: String, ty: Type) -> usize {

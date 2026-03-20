@@ -32,6 +32,7 @@ This directory stores feature and subsystem designs. It describes intent, scope 
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `multi-result-functions-and-cut-package-seams.md`: design baseline for unnamed multi-result functions, staged binding forms, and `strings.Cut` / `bytes.Cut`
 - `import-aliases-and-bytes-package.md`: design baseline for grouped imports, explicit import aliases, and the staged `bytes` package seam
 - `switch-statements.md`: design baseline for staged expression `switch` statements, tagless `switch`, clause scopes, and single-evaluation lowering
 - `if-statement-headers.md`: design baseline for staged `if` statement initializers, shared header scope, and `else if` chains

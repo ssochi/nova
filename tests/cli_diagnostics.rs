@@ -386,7 +386,7 @@ fn check_rejects_short_declaration_without_new_variable() {
     );
 
     let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
-    assert!(error.contains("short declaration `:=` requires a new variable name"));
+    assert!(error.contains("short declaration `:=` requires at least one new named variable"));
 
     cleanup_temp_source(path);
 }
@@ -731,6 +731,32 @@ fn check_rejects_close_on_non_channel() {
 
     let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
     assert!(error.contains("argument 1 in call to builtin `close` requires `chan`, found `[]int`"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_multi_result_call_in_single_value_context() {
+    let path = write_temp_source(
+        "check-bad-multi-result-single-context",
+        "package main\n\nfunc pair() (int, int) {\n\treturn 1, 2\n}\n\nfunc main() {\n\tprintln(pair())\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("call to `pair` produces `(int, int)`"));
+
+    cleanup_temp_source(path);
+}
+
+#[test]
+fn check_rejects_multi_result_binding_arity_mismatch() {
+    let path = write_temp_source(
+        "check-bad-multi-result-arity",
+        "package main\n\nimport \"strings\"\n\nfunc main() {\n\thead, found := strings.Cut(\"nova-go\", \"-\")\n\tprintln(head, found)\n}\n",
+    );
+
+    let error = run_cli(&["check", path.to_str().unwrap()]).expect_err("check should fail");
+    assert!(error.contains("short declaration expects 2 values, found 3"));
 
     cleanup_temp_source(path);
 }

@@ -117,17 +117,7 @@ pub(super) fn expect_byte_slice_package_argument(
     position: usize,
     value: Value,
 ) -> Result<Vec<u8>, RuntimeError> {
-    let slice = match value {
-        Value::Slice(slice) => slice,
-        other => {
-            return Err(RuntimeError::new(format!(
-                "argument {} in call to `{}` expected `[]byte`, found `{}`",
-                position,
-                function.render(),
-                runtime_type_name(&other)
-            )));
-        }
-    };
+    let slice = expect_byte_slice_value(function, position, value)?;
 
     slice.byte_elements().map_err(|_| {
         RuntimeError::new(format!(
@@ -136,6 +126,22 @@ pub(super) fn expect_byte_slice_package_argument(
             function.render()
         ))
     })
+}
+
+pub(super) fn expect_byte_slice_value(
+    function: PackageFunction,
+    position: usize,
+    value: Value,
+) -> Result<SliceValue, RuntimeError> {
+    match value {
+        Value::Slice(slice) => Ok(slice),
+        other => Err(RuntimeError::new(format!(
+            "argument {} in call to `{}` expected `[]byte`, found `{}`",
+            position,
+            function.render(),
+            runtime_type_name(&other)
+        ))),
+    }
 }
 
 pub(super) fn expect_byte_slice_slice_package_argument(
@@ -182,13 +188,13 @@ pub(super) fn expect_byte_slice_slice_package_argument(
 pub(super) fn execute_bytes_package_function(
     function: PackageFunction,
     arguments: Vec<Value>,
-) -> Result<Value, RuntimeError> {
+) -> Result<Vec<Value>, RuntimeError> {
     match function {
         PackageFunction::BytesEqual => {
             let [left, right] = expect_exact_package_arguments(function, arguments, 2)?;
             let left = expect_byte_slice_package_argument(function, 1, left)?;
             let right = expect_byte_slice_package_argument(function, 2, right)?;
-            Ok(Value::Boolean(left == right))
+            Ok(vec![Value::Boolean(left == right)])
         }
         PackageFunction::BytesContains => {
             let [haystack, needle] = expect_exact_package_arguments(function, arguments, 2)?;
@@ -201,21 +207,58 @@ pub(super) fn execute_bytes_package_function(
                     .windows(needle.len())
                     .any(|window| window == needle.as_slice())
             };
-            Ok(Value::Boolean(found))
+            Ok(vec![Value::Boolean(found)])
         }
         PackageFunction::BytesHasPrefix => {
             let [value, prefix] = expect_exact_package_arguments(function, arguments, 2)?;
             let value = expect_byte_slice_package_argument(function, 1, value)?;
             let prefix = expect_byte_slice_package_argument(function, 2, prefix)?;
-            Ok(Value::Boolean(value.starts_with(prefix.as_slice())))
+            Ok(vec![Value::Boolean(value.starts_with(prefix.as_slice()))])
+        }
+        PackageFunction::BytesCut => {
+            let [value, separator] = expect_exact_package_arguments(function, arguments, 2)?;
+            let value = expect_byte_slice_value(function, 1, value)?;
+            let separator = expect_byte_slice_package_argument(function, 2, separator)?;
+            let bytes = value.byte_elements().map_err(|_| {
+                RuntimeError::new(format!(
+                    "argument 1 in call to `{}` expected `[]byte`, found a non-byte slice",
+                    function.render()
+                ))
+            })?;
+            let found_index = if separator.is_empty() {
+                Some(0)
+            } else {
+                bytes
+                    .windows(separator.len())
+                    .position(|window| window == separator.as_slice())
+            };
+            if let Some(index) = found_index {
+                let before = value
+                    .slice(0, index)
+                    .map_err(|_| RuntimeError::new("bytes.Cut produced an invalid prefix slice"))?;
+                let after = value
+                    .slice(index + separator.len(), value.len())
+                    .map_err(|_| RuntimeError::new("bytes.Cut produced an invalid suffix slice"))?;
+                Ok(vec![
+                    Value::Slice(before),
+                    Value::Slice(after),
+                    Value::Boolean(true),
+                ])
+            } else {
+                Ok(vec![
+                    Value::Slice(value),
+                    Value::Slice(SliceValue::nil()),
+                    Value::Boolean(false),
+                ])
+            }
         }
         PackageFunction::BytesJoin => {
             let [elements, separator] = expect_exact_package_arguments(function, arguments, 2)?;
             let elements = expect_byte_slice_slice_package_argument(function, 1, elements)?;
             let separator = expect_byte_slice_package_argument(function, 2, separator)?;
-            Ok(Value::Slice(SliceValue::from_bytes(&join_byte_slices(
-                &elements, &separator,
-            ))))
+            Ok(vec![Value::Slice(SliceValue::from_bytes(
+                &join_byte_slices(&elements, &separator),
+            ))])
         }
         PackageFunction::BytesRepeat => {
             let [value, count] = expect_exact_package_arguments(function, arguments, 2)?;
@@ -243,7 +286,7 @@ pub(super) fn execute_bytes_package_function(
             for _ in 0..repeat_count {
                 repeated.extend_from_slice(&value);
             }
-            Ok(Value::Slice(SliceValue::from_bytes(&repeated)))
+            Ok(vec![Value::Slice(SliceValue::from_bytes(&repeated))])
         }
         _ => Err(RuntimeError::new(format!(
             "package function `{}` is not a staged bytes function",

@@ -32,11 +32,13 @@ Describe the narrow import and package-function contract model introduced during
   - `fmt.Sprint(...value) -> string`
   - `strings.Contains(string, string) -> bool`
   - `strings.HasPrefix(string, string) -> bool`
+  - `strings.Cut(string, string) -> (string, string, bool)`
   - `strings.Join([]string, string) -> string`
   - `strings.Repeat(string, int) -> string`
   - `bytes.Equal([]byte, []byte) -> bool`
   - `bytes.Contains([]byte, []byte) -> bool`
   - `bytes.HasPrefix([]byte, []byte) -> bool`
+  - `bytes.Cut([]byte, []byte) -> ([]byte, []byte, bool)`
   - `bytes.Join([][]byte, []byte) -> []byte`
   - `bytes.Repeat([]byte, int) -> []byte`
 
@@ -53,9 +55,10 @@ Describe the narrow import and package-function contract model introduced during
   - imported package functions live in `src/semantic/packages.rs`
 - Package-function validation is now per-function instead of package-wide:
   - `fmt` keeps variadic any-value contracts
-  - `strings` introduces typed fixed-arity contracts
-  - `bytes` introduces typed byte-slice and nested-byte-slice contracts
+  - `strings` introduces typed fixed-arity contracts, including staged multi-result `Cut`
+  - `bytes` introduces typed byte-slice and nested-byte-slice contracts, including staged multi-result `Cut`
   - later packages should add new validators instead of hardcoding type rules in the analyzer
+- User-defined and package-backed calls now share explicit result lists so zero-result calls, single-result calls, and staged multi-result calls all flow through one contract boundary.
 
 ## Runtime Execution Notes
 
@@ -66,11 +69,13 @@ Describe the narrow import and package-function contract model introduced during
   - `fmt.Sprint`: join rendered arguments without separators and push the resulting string
   - `strings.Contains`: return whether one string contains another
   - `strings.HasPrefix`: return whether one string begins with another
+  - `strings.Cut`: push `(before, after, found)` using the first separator match
   - `strings.Join`: join `[]string` with a separator
   - `strings.Repeat`: repeat a string `count` times, with invalid counts surfaced as runtime errors
   - `bytes.Equal`: compare byte-slice contents, treating nil and empty slices equivalently through the byte-slice view
   - `bytes.Contains`: search a `[]byte` haystack for a `[]byte` subslice
   - `bytes.HasPrefix`: test whether a `[]byte` value begins with a prefix
+  - `bytes.Cut`: push `(before, after, found)` while preserving the staged nil `after` result on misses
   - `bytes.Join`: join `[][]byte` with a separator into a fresh `[]byte`
   - `bytes.Repeat`: repeat a `[]byte` value `count` times, with invalid counts surfaced as runtime errors
 - The `fmt` behavior is intentionally approximate and does not yet implement Go formatting verbs

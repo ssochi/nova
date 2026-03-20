@@ -15,7 +15,7 @@ fn execute_builds_and_indexes_slices() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
-            returns_value: false,
+            return_types: Vec::new(),
             local_names: vec!["values".to_string()],
             instructions: vec![
                 Instruction::PushInt(1),
@@ -49,7 +49,7 @@ fn execute_strings_package_functions() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
-            returns_value: false,
+            return_types: Vec::new(),
             local_names: vec![],
             instructions: vec![
                 Instruction::PushString("nova".to_string()),
@@ -89,7 +89,7 @@ fn execute_slice_windows_and_index_assignment() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
-            returns_value: false,
+            return_types: Vec::new(),
             local_names: vec!["values".to_string(), "window".to_string()],
             instructions: vec![
                 Instruction::PushInt(1),
@@ -135,7 +135,7 @@ fn execute_make_slice_allocation() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
-            returns_value: false,
+            return_types: Vec::new(),
             local_names: vec!["values".to_string(), "grown".to_string()],
             instructions: vec![
                 Instruction::PushInt(2),
@@ -186,7 +186,7 @@ fn execute_string_indexing_slicing_and_byte_copy() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
-            returns_value: false,
+            return_types: Vec::new(),
             local_names: vec!["buf".to_string()],
             instructions: vec![
                 Instruction::PushString("nova".to_string()),
@@ -237,7 +237,7 @@ fn execute_byte_multiply_and_divide() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
-            returns_value: false,
+            return_types: Vec::new(),
             local_names: vec![],
             instructions: vec![
                 Instruction::PushByte(6),
@@ -270,7 +270,7 @@ fn execute_string_byte_conversions() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
-            returns_value: false,
+            return_types: Vec::new(),
             local_names: vec!["bytes".to_string()],
             instructions: vec![
                 Instruction::PushString("nova".to_string()),
@@ -309,7 +309,7 @@ fn execute_maps_with_nil_reads_and_updates() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
-            returns_value: false,
+            return_types: Vec::new(),
             local_names: vec!["counts".to_string()],
             instructions: vec![
                 Instruction::PushNilMap,
@@ -360,7 +360,7 @@ fn execute_map_literals_and_delete() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
-            returns_value: false,
+            return_types: Vec::new(),
             local_names: vec!["counts".to_string(), "nil_counts".to_string()],
             instructions: vec![
                 Instruction::PushString("nova".to_string()),
@@ -418,7 +418,7 @@ fn execute_map_literals_keep_last_duplicate_key() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
-            returns_value: false,
+            return_types: Vec::new(),
             local_names: vec!["counts".to_string()],
             instructions: vec![
                 Instruction::PushString("nova".to_string()),
@@ -458,7 +458,7 @@ fn execute_nil_map_assignment_fails() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
-            returns_value: false,
+            return_types: Vec::new(),
             local_names: vec!["counts".to_string()],
             instructions: vec![
                 Instruction::PushNilMap,
@@ -492,7 +492,7 @@ fn execute_map_keys_returns_deterministic_key_slice() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
-            returns_value: false,
+            return_types: Vec::new(),
             local_names: vec!["keys".to_string()],
             instructions: vec![
                 Instruction::PushString("nova".to_string()),
@@ -538,7 +538,7 @@ fn execute_lookup_map_reports_value_and_presence() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
-            returns_value: false,
+            return_types: Vec::new(),
             local_names: vec!["counts".to_string()],
             instructions: vec![
                 Instruction::PushNilMap,
@@ -583,7 +583,7 @@ fn execute_channels_send_receive_and_close() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
-            returns_value: false,
+            return_types: Vec::new(),
             local_names: vec!["ready".to_string()],
             instructions: vec![
                 Instruction::PushNilChan,
@@ -636,7 +636,7 @@ fn execute_channel_send_reports_blocking_error() {
         functions: vec![CompiledFunction {
             name: "main".to_string(),
             parameter_count: 0,
-            returns_value: false,
+            return_types: Vec::new(),
             local_names: vec!["ready".to_string()],
             instructions: vec![
                 Instruction::PushInt(1),

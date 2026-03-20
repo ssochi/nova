@@ -64,7 +64,7 @@ pub struct Program {
 pub struct CompiledFunction {
     pub name: String,
     pub parameter_count: usize,
-    pub returns_value: bool,
+    pub return_types: Vec<ValueType>,
     pub local_names: Vec<String>,
     pub instructions: Vec<Instruction>,
 }
@@ -83,10 +83,15 @@ impl Program {
                 function_index,
                 function.name,
                 function.parameter_count,
-                if function.returns_value {
-                    "value"
+                if function.return_types.is_empty() {
+                    "void".to_string()
                 } else {
-                    "void"
+                    function
+                        .return_types
+                        .iter()
+                        .map(ValueType::render)
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 },
                 function.local_names.join(", ")
             ));

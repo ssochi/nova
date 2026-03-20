@@ -5,7 +5,7 @@ use crate::semantic::model::Type;
 pub struct BuiltinContract {
     pub builtin: BuiltinFunction,
     pub name: &'static str,
-    pub validator: fn(&[Type]) -> Result<Type, String>,
+    pub validator: fn(&[Type]) -> Result<Vec<Type>, String>,
 }
 
 const BUILTIN_CONTRACTS: [BuiltinContract; 9] = [
@@ -66,7 +66,7 @@ pub fn resolve_builtin(name: &str) -> Option<BuiltinFunction> {
 pub fn validate_builtin_call(
     builtin: BuiltinFunction,
     argument_types: &[Type],
-) -> Result<Type, String> {
+) -> Result<Vec<Type>, String> {
     let contract = builtin_contract(builtin);
     (contract.validator)(argument_types)
 }
@@ -78,7 +78,7 @@ fn builtin_contract(builtin: BuiltinFunction) -> &'static BuiltinContract {
         .expect("all builtin functions must have a contract")
 }
 
-fn validate_variadic_output_builtin(argument_types: &[Type]) -> Result<Type, String> {
+fn validate_variadic_output_builtin(argument_types: &[Type]) -> Result<Vec<Type>, String> {
     for (index, argument) in argument_types.iter().enumerate() {
         if !argument.produces_value() {
             return Err(format!(
@@ -88,17 +88,17 @@ fn validate_variadic_output_builtin(argument_types: &[Type]) -> Result<Type, Str
         }
     }
 
-    Ok(Type::Void)
+    Ok(Vec::new())
 }
 
-fn validate_len_builtin(argument_types: &[Type]) -> Result<Type, String> {
+fn validate_len_builtin(argument_types: &[Type]) -> Result<Vec<Type>, String> {
     validate_exact_arity("len", 1, argument_types.len())?;
     let actual = &argument_types[0];
     if matches!(
         actual,
         Type::String | Type::Slice(_) | Type::Chan(_) | Type::Map { .. }
     ) {
-        Ok(Type::Int)
+        Ok(vec![Type::Int])
     } else {
         Err(format!(
             "argument 1 in call to builtin `len` requires `string`, `slice`, `chan`, or `map`, found `{}`",
@@ -107,11 +107,11 @@ fn validate_len_builtin(argument_types: &[Type]) -> Result<Type, String> {
     }
 }
 
-fn validate_cap_builtin(argument_types: &[Type]) -> Result<Type, String> {
+fn validate_cap_builtin(argument_types: &[Type]) -> Result<Vec<Type>, String> {
     validate_exact_arity("cap", 1, argument_types.len())?;
     let actual = &argument_types[0];
     if matches!(actual, Type::Slice(_) | Type::Chan(_)) {
-        Ok(Type::Int)
+        Ok(vec![Type::Int])
     } else {
         Err(format!(
             "argument 1 in call to builtin `cap` requires `slice` or `chan`, found `{}`",
@@ -120,7 +120,7 @@ fn validate_cap_builtin(argument_types: &[Type]) -> Result<Type, String> {
     }
 }
 
-fn validate_copy_builtin(argument_types: &[Type]) -> Result<Type, String> {
+fn validate_copy_builtin(argument_types: &[Type]) -> Result<Vec<Type>, String> {
     validate_exact_arity("copy", 2, argument_types.len())?;
     let destination = argument_types[0].clone();
     let destination_element = destination.slice_element_type().cloned().ok_or_else(|| {
@@ -131,7 +131,7 @@ fn validate_copy_builtin(argument_types: &[Type]) -> Result<Type, String> {
     })?;
     let source = &argument_types[1];
     if destination_element == Type::Byte && source == &Type::String {
-        return Ok(Type::Int);
+        return Ok(vec![Type::Int]);
     }
     if source.slice_element_type() != Some(&destination_element) {
         return Err(format!(
@@ -141,10 +141,10 @@ fn validate_copy_builtin(argument_types: &[Type]) -> Result<Type, String> {
         ));
     }
 
-    Ok(Type::Int)
+    Ok(vec![Type::Int])
 }
 
-fn validate_append_builtin(argument_types: &[Type]) -> Result<Type, String> {
+fn validate_append_builtin(argument_types: &[Type]) -> Result<Vec<Type>, String> {
     validate_min_arity("append", 1, argument_types.len())?;
     let slice_type = argument_types[0].clone();
     let element_type = slice_type.slice_element_type().cloned().ok_or_else(|| {
@@ -165,7 +165,7 @@ fn validate_append_builtin(argument_types: &[Type]) -> Result<Type, String> {
         }
     }
 
-    Ok(slice_type)
+    Ok(vec![slice_type])
 }
 
 pub fn validate_make_call(allocated_type: &Type, argument_types: &[Type]) -> Result<Type, String> {
@@ -180,11 +180,11 @@ pub fn validate_make_call(allocated_type: &Type, argument_types: &[Type]) -> Res
     }
 }
 
-fn validate_make_value_builtin(_argument_types: &[Type]) -> Result<Type, String> {
+fn validate_make_value_builtin(_argument_types: &[Type]) -> Result<Vec<Type>, String> {
     Err("builtin `make` requires a type argument".to_string())
 }
 
-fn validate_delete_builtin(argument_types: &[Type]) -> Result<Type, String> {
+fn validate_delete_builtin(argument_types: &[Type]) -> Result<Vec<Type>, String> {
     validate_exact_arity("delete", 2, argument_types.len())?;
     let map_type = argument_types[0].clone();
     let (key_type, _) = map_type.map_parts().ok_or_else(|| {
@@ -201,14 +201,14 @@ fn validate_delete_builtin(argument_types: &[Type]) -> Result<Type, String> {
         ));
     }
 
-    Ok(Type::Void)
+    Ok(Vec::new())
 }
 
-fn validate_close_builtin(argument_types: &[Type]) -> Result<Type, String> {
+fn validate_close_builtin(argument_types: &[Type]) -> Result<Vec<Type>, String> {
     validate_exact_arity("close", 1, argument_types.len())?;
     let channel_type = &argument_types[0];
     if matches!(channel_type, Type::Chan(_)) {
-        Ok(Type::Void)
+        Ok(Vec::new())
     } else {
         Err(format!(
             "argument 1 in call to builtin `close` requires `chan`, found `{}`",
@@ -303,7 +303,7 @@ mod tests {
         let result =
             validate_builtin_call(BuiltinFunction::Len, &[Type::Slice(Box::new(Type::Int))])
                 .expect("len should accept slices");
-        assert_eq!(result, Type::Int);
+        assert_eq!(result, vec![Type::Int]);
     }
 
     #[test]
@@ -317,7 +317,7 @@ mod tests {
         )
         .expect("len should accept maps");
 
-        assert_eq!(result, Type::Int);
+        assert_eq!(result, vec![Type::Int]);
     }
 
     #[test]
@@ -326,7 +326,7 @@ mod tests {
             validate_builtin_call(BuiltinFunction::Len, &[Type::Chan(Box::new(Type::Int))])
                 .expect("len should accept channels");
 
-        assert_eq!(result, Type::Int);
+        assert_eq!(result, vec![Type::Int]);
     }
 
     #[test]
@@ -343,7 +343,7 @@ mod tests {
             validate_builtin_call(BuiltinFunction::Cap, &[Type::Chan(Box::new(Type::Int))])
                 .expect("cap should accept channels");
 
-        assert_eq!(result, Type::Int);
+        assert_eq!(result, vec![Type::Int]);
     }
 
     #[test]
@@ -369,7 +369,7 @@ mod tests {
         )
         .expect("copy should accept []byte <- string");
 
-        assert_eq!(result, Type::Int);
+        assert_eq!(result, vec![Type::Int]);
     }
 
     #[test]
@@ -444,7 +444,7 @@ mod tests {
         )
         .expect("delete should accept maps");
 
-        assert_eq!(result, Type::Void);
+        assert_eq!(result, Vec::<Type>::new());
     }
 
     #[test]
@@ -461,7 +461,7 @@ mod tests {
             validate_builtin_call(BuiltinFunction::Close, &[Type::Chan(Box::new(Type::Int))])
                 .expect("close should accept channels");
 
-        assert_eq!(result, Type::Void);
+        assert_eq!(result, Vec::<Type>::new());
     }
 
     #[test]

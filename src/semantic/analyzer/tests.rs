@@ -1,5 +1,6 @@
 use super::analyze_package;
 use crate::frontend::{lexer::lex, parser::parse_source_file};
+use crate::semantic::model::Type;
 use crate::source::SourceFile;
 
 #[test]
@@ -284,7 +285,7 @@ fn reject_short_declaration_in_same_scope() {
     assert!(
         error
             .to_string()
-            .contains("short declaration `:=` requires a new variable name")
+            .contains("short declaration `:=` requires at least one new named variable")
     );
 }
 
@@ -602,6 +603,24 @@ fn analyze_for_clauses_and_loop_control_statements() {
     let program = analyze_package(&ast).expect("analysis should succeed");
 
     assert_eq!(program.functions.len(), 1);
+}
+
+#[test]
+fn analyze_multi_result_functions_and_cut_calls() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nimport (\n\t\"bytes\"\n\t\"strings\"\n)\n\nfunc split(value string) (string, string, bool) {\n\treturn strings.Cut(value, \"-\")\n}\n\nfunc main() {\n\thead, tail, found := split(\"nova-go\")\n\tbyteHead, byteTail, byteFound := bytes.Cut([]byte(\"vm-loop\"), []byte(\"-\"))\n\thead, tail, found = split(\"nova\")\n\tprintln(head, tail, found, string(byteHead), string(byteTail), byteFound)\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+    let program = analyze_package(&ast).expect("analysis should succeed");
+
+    assert_eq!(
+        program.functions[0].return_types,
+        vec![Type::String, Type::String, Type::Bool]
+    );
 }
 
 #[test]

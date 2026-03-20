@@ -33,6 +33,7 @@ This directory stores research notes that inform roadmap choices and implementat
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `2026-03-20-multi-result-functions-and-cut-package-seams.md`: official behavior baseline for unnamed multi-result functions, staged binding forms, and the `strings.Cut` / `bytes.Cut` seams
 - `2026-03-20-import-aliases-and-bytes-package.md`: official behavior baseline for grouped imports, explicit import aliases, and the staged `bytes` package seam
 - `2026-03-20-loop-control-flow.md`: official behavior baseline for staged classic `for` clauses, omitted conditions, and unlabeled `break` / `continue`
 - `2026-03-20-switch-statements.md`: official behavior baseline for staged expression `switch` statements, tagless `switch`, shared header scope, and duplicate-clause diagnostics

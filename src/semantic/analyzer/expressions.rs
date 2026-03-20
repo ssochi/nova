@@ -5,13 +5,13 @@ use crate::frontend::ast::{BinaryOperator, Expression, TypeRef};
 use crate::semantic::analyzer::{FunctionAnalyzer, SemanticError};
 use crate::semantic::builtins::{resolve_builtin, validate_builtin_call, validate_make_call};
 use crate::semantic::model::{
-    CallTarget, CheckedBinaryOperator, CheckedExpression, CheckedExpressionKind,
+    CallTarget, CheckedBinaryOperator, CheckedCall, CheckedExpression, CheckedExpressionKind,
     CheckedMapLiteralEntry, Type,
 };
 use crate::semantic::packages::{resolve_package_function, validate_package_call};
 use crate::semantic::support::{
-    coerce_expression_to_type, coerce_nil_equality_operands, expect_type, resolve_type_ref,
-    validate_make_literal_bounds, validate_runtime_type,
+    coerce_expression_to_type, coerce_nil_equality_operands, expect_type, render_type_list,
+    resolve_type_ref, validate_make_literal_bounds, validate_runtime_type,
 };
 
 impl<'a> FunctionAnalyzer<'a> {
@@ -166,16 +166,54 @@ impl<'a> FunctionAnalyzer<'a> {
                     .iter()
                     .map(|argument| self.analyze_expression(argument))
                     .collect::<Result<Vec<_>, _>>()?;
-                self.analyze_call(callee, checked_arguments)
+                self.analyze_call_expression(callee, checked_arguments)
             }
         }
     }
 
-    fn analyze_call(
-        &self,
+    pub(super) fn try_analyze_multi_result_call(
+        &mut self,
+        expression: &Expression,
+    ) -> Result<Option<CheckedCall>, SemanticError> {
+        let Expression::Call { callee, arguments } = expression else {
+            return Ok(None);
+        };
+        let checked_arguments = arguments
+            .iter()
+            .map(|argument| self.analyze_expression(argument))
+            .collect::<Result<Vec<_>, _>>()?;
+        let call = self.analyze_call(callee, checked_arguments)?;
+        if call.result_types.len() > 1 {
+            Ok(Some(call))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn analyze_call_expression(
+        &mut self,
         callee: &Expression,
         checked_arguments: Vec<CheckedExpression>,
     ) -> Result<CheckedExpression, SemanticError> {
+        let call = self.analyze_call(callee, checked_arguments)?;
+        if call.result_types.len() != 1 {
+            return Err(SemanticError::new(format!(
+                "call to `{}` produces `{}` and cannot be used in a single-value expression",
+                render_call_target(&call.target),
+                render_type_list(&call.result_types)
+            )));
+        }
+        Ok(CheckedExpression {
+            ty: call.result_types[0].clone(),
+            kind: CheckedExpressionKind::Call(call),
+        })
+    }
+
+    pub(super) fn analyze_call(
+        &mut self,
+        callee: &Expression,
+        checked_arguments: Vec<CheckedExpression>,
+    ) -> Result<CheckedCall, SemanticError> {
         match callee {
             Expression::Identifier(name) => self.analyze_identifier_call(name, checked_arguments),
             Expression::Selector { target, member } => {
@@ -188,23 +226,21 @@ impl<'a> FunctionAnalyzer<'a> {
     }
 
     fn analyze_identifier_call(
-        &self,
+        &mut self,
         callee: &str,
         checked_arguments: Vec<CheckedExpression>,
-    ) -> Result<CheckedExpression, SemanticError> {
+    ) -> Result<CheckedCall, SemanticError> {
         if let Some(builtin) = resolve_builtin(callee) {
             let argument_types = checked_arguments
                 .iter()
                 .map(|argument| argument.ty.clone())
                 .collect::<Vec<_>>();
-            let return_type =
+            let result_types =
                 validate_builtin_call(builtin, &argument_types).map_err(SemanticError::new)?;
-            return Ok(CheckedExpression {
-                ty: return_type,
-                kind: CheckedExpressionKind::Call {
-                    target: CallTarget::Builtin(builtin),
-                    arguments: checked_arguments,
-                },
+            return Ok(CheckedCall {
+                target: CallTarget::Builtin(builtin),
+                arguments: checked_arguments,
+                result_types,
             });
         }
 
@@ -234,15 +270,13 @@ impl<'a> FunctionAnalyzer<'a> {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        Ok(CheckedExpression {
-            ty: signature.return_type.clone(),
-            kind: CheckedExpressionKind::Call {
-                target: CallTarget::UserDefined {
-                    function_index,
-                    name: signature.name.clone(),
-                },
-                arguments: checked_arguments,
+        Ok(CheckedCall {
+            target: CallTarget::UserDefined {
+                function_index,
+                name: signature.name.clone(),
             },
+            arguments: checked_arguments,
+            result_types: signature.return_types.clone(),
         })
     }
 
@@ -305,11 +339,11 @@ impl<'a> FunctionAnalyzer<'a> {
     }
 
     fn analyze_package_call(
-        &self,
+        &mut self,
         target: &Expression,
         member: &str,
         checked_arguments: Vec<CheckedExpression>,
-    ) -> Result<CheckedExpression, SemanticError> {
+    ) -> Result<CheckedCall, SemanticError> {
         let package_name = match target {
             Expression::Identifier(name) => name.as_str(),
             _ => {
@@ -333,14 +367,12 @@ impl<'a> FunctionAnalyzer<'a> {
             .iter()
             .map(|argument| argument.ty.clone())
             .collect::<Vec<_>>();
-        let return_type =
+        let result_types =
             validate_package_call(package_function, &argument_types).map_err(SemanticError::new)?;
-        Ok(CheckedExpression {
-            ty: return_type,
-            kind: CheckedExpressionKind::Call {
-                target: CallTarget::PackageFunction(package_function),
-                arguments: checked_arguments,
-            },
+        Ok(CheckedCall {
+            target: CallTarget::PackageFunction(package_function),
+            arguments: checked_arguments,
+            result_types,
         })
     }
 
@@ -601,4 +633,12 @@ fn coerce_package_call_arguments(
             )
         })
         .collect()
+}
+
+fn render_call_target(target: &CallTarget) -> String {
+    match target {
+        CallTarget::Builtin(builtin) => builtin.render().to_string(),
+        CallTarget::PackageFunction(function) => function.render().to_string(),
+        CallTarget::UserDefined { name, .. } => name.clone(),
+    }
 }

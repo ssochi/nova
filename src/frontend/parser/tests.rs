@@ -619,7 +619,11 @@ fn parse_short_declarations_and_inc_dec_statements() {
 
     assert!(matches!(
         &function.body.statements[0],
-        Statement::ShortVarDecl { name, value: Expression::Integer(0) } if name == "total"
+        Statement::ShortVarDecl {
+            bindings,
+            values,
+        } if bindings == &vec![Binding::Identifier("total".to_string())]
+            && values == &vec![Expression::Integer(0)]
     ));
     assert!(matches!(
         &function.body.statements[1],
@@ -634,9 +638,10 @@ fn parse_short_declarations_and_inc_dec_statements() {
             assert!(matches!(
                 &if_statement.header,
                 Some(HeaderStatement::ShortVarDecl {
-                    name,
-                    value: Expression::Integer(2),
-                }) if name == "count"
+                    bindings,
+                    values,
+                }) if bindings == &vec![Binding::Identifier("count".to_string())]
+                    && values == &vec![Expression::Integer(2)]
             ));
         }
         _ => panic!("expected if statement"),
@@ -647,9 +652,10 @@ fn parse_short_declarations_and_inc_dec_statements() {
             assert!(matches!(
                 &switch_statement.header,
                 Some(HeaderStatement::ShortVarDecl {
-                    name,
-                    value: Expression::Identifier(value),
-                }) if name == "probe" && value == "total"
+                    bindings,
+                    values,
+                }) if bindings == &vec![Binding::Identifier("probe".to_string())]
+                    && values == &vec![Expression::Identifier("total".to_string())]
             ));
         }
         _ => panic!("expected switch statement"),
@@ -660,9 +666,10 @@ fn parse_short_declarations_and_inc_dec_statements() {
             assert!(matches!(
                 &for_statement.init,
                 Some(HeaderStatement::ShortVarDecl {
-                    name,
-                    value: Expression::Integer(0),
-                }) if name == "i"
+                    bindings,
+                    values,
+                }) if bindings == &vec![Binding::Identifier("i".to_string())]
+                    && values == &vec![Expression::Integer(0)]
             ));
             assert!(matches!(
                 &for_statement.post,
@@ -681,6 +688,41 @@ fn parse_short_declarations_and_inc_dec_statements() {
         }
         _ => panic!("expected for statement"),
     }
+}
+
+#[test]
+fn parse_multi_result_functions_and_bindings() {
+    let source = SourceFile {
+        path: "test.go".into(),
+        contents: "package main\n\nfunc split(value string) (string, string, bool) {\n\treturn value, \"\", false\n}\n\nfunc main() {\n\thead, tail, found := split(\"nova\")\n\thead, tail, found = split(\"go\")\n\tprintln(head, tail, found)\n}\n"
+            .to_string(),
+    };
+
+    let tokens = lex(&source).expect("lexing should succeed");
+    let ast = parse_source_file(&tokens).expect("parsing should succeed");
+
+    assert_eq!(
+        ast.functions[0].return_types,
+        vec![
+            TypeRef::Named("string".to_string()),
+            TypeRef::Named("string".to_string()),
+            TypeRef::Named("bool".to_string())
+        ]
+    );
+    assert!(matches!(
+        &ast.functions[0].body.statements[0],
+        Statement::Return(values) if values.len() == 3
+    ));
+    assert!(matches!(
+        &ast.functions[1].body.statements[0],
+        Statement::ShortVarDecl { bindings, values }
+            if bindings.len() == 3 && values.len() == 1
+    ));
+    assert!(matches!(
+        &ast.functions[1].body.statements[1],
+        Statement::MultiAssign { bindings, values }
+            if bindings.len() == 3 && values.len() == 1
+    ));
 }
 
 #[test]

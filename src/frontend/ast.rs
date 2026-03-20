@@ -59,7 +59,7 @@ impl ImportSpec {
 pub struct FunctionDecl {
     pub name: String,
     pub parameters: Vec<Parameter>,
-    pub return_type: Option<TypeRef>,
+    pub return_types: Vec<TypeRef>,
     pub body: Block,
 }
 
@@ -71,17 +71,13 @@ impl FunctionDecl {
             .map(Parameter::render)
             .collect::<Vec<_>>()
             .join(", ");
-        let return_type = self
-            .return_type
-            .as_ref()
-            .map(|value| format!(" {}", value.render()))
-            .unwrap_or_default();
+        let return_types = render_result_type_list(&self.return_types);
         let mut lines = vec![format!(
             "{}func {}({}){} {{",
             indent_str(indent),
             self.name,
             parameters,
-            return_type
+            return_types
         )];
         for statement in &self.body.statements {
             lines.push(statement.render(indent + 1));
@@ -135,8 +131,12 @@ pub struct Block {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Statement {
     ShortVarDecl {
-        name: String,
-        value: Expression,
+        bindings: Vec<Binding>,
+        values: Vec<Expression>,
+    },
+    MultiAssign {
+        bindings: Vec<Binding>,
+        values: Vec<Expression>,
     },
     VarDecl {
         name: String,
@@ -178,7 +178,7 @@ pub enum Statement {
     },
     Break,
     Continue,
-    Return(Option<Expression>),
+    Return(Vec<Expression>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -192,8 +192,12 @@ pub struct IfStatement {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum HeaderStatement {
     ShortVarDecl {
-        name: String,
-        value: Expression,
+        bindings: Vec<Binding>,
+        values: Vec<Expression>,
+    },
+    MultiAssign {
+        bindings: Vec<Binding>,
+        values: Vec<Expression>,
     },
     VarDecl {
         name: String,
@@ -258,6 +262,10 @@ pub enum ForPostStatement {
         target: AssignmentTarget,
         value: Expression,
     },
+    MultiAssign {
+        bindings: Vec<Binding>,
+        values: Vec<Expression>,
+    },
     CompoundAssign {
         target: AssignmentTarget,
         operator: CompoundAssignOperator,
@@ -292,8 +300,21 @@ pub enum CompoundAssignOperator {
 impl Statement {
     fn render(&self, indent: usize) -> String {
         match self {
-            Statement::ShortVarDecl { name, value } => {
-                format!("{}{} := {}", indent_str(indent), name, value.render())
+            Statement::ShortVarDecl { bindings, values } => {
+                format!(
+                    "{}{} := {}",
+                    indent_str(indent),
+                    render_binding_list(bindings),
+                    render_expression_list(values)
+                )
+            }
+            Statement::MultiAssign { bindings, values } => {
+                format!(
+                    "{}{} = {}",
+                    indent_str(indent),
+                    render_binding_list(bindings),
+                    render_expression_list(values)
+                )
             }
             Statement::VarDecl {
                 name,
@@ -376,10 +397,14 @@ impl Statement {
             ),
             Statement::Break => format!("{}break", indent_str(indent)),
             Statement::Continue => format!("{}continue", indent_str(indent)),
-            Statement::Return(Some(expression)) => {
-                format!("{}return {}", indent_str(indent), expression.render())
+            Statement::Return(values) if values.is_empty() => {
+                format!("{}return", indent_str(indent))
             }
-            Statement::Return(None) => format!("{}return", indent_str(indent)),
+            Statement::Return(values) => format!(
+                "{}return {}",
+                indent_str(indent),
+                render_expression_list(values)
+            ),
         }
     }
 }
@@ -387,8 +412,19 @@ impl Statement {
 impl HeaderStatement {
     fn render(&self) -> String {
         match self {
-            HeaderStatement::ShortVarDecl { name, value } => {
-                format!("{name} := {}", value.render())
+            HeaderStatement::ShortVarDecl { bindings, values } => {
+                format!(
+                    "{} := {}",
+                    render_binding_list(bindings),
+                    render_expression_list(values)
+                )
+            }
+            HeaderStatement::MultiAssign { bindings, values } => {
+                format!(
+                    "{} = {}",
+                    render_binding_list(bindings),
+                    render_expression_list(values)
+                )
             }
             HeaderStatement::VarDecl {
                 name,
@@ -438,6 +474,13 @@ impl ForPostStatement {
         match self {
             ForPostStatement::Assign { target, value } => {
                 format!("{} = {}", target.render(), value.render())
+            }
+            ForPostStatement::MultiAssign { bindings, values } => {
+                format!(
+                    "{} = {}",
+                    render_binding_list(bindings),
+                    render_expression_list(values)
+                )
             }
             ForPostStatement::CompoundAssign {
                 target,
@@ -870,10 +913,33 @@ fn render_map_lookup_statement(
     )
 }
 
+fn render_result_type_list(result_types: &[TypeRef]) -> String {
+    match result_types {
+        [] => String::new(),
+        [result_type] => format!(" {}", result_type.render()),
+        _ => format!(
+            " ({})",
+            result_types
+                .iter()
+                .map(TypeRef::render)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    }
+}
+
 fn render_binding_list(bindings: &[Binding]) -> String {
     bindings
         .iter()
         .map(Binding::render)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn render_expression_list(values: &[Expression]) -> String {
+    values
+        .iter()
+        .map(Expression::render)
         .collect::<Vec<_>>()
         .join(", ")
 }

@@ -109,18 +109,35 @@ impl<'a> Parser<'a> {
         self.expect(TokenKind::LeftParen)?;
         let parameters = self.parse_parameter_list()?;
         self.expect(TokenKind::RightParen)?;
-        let return_type = if self.check_type_start() {
-            Some(self.parse_type_ref()?)
+        let return_types = if self.check_type_start() || self.check(&TokenKind::LeftParen) {
+            self.parse_result_types()?
         } else {
-            None
+            Vec::new()
         };
         let body = self.parse_block()?;
         Ok(FunctionDecl {
             name,
             parameters,
-            return_type,
+            return_types,
             body,
         })
+    }
+
+    fn parse_result_types(&mut self) -> Result<Vec<TypeRef>, ParseError> {
+        if self.match_kind(&TokenKind::LeftParen) {
+            if self.check(&TokenKind::RightParen) {
+                return Err(self.error_at_current("function result list cannot be empty"));
+            }
+
+            let mut result_types = vec![self.parse_type_ref()?];
+            while self.match_kind(&TokenKind::Comma) {
+                result_types.push(self.parse_type_ref()?);
+            }
+            self.expect(TokenKind::RightParen)?;
+            return Ok(result_types);
+        }
+
+        Ok(vec![self.parse_type_ref()?])
     }
 
     fn parse_parameter_list(&mut self) -> Result<Vec<Parameter>, ParseError> {
@@ -156,6 +173,14 @@ impl<'a> Parser<'a> {
 
         self.expect(TokenKind::RightBrace)?;
         Ok(Block { statements })
+    }
+
+    fn parse_expression_list(&mut self) -> Result<Vec<Expression>, ParseError> {
+        let mut expressions = vec![self.parse_expression()?];
+        while self.match_kind(&TokenKind::Comma) {
+            expressions.push(self.parse_expression()?);
+        }
+        Ok(expressions)
     }
 
     fn parse_expression(&mut self) -> Result<Expression, ParseError> {

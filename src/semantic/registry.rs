@@ -49,8 +49,10 @@ impl FunctionRegistry {
                 })
                 .collect::<Result<Vec<_>, SemanticError>>()?;
 
-            let return_type = match &function.return_type {
-                Some(type_ref) => {
+            let return_types = function
+                .return_types
+                .iter()
+                .map(|type_ref| {
                     let ty = resolve_type_ref(type_ref).ok_or_else(|| {
                         SemanticError::new(format!(
                             "unsupported return type `{}` in function `{}`",
@@ -62,17 +64,16 @@ impl FunctionRegistry {
                         &ty,
                         &format!("return type in function `{}`", function.name),
                     )?;
-                    ty
-                }
-                None => Type::Void,
-            };
+                    Ok(ty)
+                })
+                .collect::<Result<Vec<_>, SemanticError>>()?;
 
             let index = signatures.len();
             name_to_index.insert(function.name.clone(), index);
             signatures.push(FunctionSignature {
                 name: function.name.clone(),
                 parameters,
-                return_type,
+                return_types,
             });
         }
 
@@ -94,7 +95,7 @@ impl FunctionRegistry {
 pub(super) struct FunctionSignature {
     pub(super) name: String,
     pub(super) parameters: Vec<Type>,
-    pub(super) return_type: Type,
+    pub(super) return_types: Vec<Type>,
 }
 
 pub(super) struct ImportRegistry {

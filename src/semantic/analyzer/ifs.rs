@@ -39,9 +39,16 @@ impl<'a> FunctionAnalyzer<'a> {
         header: &HeaderStatement,
     ) -> Result<CheckedHeaderStatement, SemanticError> {
         match header {
-            HeaderStatement::ShortVarDecl { name, value } => checked_statement_to_header_statement(
-                self.analyze_short_var_decl_statement(name, value)?,
-            ),
+            HeaderStatement::ShortVarDecl { bindings, values } => {
+                checked_statement_to_header_statement(
+                    self.analyze_short_var_decl_statement(bindings, values)?,
+                )
+            }
+            HeaderStatement::MultiAssign { bindings, values } => {
+                checked_statement_to_header_statement(
+                    self.analyze_multi_assign_statement(bindings, values)?,
+                )
+            }
             HeaderStatement::VarDecl {
                 name,
                 type_ref,
@@ -99,8 +106,11 @@ fn checked_statement_to_header_statement(
     statement: CheckedStatement,
 ) -> Result<CheckedHeaderStatement, SemanticError> {
     Ok(match statement {
-        CheckedStatement::ShortVarDecl { slot, name, value } => {
-            CheckedHeaderStatement::ShortVarDecl { slot, name, value }
+        CheckedStatement::ShortVarDecl { bindings, values } => {
+            CheckedHeaderStatement::ShortVarDecl { bindings, values }
+        }
+        CheckedStatement::MultiAssign { bindings, values } => {
+            CheckedHeaderStatement::MultiAssign { bindings, values }
         }
         CheckedStatement::VarDecl { slot, name, value } => {
             CheckedHeaderStatement::VarDecl { slot, name, value }

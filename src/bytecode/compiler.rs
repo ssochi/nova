@@ -5,10 +5,10 @@ use crate::bytecode::instruction::{
     CompiledFunction, Instruction, Program, SequenceKind, ValueType,
 };
 use crate::semantic::model::{
-    CallTarget, CheckedBinaryOperator, CheckedBinding, CheckedBlock, CheckedElseBranch,
-    CheckedExpression, CheckedExpressionKind, CheckedForStatement, CheckedFunction,
-    CheckedIfStatement, CheckedMapLiteralEntry, CheckedProgram, CheckedStatement,
-    CheckedSwitchClause, CheckedSwitchStatement, Type,
+    CallTarget, CheckedBinaryOperator, CheckedBinding, CheckedBlock, CheckedCall,
+    CheckedElseBranch, CheckedExpression, CheckedExpressionKind, CheckedForStatement,
+    CheckedFunction, CheckedIfStatement, CheckedMapLiteralEntry, CheckedProgram, CheckedStatement,
+    CheckedSwitchClause, CheckedSwitchStatement, CheckedValueSource, Type,
 };
 
 mod simple_statements;
@@ -74,7 +74,7 @@ impl<'a> FunctionCompiler<'a> {
         Ok(CompiledFunction {
             name: self.function.name.clone(),
             parameter_count: self.function.parameter_count,
-            returns_value: self.function.return_type.produces_value(),
+            return_types: lower_result_types(&self.function.return_types)?,
             local_names: self.local_names,
             instructions: self.instructions,
         })
@@ -89,8 +89,11 @@ impl<'a> FunctionCompiler<'a> {
 
     fn compile_statement(&mut self, statement: &CheckedStatement) -> Result<(), CompileError> {
         match statement {
-            CheckedStatement::ShortVarDecl { slot, value, .. } => {
-                self.compile_local_store(*slot, value, "short declaration")?;
+            CheckedStatement::ShortVarDecl { bindings, values } => {
+                self.compile_binding_statement(bindings, values, "short declaration")?;
+            }
+            CheckedStatement::MultiAssign { bindings, values } => {
+                self.compile_binding_statement(bindings, values, "assignment")?;
             }
             CheckedStatement::VarDecl { slot, value, .. } => {
                 if let Some(value) = value {
@@ -145,11 +148,8 @@ impl<'a> FunctionCompiler<'a> {
             } => self.compile_inc_dec_statement(target, *operator, operand_type)?,
             CheckedStatement::Break => self.compile_break_statement()?,
             CheckedStatement::Continue => self.compile_continue_statement()?,
-            CheckedStatement::Return(value) => {
-                if let Some(expression) = value {
-                    self.compile_expression(expression)?;
-                    self.expect_value(&expression.ty, "return")?;
-                }
+            CheckedStatement::Return(values) => {
+                self.compile_value_source(values, "return")?;
                 self.instructions.push(Instruction::Return);
             }
         }
@@ -497,29 +497,51 @@ impl<'a> FunctionCompiler<'a> {
                     CheckedBinaryOperator::GreaterEqual => Instruction::GreaterEqual,
                 });
             }
-            CheckedExpressionKind::Call { target, arguments } => {
-                for argument in arguments {
-                    self.compile_expression(argument)?;
-                    self.expect_value(&argument.ty, "function call")?;
-                }
-
-                match target {
-                    CallTarget::Builtin(builtin) => {
-                        self.instructions
-                            .push(Instruction::CallBuiltin(*builtin, arguments.len()));
-                    }
-                    CallTarget::PackageFunction(function) => {
-                        self.instructions
-                            .push(Instruction::CallPackage(*function, arguments.len()));
-                    }
-                    CallTarget::UserDefined { function_index, .. } => {
-                        self.instructions
-                            .push(Instruction::CallFunction(*function_index, arguments.len()));
-                    }
-                }
-            }
+            CheckedExpressionKind::Call(call) => self.compile_call(call, "function call")?,
         }
 
+        Ok(())
+    }
+
+    fn compile_call(&mut self, call: &CheckedCall, context: &str) -> Result<(), CompileError> {
+        for argument in &call.arguments {
+            self.compile_expression(argument)?;
+            self.expect_value(&argument.ty, context)?;
+        }
+
+        match &call.target {
+            CallTarget::Builtin(builtin) => {
+                self.instructions
+                    .push(Instruction::CallBuiltin(*builtin, call.arguments.len()));
+            }
+            CallTarget::PackageFunction(function) => {
+                self.instructions
+                    .push(Instruction::CallPackage(*function, call.arguments.len()));
+            }
+            CallTarget::UserDefined { function_index, .. } => {
+                self.instructions.push(Instruction::CallFunction(
+                    *function_index,
+                    call.arguments.len(),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn compile_value_source(
+        &mut self,
+        values: &CheckedValueSource,
+        context: &str,
+    ) -> Result<(), CompileError> {
+        match values {
+            CheckedValueSource::Expressions(expressions) => {
+                for expression in expressions {
+                    self.compile_expression(expression)?;
+                    self.expect_value(&expression.ty, context)?;
+                }
+            }
+            CheckedValueSource::Call(call) => self.compile_call(call, context)?,
+        }
         Ok(())
     }
 
@@ -822,6 +844,10 @@ fn lower_value_type(ty: &Type) -> Result<ValueType, CompileError> {
             "runtime value types do not support `void`",
         )),
     }
+}
+
+fn lower_result_types(types: &[Type]) -> Result<Vec<ValueType>, CompileError> {
+    types.iter().map(lower_value_type).collect()
 }
 
 fn lower_sequence_kind(ty: &Type) -> Result<SequenceKind, CompileError> {

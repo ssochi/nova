@@ -39,6 +39,21 @@ pub fn expect_type(expected: &Type, actual: &Type, context: &str) -> Result<(), 
     }
 }
 
+pub fn render_type_list(types: &[Type]) -> String {
+    match types {
+        [] => "void".to_string(),
+        [ty] => ty.render(),
+        _ => format!(
+            "({})",
+            types
+                .iter()
+                .map(Type::render)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    }
+}
+
 pub fn expect_same_type(left: &Type, right: &Type, context: &str) -> Result<(), SemanticError> {
     if left == right {
         Ok(())

@@ -13,7 +13,7 @@ pub struct CheckedProgram {
 pub struct CheckedFunction {
     pub name: String,
     pub parameter_count: usize,
-    pub return_type: Type,
+    pub return_types: Vec<Type>,
     pub local_names: Vec<String>,
     pub body: CheckedBlock,
 }
@@ -26,9 +26,12 @@ pub struct CheckedBlock {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CheckedStatement {
     ShortVarDecl {
-        slot: usize,
-        name: String,
-        value: CheckedExpression,
+        bindings: Vec<CheckedBinding>,
+        values: CheckedValueSource,
+    },
+    MultiAssign {
+        bindings: Vec<CheckedBinding>,
+        values: CheckedValueSource,
     },
     VarDecl {
         slot: usize,
@@ -71,7 +74,7 @@ pub enum CheckedStatement {
     },
     Break,
     Continue,
-    Return(Option<CheckedExpression>),
+    Return(CheckedValueSource),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -85,9 +88,12 @@ pub struct CheckedIfStatement {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CheckedHeaderStatement {
     ShortVarDecl {
-        slot: usize,
-        name: String,
-        value: CheckedExpression,
+        bindings: Vec<CheckedBinding>,
+        values: CheckedValueSource,
+    },
+    MultiAssign {
+        bindings: Vec<CheckedBinding>,
+        values: CheckedValueSource,
     },
     VarDecl {
         slot: usize,
@@ -152,6 +158,10 @@ pub enum CheckedForPostStatement {
     Assign {
         target: CheckedAssignmentTarget,
         value: CheckedExpression,
+    },
+    MultiAssign {
+        bindings: Vec<CheckedBinding>,
+        values: CheckedValueSource,
     },
     CompoundAssign {
         target: CheckedAssignmentTarget,
@@ -268,10 +278,31 @@ pub enum CheckedExpressionKind {
         operator: CheckedBinaryOperator,
         right: Box<CheckedExpression>,
     },
-    Call {
-        target: CallTarget,
-        arguments: Vec<CheckedExpression>,
-    },
+    Call(CheckedCall),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CheckedValueSource {
+    Expressions(Vec<CheckedExpression>),
+    Call(CheckedCall),
+}
+
+impl CheckedValueSource {
+    pub fn result_types(&self) -> Vec<Type> {
+        match self {
+            CheckedValueSource::Expressions(values) => {
+                values.iter().map(|value| value.ty.clone()).collect()
+            }
+            CheckedValueSource::Call(call) => call.result_types.clone(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CheckedCall {
+    pub target: CallTarget,
+    pub arguments: Vec<CheckedExpression>,
+    pub result_types: Vec<Type>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

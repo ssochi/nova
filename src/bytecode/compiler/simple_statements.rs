@@ -2,7 +2,8 @@ use super::{CompileError, FunctionCompiler, lower_sequence_kind, lower_value_typ
 use crate::bytecode::instruction::Instruction;
 use crate::semantic::model::{
     CheckedAssignmentTarget, CheckedBinding, CheckedCompoundAssignOperator, CheckedExpression,
-    CheckedForPostStatement, CheckedHeaderStatement, CheckedIncDecOperator, Type,
+    CheckedForPostStatement, CheckedHeaderStatement, CheckedIncDecOperator, CheckedValueSource,
+    Type,
 };
 
 impl<'a> FunctionCompiler<'a> {
@@ -12,8 +13,15 @@ impl<'a> FunctionCompiler<'a> {
         context: &str,
     ) -> Result<(), CompileError> {
         match header {
-            CheckedHeaderStatement::ShortVarDecl { slot, value, .. } => {
-                self.compile_local_store(*slot, value, &format!("{context} short declaration"))?;
+            CheckedHeaderStatement::ShortVarDecl { bindings, values } => {
+                self.compile_binding_statement(
+                    bindings,
+                    values,
+                    &format!("{context} short declaration"),
+                )?;
+            }
+            CheckedHeaderStatement::MultiAssign { bindings, values } => {
+                self.compile_binding_statement(bindings, values, &format!("{context} assignment"))?;
             }
             CheckedHeaderStatement::VarDecl { slot, value, .. } => {
                 if let Some(value) = value {
@@ -97,6 +105,9 @@ impl<'a> FunctionCompiler<'a> {
             CheckedForPostStatement::Assign { target, value } => {
                 self.compile_assignment(target, value, "for post assignment")?
             }
+            CheckedForPostStatement::MultiAssign { bindings, values } => {
+                self.compile_binding_statement(bindings, values, "for post assignment")?
+            }
             CheckedForPostStatement::CompoundAssign {
                 target,
                 operator,
@@ -124,6 +135,19 @@ impl<'a> FunctionCompiler<'a> {
                 operator,
                 operand_type,
             } => self.compile_inc_dec_statement(target, *operator, operand_type)?,
+        }
+        Ok(())
+    }
+
+    pub(super) fn compile_binding_statement(
+        &mut self,
+        bindings: &[CheckedBinding],
+        values: &CheckedValueSource,
+        context: &str,
+    ) -> Result<(), CompileError> {
+        self.compile_value_source(values, context)?;
+        for binding in bindings.iter().rev() {
+            self.consume_binding_value(binding);
         }
         Ok(())
     }

@@ -28,11 +28,10 @@ impl<'a> Parser<'a> {
 
         if self.match_kind(&TokenKind::Return) {
             if self.check(&TokenKind::Semicolon) || self.check(&TokenKind::RightBrace) {
-                return Ok(Statement::Return(None));
+                return Ok(Statement::Return(Vec::new()));
             }
 
-            let value = self.parse_expression()?;
-            return Ok(Statement::Return(Some(value)));
+            return Ok(Statement::Return(self.parse_expression_list()?));
         }
 
         if self.match_kind(&TokenKind::If) {
@@ -55,10 +54,6 @@ impl<'a> Parser<'a> {
         if self.match_kind(&TokenKind::Continue) {
             self.reject_labeled_control_statement("continue")?;
             return Ok(Statement::Continue);
-        }
-
-        if self.is_map_lookup_statement_start() {
-            return self.parse_map_lookup_statement();
         }
 
         self.parse_expression_statement()
@@ -120,25 +115,6 @@ impl<'a> Parser<'a> {
             post: None,
             body,
         }))
-    }
-
-    fn parse_map_lookup_statement(&mut self) -> Result<Statement, ParseError> {
-        let header = self.parse_map_lookup_header_statement()?;
-        let HeaderStatement::MapLookup {
-            bindings,
-            binding_mode,
-            target,
-            key,
-        } = header
-        else {
-            unreachable!("map lookup parsing always returns map lookup data");
-        };
-        Ok(Statement::MapLookup {
-            bindings,
-            binding_mode,
-            target,
-            key,
-        })
     }
 
     fn parse_if_statement(&mut self) -> Result<IfStatement, ParseError> {
@@ -225,21 +201,66 @@ impl<'a> Parser<'a> {
             return Ok((Some(header), condition));
         }
 
-        if self.is_map_lookup_statement_start() {
-            let header = self.parse_map_lookup_header_statement()?;
-            self.expect(TokenKind::Semicolon)?;
-            let condition = self.parse_expression()?;
-            return Ok((Some(header), condition));
-        }
-
         let expression = self.parse_expression()?;
+        if self.check(&TokenKind::Comma) {
+            let bindings = self.parse_binding_list_from_expression(expression)?;
+            if self.match_kind(&TokenKind::Define) {
+                let values = self.parse_expression_list()?;
+                self.expect(TokenKind::Semicolon)?;
+                let condition = self.parse_expression()?;
+                if bindings.len() == 2 {
+                    if let Ok((target, key)) = map_lookup_from_value_list(values.clone()) {
+                        return Ok((
+                            Some(HeaderStatement::MapLookup {
+                                bindings,
+                                binding_mode: BindingMode::Define,
+                                target,
+                                key,
+                            }),
+                            condition,
+                        ));
+                    }
+                }
+                return Ok((
+                    Some(HeaderStatement::ShortVarDecl { bindings, values }),
+                    condition,
+                ));
+            }
+            if self.match_kind(&TokenKind::Assign) {
+                let values = self.parse_expression_list()?;
+                self.expect(TokenKind::Semicolon)?;
+                let condition = self.parse_expression()?;
+                if bindings.len() == 2 {
+                    if let Ok((target, key)) = map_lookup_from_value_list(values.clone()) {
+                        return Ok((
+                            Some(HeaderStatement::MapLookup {
+                                bindings,
+                                binding_mode: BindingMode::Assign,
+                                target,
+                                key,
+                            }),
+                            condition,
+                        ));
+                    }
+                }
+                return Ok((
+                    Some(HeaderStatement::MultiAssign { bindings, values }),
+                    condition,
+                ));
+            }
+            return Err(self.error_at_current(
+                "multi-binding `if` header requires `:=` or `=` after the left side",
+            ));
+        }
         if self.match_kind(&TokenKind::Define) {
-            let name = short_var_name_from_expression(expression)?;
-            let value = self.parse_expression()?;
+            let values = self.parse_expression_list()?;
             self.expect(TokenKind::Semicolon)?;
             let condition = self.parse_expression()?;
             return Ok((
-                Some(HeaderStatement::ShortVarDecl { name, value }),
+                Some(HeaderStatement::ShortVarDecl {
+                    bindings: vec![binding_from_expression(expression)?],
+                    values,
+                }),
                 condition,
             ));
         }
@@ -300,21 +321,67 @@ impl<'a> Parser<'a> {
             return Ok((Some(header), expression));
         }
 
-        if self.is_map_lookup_statement_start() {
-            let header = self.parse_map_lookup_header_statement()?;
-            self.expect(TokenKind::Semicolon)?;
-            let expression = if self.check(&TokenKind::LeftBrace) {
-                None
-            } else {
-                Some(self.parse_expression()?)
-            };
-            return Ok((Some(header), expression));
-        }
-
         let expression = self.parse_expression()?;
+        if self.check(&TokenKind::Comma) {
+            let bindings = self.parse_binding_list_from_expression(expression)?;
+            if self.match_kind(&TokenKind::Define) {
+                let values = self.parse_expression_list()?;
+                self.expect(TokenKind::Semicolon)?;
+                let switch_expression = if self.check(&TokenKind::LeftBrace) {
+                    None
+                } else {
+                    Some(self.parse_expression()?)
+                };
+                if bindings.len() == 2 {
+                    if let Ok((target, key)) = map_lookup_from_value_list(values.clone()) {
+                        return Ok((
+                            Some(HeaderStatement::MapLookup {
+                                bindings,
+                                binding_mode: BindingMode::Define,
+                                target,
+                                key,
+                            }),
+                            switch_expression,
+                        ));
+                    }
+                }
+                return Ok((
+                    Some(HeaderStatement::ShortVarDecl { bindings, values }),
+                    switch_expression,
+                ));
+            }
+            if self.match_kind(&TokenKind::Assign) {
+                let values = self.parse_expression_list()?;
+                self.expect(TokenKind::Semicolon)?;
+                let switch_expression = if self.check(&TokenKind::LeftBrace) {
+                    None
+                } else {
+                    Some(self.parse_expression()?)
+                };
+                if bindings.len() == 2 {
+                    if let Ok((target, key)) = map_lookup_from_value_list(values.clone()) {
+                        return Ok((
+                            Some(HeaderStatement::MapLookup {
+                                bindings,
+                                binding_mode: BindingMode::Assign,
+                                target,
+                                key,
+                            }),
+                            switch_expression,
+                        ));
+                    }
+                }
+                return Ok((
+                    Some(HeaderStatement::MultiAssign { bindings, values }),
+                    switch_expression,
+                ));
+            }
+            return Err(self.error_at_current(
+                "multi-binding `switch` header requires `:=` or `=` after the left side",
+            ));
+        }
         if self.match_kind(&TokenKind::Define) {
-            let name = short_var_name_from_expression(expression)?;
-            let value = self.parse_expression()?;
+            let values = self.parse_expression_list()?;
             self.expect(TokenKind::Semicolon)?;
             let switch_expression = if self.check(&TokenKind::LeftBrace) {
                 None
@@ -322,7 +389,10 @@ impl<'a> Parser<'a> {
                 Some(self.parse_expression()?)
             };
             return Ok((
-                Some(HeaderStatement::ShortVarDecl { name, value }),
+                Some(HeaderStatement::ShortVarDecl {
+                    bindings: vec![binding_from_expression(expression)?],
+                    values,
+                }),
                 switch_expression,
             ));
         }
@@ -408,30 +478,6 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_map_lookup_header_statement(&mut self) -> Result<HeaderStatement, ParseError> {
-        let mut bindings = vec![self.parse_binding()?];
-        self.expect(TokenKind::Comma)?;
-        bindings.push(self.parse_binding()?);
-        let binding_mode = if self.match_kind(&TokenKind::Define) {
-            BindingMode::Define
-        } else {
-            self.expect(TokenKind::Assign)?;
-            BindingMode::Assign
-        };
-        let expression = self.parse_expression()?;
-        let Expression::Index { target, index } = expression else {
-            return Err(ParseError::new(
-                "comma-ok lookup requires a map index expression on the right side",
-            ));
-        };
-        Ok(HeaderStatement::MapLookup {
-            bindings,
-            binding_mode,
-            target: *target,
-            key: *index,
-        })
-    }
-
     fn parse_for_clause_statement(&mut self) -> Result<ForStatement, ParseError> {
         let init = if self.check(&TokenKind::Semicolon) {
             None
@@ -466,15 +512,46 @@ impl<'a> Parser<'a> {
             return self.parse_var_decl_header_statement();
         }
 
-        if self.is_map_lookup_statement_start() {
-            return self.parse_map_lookup_header_statement();
-        }
-
         let expression = self.parse_expression()?;
+        if self.check(&TokenKind::Comma) {
+            let bindings = self.parse_binding_list_from_expression(expression)?;
+            if self.match_kind(&TokenKind::Define) {
+                let values = self.parse_expression_list()?;
+                if bindings.len() == 2 {
+                    if let Ok((target, key)) = map_lookup_from_value_list(values.clone()) {
+                        return Ok(HeaderStatement::MapLookup {
+                            bindings,
+                            binding_mode: BindingMode::Define,
+                            target,
+                            key,
+                        });
+                    }
+                }
+                return Ok(HeaderStatement::ShortVarDecl { bindings, values });
+            }
+            if self.match_kind(&TokenKind::Assign) {
+                let values = self.parse_expression_list()?;
+                if bindings.len() == 2 {
+                    if let Ok((target, key)) = map_lookup_from_value_list(values.clone()) {
+                        return Ok(HeaderStatement::MapLookup {
+                            bindings,
+                            binding_mode: BindingMode::Assign,
+                            target,
+                            key,
+                        });
+                    }
+                }
+                return Ok(HeaderStatement::MultiAssign { bindings, values });
+            }
+            return Err(self.error_at_current(
+                "multi-binding `for` init requires `:=` or `=` after the left side",
+            ));
+        }
         if self.match_kind(&TokenKind::Define) {
-            let name = short_var_name_from_expression(expression)?;
-            let value = self.parse_expression()?;
-            return Ok(HeaderStatement::ShortVarDecl { name, value });
+            return Ok(HeaderStatement::ShortVarDecl {
+                bindings: vec![binding_from_expression(expression)?],
+                values: self.parse_expression_list()?,
+            });
         }
         if self.match_kind(&TokenKind::Assign) {
             let target = assignment_target_from_expression(expression)?;
@@ -499,30 +576,29 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_for_post_statement(&mut self) -> Result<ForPostStatement, ParseError> {
-        if self.is_map_lookup_statement_start() {
-            let header = self.parse_map_lookup_header_statement()?;
-            let HeaderStatement::MapLookup {
-                bindings,
-                binding_mode,
-                target,
-                key,
-            } = header
-            else {
-                unreachable!("map lookup parsing always returns map lookup data");
-            };
-            if binding_mode == BindingMode::Define {
-                return Err(
-                    self.error_at_current("for post statement does not support `:=` map lookups")
-                );
-            }
-            return Ok(ForPostStatement::MapLookup {
-                bindings,
-                target,
-                key,
-            });
-        }
-
         let expression = self.parse_expression()?;
+        if self.check(&TokenKind::Comma) {
+            let bindings = self.parse_binding_list_from_expression(expression)?;
+            if self.match_kind(&TokenKind::Define) {
+                return Err(self.error_at_current("for post statement does not support `:=`"));
+            }
+            if self.match_kind(&TokenKind::Assign) {
+                let values = self.parse_expression_list()?;
+                if bindings.len() == 2 {
+                    if let Ok((target, key)) = map_lookup_from_value_list(values.clone()) {
+                        return Ok(ForPostStatement::MapLookup {
+                            bindings,
+                            target,
+                            key,
+                        });
+                    }
+                }
+                return Ok(ForPostStatement::MultiAssign { bindings, values });
+            }
+            return Err(self.error_at_current(
+                "multi-binding `for` post statement requires `=` after the left side",
+            ));
+        }
         if self.match_kind(&TokenKind::Define) {
             return Err(self.error_at_current("for post statement does not support `:=`"));
         }
@@ -550,10 +626,45 @@ impl<'a> Parser<'a> {
 
     fn parse_expression_statement(&mut self) -> Result<Statement, ParseError> {
         let expression = self.parse_expression()?;
+        if self.check(&TokenKind::Comma) {
+            let bindings = self.parse_binding_list_from_expression(expression)?;
+            if self.match_kind(&TokenKind::Define) {
+                let values = self.parse_expression_list()?;
+                if bindings.len() == 2 {
+                    if let Ok((target, key)) = map_lookup_from_value_list(values.clone()) {
+                        return Ok(Statement::MapLookup {
+                            bindings,
+                            binding_mode: BindingMode::Define,
+                            target,
+                            key,
+                        });
+                    }
+                }
+                return Ok(Statement::ShortVarDecl { bindings, values });
+            }
+            if self.match_kind(&TokenKind::Assign) {
+                let values = self.parse_expression_list()?;
+                if bindings.len() == 2 {
+                    if let Ok((target, key)) = map_lookup_from_value_list(values.clone()) {
+                        return Ok(Statement::MapLookup {
+                            bindings,
+                            binding_mode: BindingMode::Assign,
+                            target,
+                            key,
+                        });
+                    }
+                }
+                return Ok(Statement::MultiAssign { bindings, values });
+            }
+            return Err(self.error_at_current(
+                "multi-binding statement requires `:=` or `=` after the left side",
+            ));
+        }
         if self.match_kind(&TokenKind::Define) {
-            let name = short_var_name_from_expression(expression)?;
-            let value = self.parse_expression()?;
-            return Ok(Statement::ShortVarDecl { name, value });
+            return Ok(Statement::ShortVarDecl {
+                bindings: vec![binding_from_expression(expression)?],
+                values: self.parse_expression_list()?,
+            });
         }
         if self.match_kind(&TokenKind::Assign) {
             let target = assignment_target_from_expression(expression)?;
@@ -642,23 +753,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn is_map_lookup_statement_start(&self) -> bool {
-        matches!(
-            (
-                self.current_kind(),
-                self.peek_kind(),
-                self.peek_second_kind(),
-                self.peek_third_kind(),
-            ),
-            (
-                Some(TokenKind::Identifier(_)),
-                Some(TokenKind::Comma),
-                Some(TokenKind::Identifier(_)),
-                Some(TokenKind::Define | TokenKind::Assign),
-            )
-        )
-    }
-
     fn for_statement_uses_clause_form(&self) -> bool {
         for index in self.index..self.tokens.len() {
             match self.tokens[index].kind {
@@ -679,13 +773,39 @@ impl<'a> Parser<'a> {
         }
         Err(self.error_at_current(&format!("labeled `{keyword}` statements are not supported")))
     }
+
+    fn parse_binding_list_from_expression(
+        &mut self,
+        first: Expression,
+    ) -> Result<Vec<Binding>, ParseError> {
+        let mut bindings = vec![binding_from_expression(first)?];
+        while self.match_kind(&TokenKind::Comma) {
+            bindings.push(self.parse_binding()?);
+        }
+        Ok(bindings)
+    }
 }
 
-fn short_var_name_from_expression(expression: Expression) -> Result<String, ParseError> {
+fn binding_from_expression(expression: Expression) -> Result<Binding, ParseError> {
     match expression {
-        Expression::Identifier(name) => Ok(name),
+        Expression::Identifier(name) if name == "_" => Ok(Binding::Blank),
+        Expression::Identifier(name) => Ok(Binding::Identifier(name)),
         _ => Err(ParseError::new(
-            "short variable declaration requires a variable name on the left side",
+            "multi-binding statement requires identifier or `_` bindings on the left side",
         )),
+    }
+}
+
+fn map_lookup_from_value_list(
+    values: Vec<Expression>,
+) -> Result<(Expression, Expression), Vec<Expression>> {
+    if values.len() != 1 {
+        return Err(values);
+    }
+
+    let value = values.into_iter().next().expect("length was checked above");
+    match value {
+        Expression::Index { target, index } => Ok((*target, *index)),
+        other => Err(vec![other]),
     }
 }

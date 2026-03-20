@@ -77,6 +77,15 @@ impl<'a> FunctionAnalyzer<'a> {
                 };
                 Ok(CheckedForPostStatement::Assign { target, value })
             }
+            ForPostStatement::MultiAssign { bindings, values } => {
+                let statement = self.analyze_multi_assign_statement(bindings, values)?;
+                let CheckedStatement::MultiAssign { bindings, values } = statement else {
+                    unreachable!(
+                        "multi-assignment analysis always returns checked multi-assignment data"
+                    );
+                };
+                Ok(CheckedForPostStatement::MultiAssign { bindings, values })
+            }
             ForPostStatement::CompoundAssign {
                 target,
                 operator,

@@ -25,6 +25,7 @@
 
 ## Related Plans
 
+- `2026-03-20-08-14-13-multi-result-functions-cut-seams`: completed plan for the first staged multi-result model plus `strings.Cut` / `bytes.Cut`
 - `2026-03-20-07-46-15-import-aliases-and-bytes-package`: completed plan for grouped imports, explicit import aliases, and the staged `bytes` package seam
 - `2026-03-20-07-17-39-channel-runtime-first-slice`: completed staged buffered `chan` support with explicit send / receive / close behavior, nil-channel zero values, and channel-aware `len` / `cap`
 - `2026-03-20-06-56-53-compound-assignments`: completed staged compound assignments across ordinary statements, headers, classic `for` clauses, and single-evaluation index lowering
@@ -53,10 +54,10 @@
 - Runtime-surface growth can sprawl quickly if types, builtins, imports, and control-flow work are mixed into the same plan.
 - Builtin additions can become hardcoded special cases unless their contracts stay centralized.
 - Supporting more realistic Go programs will require careful staging so the VM remains understandable.
-- The current runtime now has byte-oriented strings, slice allocation, narrow explicit string/byte conversions, staged map groundwork, staged map literals plus `delete`, explicit `nil` for slice/map/chan contexts, staged `range` loops over slices/maps, duplicate constant literal-key diagnostics, staged comma-ok lookups, staged `if` headers, staged expression `switch`, classic `for` clauses, unlabeled `break` / `continue`, staged single-expression short declarations, explicit `++` / `--`, staged compound assignments, the first buffered `chan` slice, grouped imports, explicit import aliases, and package-backed `fmt` / `strings` / `bytes` seams; scheduler-aware blocking, channel directions, channel `range`, labels, broader `assign_op` coverage, real import graphs, wider package-backed runtime services, and multi-result modeling remain open.
+- The current runtime now has byte-oriented strings, slice allocation, narrow explicit string/byte conversions, staged map groundwork, staged map literals plus `delete`, explicit `nil` for slice/map/chan contexts, staged `range` loops over slices/maps, duplicate constant literal-key diagnostics, staged comma-ok lookups, staged `if` headers, staged expression `switch`, classic `for` clauses, unlabeled `break` / `continue`, staged multi-binding short declarations and assignments, explicit `++` / `--`, staged compound assignments, the first buffered `chan` slice, grouped imports, explicit import aliases, explicit multi-result function signatures / returns, and package-backed `fmt` / `strings` / `bytes` seams including `Cut`; scheduler-aware blocking, channel directions, channel `range`, labels, broader `assign_op` coverage, real import graphs, wider package-backed runtime services, and wider multi-result consumption remain open.
 
 ## Next-Round Recommendations
 
-- Open the next `M3` plan for the first staged multi-result model so package growth and later channel follow-up no longer depend on statement-specific exceptions.
+- Open the next `M3` plan for the next staged multi-result consumer slice or package seam so the new result-list plumbing keeps paying down package/runtime gaps instead of stagnating as an isolated feature.
 - If control-flow stays the next priority, reuse the explicit `ForStatement` / `CheckedForStatement` model and the compiler control-flow stack instead of lowering new targets through ad hoc jumps.
 - Reuse the `docs/research/` flow before locking the next compatibility-sensitive slice.
