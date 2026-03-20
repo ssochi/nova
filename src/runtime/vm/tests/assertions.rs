@@ -130,3 +130,62 @@ fn execute_type_assertion_panics_for_mismatched_dynamic_type() {
         "panic: interface conversion: interface {} is string, not []byte"
     );
 }
+
+#[test]
+fn execute_comma_ok_type_assertion_returns_value_and_true_for_match() {
+    let program = Program {
+        package_name: "main".to_string(),
+        entry_function: "main".to_string(),
+        entry_function_index: 0,
+        functions: vec![CompiledFunction {
+            name: "main".to_string(),
+            parameter_count: 0,
+            variadic_element_type: None,
+            return_types: Vec::new(),
+            local_names: vec![],
+            instructions: vec![
+                Instruction::PushString("go".to_string()),
+                Instruction::BoxAny(ValueType::String),
+                Instruction::TypeAssertOk(ValueType::String),
+                Instruction::CallBuiltin(BuiltinFunction::Println, 2),
+                Instruction::Return,
+            ],
+        }],
+    };
+
+    let output = VirtualMachine::new()
+        .execute(&program)
+        .expect("program should execute")
+        .render_output();
+
+    assert_eq!(output, "go true\n");
+}
+
+#[test]
+fn execute_comma_ok_type_assertion_returns_zero_value_and_false_for_mismatch() {
+    let program = Program {
+        package_name: "main".to_string(),
+        entry_function: "main".to_string(),
+        entry_function_index: 0,
+        functions: vec![CompiledFunction {
+            name: "main".to_string(),
+            parameter_count: 0,
+            variadic_element_type: None,
+            return_types: Vec::new(),
+            local_names: vec![],
+            instructions: vec![
+                Instruction::PushNilInterface,
+                Instruction::TypeAssertOk(ValueType::String),
+                Instruction::CallBuiltin(BuiltinFunction::Println, 2),
+                Instruction::Return,
+            ],
+        }],
+    };
+
+    let output = VirtualMachine::new()
+        .execute(&program)
+        .expect("program should execute")
+        .render_output();
+
+    assert_eq!(output, " false\n");
+}

@@ -58,14 +58,14 @@ Describe the concrete execution pipeline shipped in the bootstrap milestone, inc
 - Explicit builtin `panic` now lowers through dedicated typed panic instructions rather than a generic builtin call so `dump-bytecode` keeps panic entry points readable.
 - Explicit builtin `recover()` stays visible as an ordinary builtin call so `dump-bytecode` exposes the difference between recoverable deferred user-function frames and non-recovering helper/builtin paths.
 - Empty-interface coercions now lower through explicit `box-any <type>` bytecode, while nil interface zero values lower through `push-nil-interface`.
-- Empty-interface assertions now lower through explicit `type-assert <type>` bytecode, preserving the asserted target type in `dump-bytecode`.
+- Empty-interface assertions now lower through explicit `type-assert <type>` and `type-assert-ok <type>` bytecode, preserving the asserted target type in `dump-bytecode`.
 - Runtime dispatch inside `src/runtime/vm/` is now split between `builtins.rs`, `calls.rs`, `packages.rs`, `support.rs`, and `unwind.rs` so panic/call growth does not keep accumulating in one VM file.
 - Runtime interface values now carry explicit nil-vs-boxed state plus the boxed dynamic runtime type, so nil checks and staged interface equality do not collapse boxed typed-nil composites into nil interfaces.
-- Runtime interface helpers now also own single-result assertion execution, including the staged `value.(any)` success rule, typed-nil payload preservation, and user-visible interface-conversion panic messages.
+- Runtime interface helpers now also own single-result assertion execution, comma-ok assertion success/failure behavior, the staged `value.(any)` success rule, typed-nil payload preservation, and user-visible interface-conversion panic messages for the panicking path.
 - VM call frames now retain both pending return values and a deferred-call stack, while the VM also tracks a pending panic payload plus unwind depth so staged `defer` can run during ordinary returns and panic propagation through the same frame model.
 - Directly deferred user-function frames now also carry explicit recover-eligibility metadata, letting `recover()` stop the active panic only in that precise context while helper calls and deferred builtin `recover()` still produce nil.
 - Branch and loop conditions must produce boolean values, staged control-flow headers run before condition or clause dispatch, and expression-switch tags are evaluated once before clause comparison.
-- The current branch model supports `if`, `else`, explicit `else if`, and staged expression `switch` lowering with header scopes chosen during semantic analysis.
+- The current branch model supports `if`, `else`, explicit `else if`, staged expression `switch`, and staged empty-interface type switches with header scopes chosen during semantic analysis.
 - Single-expression short declarations, staged compound assignments, and explicit `++` / `--` are now explicit statement forms that survive semantic analysis and lower directly instead of pretending to be expressions.
 - Infinite / condition-only / classic-clause `for` loops plus staged `range` loops over `slice` / `map` are lowered into the existing jump and helper instruction set.
 - Loop and `switch` control transfer now share an explicit lowering-time control-flow stack so unlabeled `break` / `continue` patch to readable jump targets.
@@ -76,7 +76,7 @@ Describe the concrete execution pipeline shipped in the bootstrap milestone, inc
 ## Near-Term Extension Path
 
 1. Keep broader panic payload fidelity staged; `recover()` now works for directly deferred user functions, but concrete Go runtime panic object types still need deliberate modeling.
-2. If comma-ok type assertions or type switches are added later, keep them explicit on top of the new `type-assert <type>` and runtime-interface helper seam instead of introducing tuple runtime values.
+2. Comma-ok type assertions and type switches now exist as explicit statement-level surfaces; keep extending them on top of the `type-assert` / `type-assert-ok` and runtime-interface helper seam instead of introducing tuple runtime values.
 3. Do not add channel `range` or comma-ok receive opportunistically; pair them with the blocking-model design they still need on top of the new multi-result path.
 4. Keep package-backed services growing without collapsing into ad hoc dispatch tables spread across the VM.
 5. Separate bytecode IR from runtime-specific instruction encoding if the VM grows significantly.

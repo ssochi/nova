@@ -24,6 +24,7 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 - Model staged map literals explicitly in the checked layer instead of hiding them behind synthetic `make` plus index assignment trees.
 - Model explicit conversion syntax separately from ordinary calls because `T(x)` uses a type in callee position rather than a runtime function value.
 - Model explicit type assertions separately from selectors, calls, and conversions because `x.(T)` needs interface-only operand validation and explicit runtime-type metadata during lowering.
+- Model comma-ok type assertions separately from generic multi-result expressions so `value, ok := boxed.(T)` can keep interface-only validation, `:=` freshness rules, and bytecode visibility without introducing tuple runtime values.
 - Model explicit `nil` as a dedicated untyped checked expression and coerce it centrally when typed slice/map context is available.
 - Model `byte` explicitly so string indexing and `[]byte` paths do not collapse into ad hoc `int` behavior.
 - Model `chan` explicitly so send statements, receive expressions, and nil/equality behavior remain visible in the checked layer instead of being hidden inside builtin dispatch.
@@ -32,6 +33,7 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 - Validate staged comma-ok map lookup statements centrally, including map-only right-hand sides, typed `=` assignments, same-block `:=` freshness rules, and blank-identifier handling.
 - Validate staged `if` statement headers centrally, including the current simple-statement subset, dedicated header scopes shared by the condition / `then` / `else` path, and explicit `else if` chaining.
 - Validate staged expression `switch` statements centrally, including shared header scopes, tagless `switch`, clause-local scopes, duplicate `default` rejection, and the current duplicate scalar literal-case diagnostics.
+- Validate staged type switches centrally, including interface-only guards, duplicate staged case detection, clause-local binding typing, and the current `case nil` versus typed-nil distinction.
 - Validate staged short declarations centrally so they remain explicit, support the current same-block redeclaration rules when at least one named binding is new, and keep multi-binding result flow separate from plain assignment targets.
 - Validate staged multi-result returns, assignment-like usage, and single-call-argument forwarding centrally so broader package seams can reuse the same non-tuple result model.
 - Validate staged variadic function declarations and explicit final-argument `...` calls centrally so user-defined helpers and `append` spread behavior stay explicit instead of disappearing into generic flat argument lists.
@@ -92,7 +94,7 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 - User-defined functions now also support grouped named result declarations plus bare `return`; named result slots are initialized explicitly at function entry, while mixed named/unnamed result lists remain invalid.
 - `defer` is now supported for the current direct-call subset: builtins permitted in statement context, imported package members, and user-defined function names. Parenthesized defer expressions, arbitrary non-call operands, closures, and methods remain deferred.
 - `recover()` is now supported with an intentionally narrow rule: it returns `any`, may appear in ordinary expression or defer-statement contexts, and only directly deferred user-defined function frames can actually stop an active panic. Helper calls and deferred builtin `recover()` still return nil.
-- Single-result type assertions are now supported for `any` / `interface{}` operands across the currently modeled runtime types, while comma-ok assertions and type switches remain deferred.
+- Both single-result and statement-scoped comma-ok type assertions are now supported for `any` / `interface{}` operands across the currently modeled runtime types.
 - Call forwarding is still staged: a multi-result call may feed another call only when it is the entire argument list by itself, while prefixed forms such as `f(1, pair())` remain invalid single-value contexts.
 - User-defined functions now also support staged final variadic parameters, and calls may use explicit final `...` spreading only for the fixed-prefix-plus-spread shape required by real Go; broader package-backed variadic slice forwarding still remains deferred.
 - User-defined functions now also support grouped input parameter-name shorthand such as `func f(a, b int)` plus grouped named result declarations such as `func f() (left, right string)`; grouped declarations preserve source readability in `dump-ast` but flatten into ordinary ordered parameter/result slots before checked-program construction.
@@ -102,8 +104,8 @@ Describe the semantic boundary introduced during milestone `M2-frontend-expansio
 - Explicit `nil` still needs typed slice/map/channel context; `var value = nil`, `nil == nil`, and broader nilable-type work remain deferred.
 - General conversion syntax beyond the narrow `[]byte(string)` / `string([]byte)` pair is still deferred.
 - Range support is still staged: only `slice` and `map` are iterable, assignment-form left sides are identifier-only, and string/channel/integer/function ranges remain deferred.
-- Statement-header support is still staged: `if` and expression `switch` support header simple statements, and that support is limited to expression statements, assignments, staged multi-binding `=` / `:=`, staged compound assignments, `var` declarations, explicit `++` / `--`, and staged comma-ok `map` lookups.
+- Statement-header support is still staged: `if`, expression `switch`, and type switches support header simple statements, and that support is limited to expression statements, assignments, staged multi-binding `=` / `:=`, staged compound assignments, `var` declarations, explicit `++` / `--`, staged comma-ok `map` lookups, and staged comma-ok type assertions.
 - Send statements remain ordinary statements only in the current slice; they are not yet part of the staged header or `for` post-statement subset.
-- Short declarations are still staged: multi-binding `:=` now works for expression lists and single multi-result calls, while the existing explicit comma-ok map lookup path remains a dedicated statement form.
+- Short declarations are still staged: multi-binding `:=` now works for expression lists and single multi-result calls, while explicit comma-ok map lookup and comma-ok type assertion paths remain dedicated statement forms.
 - Compound assignments are still staged: `+=`, `-=`, `*=`, and `/=` are supported in explicit statement positions, while modulo, bitwise, and shift assignment operators remain deferred with their wider expression support.
-- Switch support is still staged: only expression and tagless `switch` are supported, with no type switches, `fallthrough`, labels, or broader constant-expression duplicate detection.
+- Switch support is still staged: expression, tagless, and empty-interface type switches are supported, while `fallthrough`, labels, non-empty-interface type cases, and broader constant-expression duplicate detection remain deferred.

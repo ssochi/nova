@@ -4,7 +4,7 @@ use crate::semantic::analyzer::SemanticError;
 use crate::semantic::model::{
     CallTarget, CheckedBlock, CheckedElseBranch, CheckedExpression, CheckedExpressionKind,
     CheckedForStatement, CheckedIfStatement, CheckedStatement, CheckedSwitchClause,
-    CheckedSwitchStatement, Type,
+    CheckedSwitchStatement, CheckedTypeSwitchClause, CheckedTypeSwitchStatement, Type,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -261,6 +261,9 @@ fn statement_guarantees_termination(statement: &CheckedStatement) -> bool {
         CheckedStatement::Switch(switch_statement) => {
             switch_statement_guarantees_termination(switch_statement)
         }
+        CheckedStatement::TypeSwitch(type_switch_statement) => {
+            type_switch_statement_guarantees_termination(type_switch_statement)
+        }
         CheckedStatement::For(for_statement) => for_statement_guarantees_termination(for_statement),
         CheckedStatement::RangeFor { .. } => false,
         CheckedStatement::Defer(_) => false,
@@ -296,6 +299,28 @@ fn switch_statement_guarantees_termination(switch_statement: &CheckedSwitchState
                 }
             }
             CheckedSwitchClause::Default(body) => {
+                has_default = true;
+                if !block_guarantees_return(body) || block_contains_break_for_switch(body) {
+                    return false;
+                }
+            }
+        }
+    }
+    has_default
+}
+
+fn type_switch_statement_guarantees_termination(
+    type_switch_statement: &CheckedTypeSwitchStatement,
+) -> bool {
+    let mut has_default = false;
+    for clause in &type_switch_statement.clauses {
+        match clause {
+            CheckedTypeSwitchClause::Case { body, .. } => {
+                if !block_guarantees_return(body) || block_contains_break_for_switch(body) {
+                    return false;
+                }
+            }
+            CheckedTypeSwitchClause::Default { body, .. } => {
                 has_default = true;
                 if !block_guarantees_return(body) || block_contains_break_for_switch(body) {
                     return false;

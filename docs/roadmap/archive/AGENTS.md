@@ -34,6 +34,7 @@ This directory stores complete archives of closed plans. It serves historical co
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `2026-03-20-14-17-12-type-switches-and-comma-ok-assertions/`: archived M3 plan for staged comma-ok type assertions, empty-interface type switches, explicit `type-assert-ok` bytecode, and frontend/compiler file-size governance
 - `2026-03-20-11-58-27-defer-first-slice/`: archived M3 plan for staged `defer` statements, eager argument capture, and explicit frame-level deferred-call execution
 - `2026-03-20-10-46-29-builtin-clear-and-runtime-file-split/`: archived M3 plan for builtin `clear(slice|map)` plus runtime file-size governance
 - `2026-03-20-10-32-34-strings-bytes-clone-seams/`: archived M3 plan for staged `strings.Clone` / `bytes.Clone` package seams

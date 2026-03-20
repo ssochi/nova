@@ -142,6 +142,33 @@ impl<'a> FunctionAnalyzer<'a> {
                     ok_binding,
                 })
             }
+            ForPostStatement::TypeAssert {
+                bindings,
+                target,
+                asserted_type,
+            } => {
+                let statement = self.analyze_type_assert_statement(
+                    bindings,
+                    crate::frontend::ast::BindingMode::Assign,
+                    target,
+                    asserted_type,
+                )?;
+                let CheckedStatement::TypeAssert {
+                    interface,
+                    asserted_type,
+                    value_binding,
+                    ok_binding,
+                } = statement
+                else {
+                    unreachable!("type-assert analysis always returns checked type-assert data");
+                };
+                Ok(CheckedForPostStatement::TypeAssert {
+                    interface,
+                    asserted_type,
+                    value_binding,
+                    ok_binding,
+                })
+            }
             ForPostStatement::IncDec { target, operator } => {
                 let statement = self.analyze_inc_dec_statement(target, *operator)?;
                 let CheckedStatement::IncDec {

@@ -4,7 +4,7 @@
 
 - `M3-standard-library-and-runtime-model`: `in_progress`
   - Goal: expand types, runtime data structures, builtin coverage, and the path toward standard library support
-  - Current Main Plan: none currently
+  - Current Main Plan: none currently; open the next `M3` plan before changing scope
 
 ## Planned Milestones
 

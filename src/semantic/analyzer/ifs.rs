@@ -77,6 +77,14 @@ impl<'a> FunctionAnalyzer<'a> {
                 target,
                 key,
             } => self.analyze_map_lookup_initializer(bindings, *binding_mode, target, key),
+            HeaderStatement::TypeAssert {
+                bindings,
+                binding_mode,
+                target,
+                asserted_type,
+            } => {
+                self.analyze_type_assert_initializer(bindings, *binding_mode, target, asserted_type)
+            }
             HeaderStatement::IncDec { target, operator } => checked_statement_to_header_statement(
                 self.analyze_inc_dec_statement(target, *operator)?,
             ),
@@ -139,6 +147,17 @@ fn checked_statement_to_header_statement(
             value_binding,
             ok_binding,
         },
+        CheckedStatement::TypeAssert {
+            interface,
+            asserted_type,
+            value_binding,
+            ok_binding,
+        } => CheckedHeaderStatement::TypeAssert {
+            interface,
+            asserted_type,
+            value_binding,
+            ok_binding,
+        },
         CheckedStatement::IncDec {
             target,
             operator,
@@ -152,6 +171,7 @@ fn checked_statement_to_header_statement(
         | CheckedStatement::Defer(_)
         | CheckedStatement::Send { .. }
         | CheckedStatement::Switch(_)
+        | CheckedStatement::TypeSwitch(_)
         | CheckedStatement::For(_)
         | CheckedStatement::RangeFor { .. }
         | CheckedStatement::Break

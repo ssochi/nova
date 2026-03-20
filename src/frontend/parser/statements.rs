@@ -39,7 +39,7 @@ impl<'a> Parser<'a> {
         }
 
         if self.match_kind(&TokenKind::Switch) {
-            return Ok(Statement::Switch(self.parse_switch_statement()?));
+            return self.parse_switch_statement();
         }
 
         if self.match_kind(&TokenKind::For) {
@@ -154,7 +154,9 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_switch_statement(&mut self) -> Result<SwitchStatement, ParseError> {
+    pub(super) fn parse_expression_switch_statement(
+        &mut self,
+    ) -> Result<SwitchStatement, ParseError> {
         let (header, expression) = self.parse_switch_header()?;
         self.expect(TokenKind::LeftBrace)?;
         self.skip_semicolons();
@@ -197,7 +199,9 @@ impl<'a> Parser<'a> {
         Ok(expressions)
     }
 
-    fn parse_switch_clause_body(&mut self) -> Result<crate::frontend::ast::Block, ParseError> {
+    pub(super) fn parse_switch_clause_body(
+        &mut self,
+    ) -> Result<crate::frontend::ast::Block, ParseError> {
         let mut statements = Vec::new();
         self.skip_semicolons();
         while !matches!(
@@ -237,6 +241,18 @@ impl<'a> Parser<'a> {
                             condition,
                         ));
                     }
+                    if let Ok((target, asserted_type)) = type_assert_from_value_list(values.clone())
+                    {
+                        return Ok((
+                            Some(HeaderStatement::TypeAssert {
+                                bindings,
+                                binding_mode: BindingMode::Define,
+                                target,
+                                asserted_type,
+                            }),
+                            condition,
+                        ));
+                    }
                 }
                 return Ok((
                     Some(HeaderStatement::ShortVarDecl { bindings, values }),
@@ -255,6 +271,18 @@ impl<'a> Parser<'a> {
                                 binding_mode: BindingMode::Assign,
                                 target,
                                 key,
+                            }),
+                            condition,
+                        ));
+                    }
+                    if let Ok((target, asserted_type)) = type_assert_from_value_list(values.clone())
+                    {
+                        return Ok((
+                            Some(HeaderStatement::TypeAssert {
+                                bindings,
+                                binding_mode: BindingMode::Assign,
+                                target,
+                                asserted_type,
                             }),
                             condition,
                         ));
@@ -361,6 +389,18 @@ impl<'a> Parser<'a> {
                             switch_expression,
                         ));
                     }
+                    if let Ok((target, asserted_type)) = type_assert_from_value_list(values.clone())
+                    {
+                        return Ok((
+                            Some(HeaderStatement::TypeAssert {
+                                bindings,
+                                binding_mode: BindingMode::Define,
+                                target,
+                                asserted_type,
+                            }),
+                            switch_expression,
+                        ));
+                    }
                 }
                 return Ok((
                     Some(HeaderStatement::ShortVarDecl { bindings, values }),
@@ -383,6 +423,18 @@ impl<'a> Parser<'a> {
                                 binding_mode: BindingMode::Assign,
                                 target,
                                 key,
+                            }),
+                            switch_expression,
+                        ));
+                    }
+                    if let Ok((target, asserted_type)) = type_assert_from_value_list(values.clone())
+                    {
+                        return Ok((
+                            Some(HeaderStatement::TypeAssert {
+                                bindings,
+                                binding_mode: BindingMode::Assign,
+                                target,
+                                asserted_type,
                             }),
                             switch_expression,
                         ));
@@ -471,7 +523,9 @@ impl<'a> Parser<'a> {
         Ok((None, Some(expression)))
     }
 
-    fn parse_var_decl_header_statement(&mut self) -> Result<HeaderStatement, ParseError> {
+    pub(super) fn parse_var_decl_header_statement(
+        &mut self,
+    ) -> Result<HeaderStatement, ParseError> {
         let name = self.expect_identifier()?;
         let (type_ref, value) = if self.match_kind(&TokenKind::Assign) {
             (None, Some(self.parse_expression()?))
@@ -524,7 +578,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_for_init_statement(&mut self) -> Result<HeaderStatement, ParseError> {
+    pub(super) fn parse_for_init_statement(&mut self) -> Result<HeaderStatement, ParseError> {
         if self.match_kind(&TokenKind::Var) {
             return self.parse_var_decl_header_statement();
         }
@@ -543,6 +597,15 @@ impl<'a> Parser<'a> {
                             key,
                         });
                     }
+                    if let Ok((target, asserted_type)) = type_assert_from_value_list(values.clone())
+                    {
+                        return Ok(HeaderStatement::TypeAssert {
+                            bindings,
+                            binding_mode: BindingMode::Define,
+                            target,
+                            asserted_type,
+                        });
+                    }
                 }
                 return Ok(HeaderStatement::ShortVarDecl { bindings, values });
             }
@@ -555,6 +618,15 @@ impl<'a> Parser<'a> {
                             binding_mode: BindingMode::Assign,
                             target,
                             key,
+                        });
+                    }
+                    if let Ok((target, asserted_type)) = type_assert_from_value_list(values.clone())
+                    {
+                        return Ok(HeaderStatement::TypeAssert {
+                            bindings,
+                            binding_mode: BindingMode::Assign,
+                            target,
+                            asserted_type,
                         });
                     }
                 }
@@ -609,6 +681,14 @@ impl<'a> Parser<'a> {
                             key,
                         });
                     }
+                    if let Ok((target, asserted_type)) = type_assert_from_value_list(values.clone())
+                    {
+                        return Ok(ForPostStatement::TypeAssert {
+                            bindings,
+                            target,
+                            asserted_type,
+                        });
+                    }
                 }
                 return Ok(ForPostStatement::MultiAssign { bindings, values });
             }
@@ -656,6 +736,15 @@ impl<'a> Parser<'a> {
                             key,
                         });
                     }
+                    if let Ok((target, asserted_type)) = type_assert_from_value_list(values.clone())
+                    {
+                        return Ok(Statement::TypeAssert {
+                            bindings,
+                            binding_mode: BindingMode::Define,
+                            target,
+                            asserted_type,
+                        });
+                    }
                 }
                 return Ok(Statement::ShortVarDecl { bindings, values });
             }
@@ -668,6 +757,15 @@ impl<'a> Parser<'a> {
                             binding_mode: BindingMode::Assign,
                             target,
                             key,
+                        });
+                    }
+                    if let Ok((target, asserted_type)) = type_assert_from_value_list(values.clone())
+                    {
+                        return Ok(Statement::TypeAssert {
+                            bindings,
+                            binding_mode: BindingMode::Assign,
+                            target,
+                            asserted_type,
                         });
                     }
                 }
@@ -823,6 +921,23 @@ fn map_lookup_from_value_list(
     let value = values.into_iter().next().expect("length was checked above");
     match value {
         Expression::Index { target, index } => Ok((*target, *index)),
+        other => Err(vec![other]),
+    }
+}
+
+fn type_assert_from_value_list(
+    values: Vec<Expression>,
+) -> Result<(Expression, crate::frontend::ast::TypeRef), Vec<Expression>> {
+    if values.len() != 1 {
+        return Err(values);
+    }
+
+    let value = values.into_iter().next().expect("length was checked above");
+    match value {
+        Expression::TypeAssertion {
+            target,
+            asserted_type,
+        } => Ok((*target, asserted_type)),
         other => Err(vec![other]),
     }
 }

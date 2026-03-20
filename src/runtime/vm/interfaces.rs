@@ -1,6 +1,7 @@
 use super::{RuntimeError, VirtualMachine};
 use crate::bytecode::instruction::ValueType;
 use crate::runtime::value::{InterfaceValue, Value};
+use crate::runtime::vm::support::zero_value_for_type;
 
 impl VirtualMachine {
     pub(super) fn box_any(&mut self, value_type: ValueType) -> Result<(), RuntimeError> {
@@ -20,6 +21,21 @@ impl VirtualMachine {
 
         let asserted = self.assert_interface_type(interface, &expected_type)?;
         self.stack.push(asserted);
+        Ok(())
+    }
+
+    pub(super) fn type_assert_ok(&mut self, expected_type: ValueType) -> Result<(), RuntimeError> {
+        let value = self.pop_value()?;
+        let Value::Interface(interface) = value else {
+            return Err(RuntimeError::new(format!(
+                "type assertion requires interface value, found `{}`",
+                super::support::runtime_type_name(&value)
+            )));
+        };
+
+        let (asserted, ok) = self.assert_interface_type_ok(interface, &expected_type)?;
+        self.stack.push(asserted);
+        self.stack.push(Value::Boolean(ok));
         Ok(())
     }
 
@@ -112,6 +128,29 @@ impl VirtualMachine {
         interface
             .into_inner()
             .ok_or_else(|| RuntimeError::new("boxed interface value was missing payload"))
+    }
+
+    fn assert_interface_type_ok(
+        &self,
+        interface: InterfaceValue,
+        expected_type: &ValueType,
+    ) -> Result<(Value, bool), RuntimeError> {
+        let Some(actual_type) = interface.value_type() else {
+            return Ok((zero_value_for_type(expected_type), false));
+        };
+
+        if expected_type == &ValueType::Any {
+            return Ok((Value::Interface(interface), true));
+        }
+
+        if actual_type != expected_type {
+            return Ok((zero_value_for_type(expected_type), false));
+        }
+
+        let asserted = interface
+            .into_inner()
+            .ok_or_else(|| RuntimeError::new("boxed interface value was missing payload"))?;
+        Ok((asserted, true))
     }
 }
 

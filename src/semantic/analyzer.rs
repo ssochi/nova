@@ -294,6 +294,9 @@ impl<'a> FunctionAnalyzer<'a> {
             Statement::Expr(expression) => self.analyze_expression_statement(expression),
             Statement::If(if_statement) => self.analyze_if_statement(if_statement),
             Statement::Switch(switch_statement) => self.analyze_switch_statement(switch_statement),
+            Statement::TypeSwitch(type_switch_statement) => {
+                self.analyze_type_switch_statement(type_switch_statement)
+            }
             Statement::For(for_statement) => self.analyze_for_statement(for_statement),
             Statement::RangeFor {
                 bindings,
@@ -307,6 +310,12 @@ impl<'a> FunctionAnalyzer<'a> {
                 target,
                 key,
             } => self.analyze_map_lookup_statement(bindings, *binding_mode, target, key),
+            Statement::TypeAssert {
+                bindings,
+                binding_mode,
+                target,
+                asserted_type,
+            } => self.analyze_type_assert_statement(bindings, *binding_mode, target, asserted_type),
             Statement::IncDec { target, operator } => {
                 self.analyze_inc_dec_statement(target, *operator)
             }
@@ -948,3 +957,5 @@ mod tests;
 mod tests_defer;
 #[cfg(test)]
 mod tests_type_assertions;
+#[cfg(test)]
+mod tests_type_switches;

@@ -2,13 +2,12 @@
 
 ## Current Active Plan
 
-- None
-  - Status: `idle`
-  - Topic: waiting for the next plan under `M3-standard-library-and-runtime-model`
-  - Milestone: `M3-standard-library-and-runtime-model`
+- None currently. Open the next plan under `M3-standard-library-and-runtime-model`.
 
 ## Recent Updates
 
+- Completed and archived `2026-03-20-14-17-12-type-switches-and-comma-ok-assertions`
+- Opened `2026-03-20-14-17-12-type-switches-and-comma-ok-assertions` for staged comma-ok assertions plus the first explicit type-switch slice on top of empty-interface/type-assertion groundwork under `M3`
 - Completed and archived `2026-03-20-13-55-46-type-assertions-first-slice`
 - Opened `2026-03-20-13-55-46-type-assertions-first-slice` for the first staged type-assertion slice on top of empty-interface runtime support under `M3`
 - Completed and archived `2026-03-20-13-28-50-recover-first-slice`

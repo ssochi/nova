@@ -62,6 +62,7 @@ pub enum CheckedStatement {
     Expr(CheckedExpression),
     If(CheckedIfStatement),
     Switch(CheckedSwitchStatement),
+    TypeSwitch(CheckedTypeSwitchStatement),
     For(CheckedForStatement),
     RangeFor {
         source: CheckedExpression,
@@ -72,6 +73,12 @@ pub enum CheckedStatement {
     MapLookup {
         map: CheckedExpression,
         key: CheckedExpression,
+        value_binding: CheckedBinding,
+        ok_binding: CheckedBinding,
+    },
+    TypeAssert {
+        interface: CheckedExpression,
+        asserted_type: Type,
         value_binding: CheckedBinding,
         ok_binding: CheckedBinding,
     },
@@ -125,6 +132,12 @@ pub enum CheckedHeaderStatement {
         value_binding: CheckedBinding,
         ok_binding: CheckedBinding,
     },
+    TypeAssert {
+        interface: CheckedExpression,
+        asserted_type: Type,
+        value_binding: CheckedBinding,
+        ok_binding: CheckedBinding,
+    },
     IncDec {
         target: CheckedAssignmentTarget,
         operator: CheckedIncDecOperator,
@@ -146,12 +159,50 @@ pub struct CheckedSwitchStatement {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CheckedTypeSwitchStatement {
+    pub header: Option<CheckedHeaderStatement>,
+    pub guard: CheckedExpression,
+    pub clauses: Vec<CheckedTypeSwitchClause>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CheckedSwitchClause {
     Case {
         expressions: Vec<CheckedExpression>,
         body: CheckedBlock,
     },
     Default(CheckedBlock),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CheckedTypeSwitchClause {
+    Case {
+        cases: Vec<CheckedTypeSwitchCase>,
+        binding: Option<CheckedTypeSwitchBinding>,
+        body: CheckedBlock,
+    },
+    Default {
+        binding: Option<CheckedTypeSwitchBinding>,
+        body: CheckedBlock,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CheckedTypeSwitchCase {
+    Type(Type),
+    Nil,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CheckedTypeSwitchBinding {
+    pub binding: CheckedBinding,
+    pub source: CheckedTypeSwitchBindingSource,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CheckedTypeSwitchBindingSource {
+    Interface,
+    Asserted(Type),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -181,6 +232,12 @@ pub enum CheckedForPostStatement {
     MapLookup {
         map: CheckedExpression,
         key: CheckedExpression,
+        value_binding: CheckedBinding,
+        ok_binding: CheckedBinding,
+    },
+    TypeAssert {
+        interface: CheckedExpression,
+        asserted_type: Type,
         value_binding: CheckedBinding,
         ok_binding: CheckedBinding,
     },

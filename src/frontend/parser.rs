@@ -7,6 +7,7 @@ use crate::frontend::ast::{
 use crate::frontend::token::{Token, TokenKind};
 
 mod statements;
+mod type_switches;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseError {
@@ -834,3 +835,5 @@ mod tests_defer;
 mod tests_named_results;
 #[cfg(test)]
 mod tests_type_assertions;
+#[cfg(test)]
+mod tests_type_switches;

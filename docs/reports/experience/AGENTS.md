@@ -34,6 +34,7 @@ This directory stores experience validation reports close to the real user path.
 ## File Index
 
 - `AGENTS.md`: this directory convention
+- `2026-03-20-type-switches-and-comma-ok-assertions-playtest.md`: records the CLI walkthrough for staged comma-ok assertions, explicit type switches, typed-nil versus `case nil`, and type-switch diagnostics
 - `2026-03-20-type-assertions-first-slice-playtest.md`: records the CLI walkthrough for staged single-result `x.(T)` assertions, typed-nil assertion payloads, runtime mismatch panics, and rejected type-switch syntax
 - `2026-03-20-recover-first-slice-playtest.md`: records the CLI walkthrough for staged builtin `recover()`, direct deferred recovery, helper/deferred-builtin non-recovery, and recovered return behavior
 - `2026-03-20-empty-interface-any-and-fmt-spread-playtest.md`: records the CLI walkthrough for staged empty-interface values, explicit boxing, runtime interface equality edges, and `fmt` variadic spread over `[]any`

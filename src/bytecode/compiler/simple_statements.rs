@@ -57,6 +57,17 @@ impl<'a> FunctionCompiler<'a> {
                 value_binding,
                 ok_binding,
             } => self.compile_map_lookup_statement(map, key, value_binding, ok_binding)?,
+            CheckedHeaderStatement::TypeAssert {
+                interface,
+                asserted_type,
+                value_binding,
+                ok_binding,
+            } => self.compile_type_assert_statement(
+                interface,
+                asserted_type,
+                value_binding,
+                ok_binding,
+            )?,
             CheckedHeaderStatement::IncDec {
                 target,
                 operator,
@@ -79,6 +90,22 @@ impl<'a> FunctionCompiler<'a> {
         self.expect_value(&key.ty, "comma-ok lookup")?;
         self.instructions
             .push(Instruction::LookupMap(lower_value_type(&map.ty)?));
+        self.consume_binding_value(ok_binding);
+        self.consume_binding_value(value_binding);
+        Ok(())
+    }
+
+    pub(super) fn compile_type_assert_statement(
+        &mut self,
+        interface: &CheckedExpression,
+        asserted_type: &Type,
+        value_binding: &CheckedBinding,
+        ok_binding: &CheckedBinding,
+    ) -> Result<(), CompileError> {
+        self.compile_expression(interface)?;
+        self.expect_value(&interface.ty, "comma-ok type assertion")?;
+        self.instructions
+            .push(Instruction::TypeAssertOk(lower_value_type(asserted_type)?));
         self.consume_binding_value(ok_binding);
         self.consume_binding_value(value_binding);
         Ok(())
@@ -130,6 +157,17 @@ impl<'a> FunctionCompiler<'a> {
                 value_binding,
                 ok_binding,
             } => self.compile_map_lookup_statement(map, key, value_binding, ok_binding)?,
+            CheckedForPostStatement::TypeAssert {
+                interface,
+                asserted_type,
+                value_binding,
+                ok_binding,
+            } => self.compile_type_assert_statement(
+                interface,
+                asserted_type,
+                value_binding,
+                ok_binding,
+            )?,
             CheckedForPostStatement::IncDec {
                 target,
                 operator,

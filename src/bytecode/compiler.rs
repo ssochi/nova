@@ -6,12 +6,12 @@ use crate::semantic::model::{
     CallTarget, CheckedBinaryOperator, CheckedBinding, CheckedBlock, CheckedCall,
     CheckedCallArguments, CheckedElseBranch, CheckedExpression, CheckedExpressionKind,
     CheckedForStatement, CheckedFunction, CheckedIfStatement, CheckedMapLiteralEntry,
-    CheckedProgram, CheckedStatement, CheckedSwitchClause, CheckedSwitchStatement,
-    CheckedValueSource, Type,
+    CheckedProgram, CheckedStatement, CheckedValueSource, Type,
 };
 
 mod calls;
 mod simple_statements;
+mod switches;
 mod types;
 
 use self::types::{lower_result_types, lower_sequence_kind, lower_value_type};
@@ -144,6 +144,9 @@ impl<'a> FunctionCompiler<'a> {
             CheckedStatement::Switch(switch_statement) => {
                 self.compile_switch_statement(switch_statement)?
             }
+            CheckedStatement::TypeSwitch(type_switch_statement) => {
+                self.compile_type_switch_statement(type_switch_statement)?
+            }
             CheckedStatement::For(for_statement) => self.compile_for_statement(for_statement)?,
             CheckedStatement::RangeFor {
                 source,
@@ -162,6 +165,17 @@ impl<'a> FunctionCompiler<'a> {
                 value_binding,
                 ok_binding,
             } => self.compile_map_lookup_statement(map, key, value_binding, ok_binding)?,
+            CheckedStatement::TypeAssert {
+                interface,
+                asserted_type,
+                value_binding,
+                ok_binding,
+            } => self.compile_type_assert_statement(
+                interface,
+                asserted_type,
+                value_binding,
+                ok_binding,
+            )?,
             CheckedStatement::IncDec {
                 target,
                 operator,
@@ -242,86 +256,6 @@ impl<'a> FunctionCompiler<'a> {
             let end = self.instructions.len();
             self.patch_jump(jump_to_else, Instruction::JumpIfFalse(end));
         }
-        Ok(())
-    }
-
-    fn compile_switch_statement(
-        &mut self,
-        switch_statement: &CheckedSwitchStatement,
-    ) -> Result<(), CompileError> {
-        if let Some(header) = &switch_statement.header {
-            self.compile_header_statement(header, "switch header")?;
-        }
-
-        let tag_slot = if let Some(expression) = &switch_statement.expression {
-            self.compile_expression(expression)?;
-            self.expect_value(&expression.ty, "switch expression")?;
-            let slot = self.allocate_hidden_local("switch$tag");
-            self.instructions.push(Instruction::StoreLocal(slot));
-            Some(slot)
-        } else {
-            None
-        };
-
-        let mut end_jumps = Vec::new();
-        let default_body = switch_statement
-            .clauses
-            .iter()
-            .find_map(|clause| match clause {
-                CheckedSwitchClause::Default(body) => Some(body),
-                CheckedSwitchClause::Case { .. } => None,
-            });
-        self.control_flow_stack.push(ControlFlowContext::Switch {
-            break_jumps: Vec::new(),
-        });
-
-        for clause in &switch_statement.clauses {
-            let CheckedSwitchClause::Case { expressions, body } = clause else {
-                continue;
-            };
-            let mut next_test_jump = None;
-            let mut success_jumps = Vec::new();
-            for expression in expressions {
-                let test_start = self.instructions.len();
-                if let Some(previous_jump) = next_test_jump.take() {
-                    self.patch_jump(previous_jump, Instruction::JumpIfFalse(test_start));
-                }
-                if let Some(tag_slot) = tag_slot {
-                    self.instructions.push(Instruction::LoadLocal(tag_slot));
-                    self.compile_expression(expression)?;
-                    self.expect_value(&expression.ty, "switch case expression")?;
-                    self.instructions.push(Instruction::Equal);
-                } else {
-                    self.compile_expression(expression)?;
-                    self.expect_value(&expression.ty, "switch case expression")?;
-                }
-                next_test_jump = Some(self.push_instruction(Instruction::JumpIfFalse(usize::MAX)));
-                success_jumps.push(self.push_instruction(Instruction::Jump(usize::MAX)));
-            }
-
-            let body_start = self.instructions.len();
-            for jump in success_jumps {
-                self.patch_jump(jump, Instruction::Jump(body_start));
-            }
-            self.compile_block(body)?;
-            end_jumps.push(self.push_instruction(Instruction::Jump(usize::MAX)));
-
-            let next_clause_start = self.instructions.len();
-            if let Some(jump) = next_test_jump {
-                self.patch_jump(jump, Instruction::JumpIfFalse(next_clause_start));
-            }
-        }
-
-        if let Some(default_body) = default_body {
-            self.compile_block(default_body)?;
-        }
-
-        let end = self.instructions.len();
-        for jump in end_jumps {
-            self.patch_jump(jump, Instruction::Jump(end));
-        }
-        self.patch_switch_break_jumps(end)?;
-        self.control_flow_stack.pop();
         Ok(())
     }
 
